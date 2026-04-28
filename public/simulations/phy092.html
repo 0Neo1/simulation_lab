@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Newton's Second Law</title>
+<link rel="stylesheet" href="/simulations/_shared.css" />
+</head>
+<body>
+<div class="app">
+  <header>
+    <h1>Newton's Second Law — F = ma</h1>
+    <span class="pill">Class 9 · Physics</span>
+  </header>
+  <div class="grid">
+    <div class="card">
+      <h2>Trolley on Track</h2>
+      <div class="viz"><canvas id="cv" width="780" height="380"></canvas></div>
+      <p class="note">Use sliders to set force and trolley mass. Observe how acceleration changes proportionally to F and inversely to m.</p>
+    </div>
+    <div class="card controls">
+      <h2>Controls</h2>
+      <label>Applied Force F (N) — <span id="fv">2.0</span></label>
+      <input id="F" type="range" min="0.2" max="10" step="0.1" value="2.0" />
+      <label>Mass m (kg) — <span id="mv">1.0</span></label>
+      <input id="m" type="range" min="0.5" max="6" step="0.1" value="1.0" />
+      <label>Friction
+        <input id="fr" type="range" min="0" max="0.5" step="0.01" value="0.05" />
+      </label>
+      <button class="btn" id="run">Start</button>
+      <button class="btn warn" id="stop">Stop</button>
+      <button class="btn secondary" id="reset">Reset</button>
+      <div class="values">
+        <div class="value"><div class="label">Force</div><div class="v" id="Fd">2.0 N</div></div>
+        <div class="value"><div class="label">Mass</div><div class="v" id="md">1.0 kg</div></div>
+        <div class="value"><div class="label">Acceleration</div><div class="v" id="ad">— m/s²</div></div>
+        <div class="value"><div class="label">Velocity</div><div class="v" id="vd">— m/s</div></div>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+const cv = document.getElementById('cv'); const ctx = cv.getContext('2d');
+const F = document.getElementById('F'); const m = document.getElementById('m'); const fr = document.getElementById('fr');
+let running = false, x = 0, v = 0, lastT = 0;
+function update() {
+  document.getElementById('fv').textContent = F.value;
+  document.getElementById('mv').textContent = m.value;
+  document.getElementById('Fd').textContent = F.value + ' N';
+  document.getElementById('md').textContent = m.value + ' kg';
+  draw();
+}
+function draw() {
+  const W = cv.width, H = cv.height;
+  ctx.fillStyle = '#0b1220'; ctx.fillRect(0, 0, W, H);
+  // track
+  ctx.fillStyle = '#1e293b'; ctx.fillRect(40, 240, W - 80, 80);
+  ctx.fillStyle = '#475569'; ctx.fillRect(40, 230, W - 80, 4);
+  // trolley
+  const massSize = 30 + parseFloat(m.value) * 8;
+  const tx = 100 + Math.min(W - 200, x * 80);
+  ctx.fillStyle = '#7c3aed'; ctx.fillRect(tx - massSize / 2, 200, massSize, 40);
+  ctx.fillStyle = '#fbbf24';
+  ctx.beginPath(); ctx.arc(tx - massSize / 3, 244, 6, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.arc(tx + massSize / 3, 244, 6, 0, Math.PI * 2); ctx.fill();
+  // force arrow
+  const Fval = parseFloat(F.value);
+  const arrowLen = Fval * 18;
+  ctx.strokeStyle = '#06b6d4'; ctx.lineWidth = 4;
+  ctx.beginPath(); ctx.moveTo(tx + massSize / 2, 220); ctx.lineTo(tx + massSize / 2 + arrowLen, 220); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(tx + massSize / 2 + arrowLen, 220); ctx.lineTo(tx + massSize / 2 + arrowLen - 10, 215); ctx.lineTo(tx + massSize / 2 + arrowLen - 10, 225); ctx.closePath(); ctx.fillStyle = '#06b6d4'; ctx.fill();
+  ctx.fillStyle = '#cbd5e1'; ctx.font = '12px Arial';
+  ctx.fillText('F = ' + Fval + ' N', tx + massSize / 2 + 10, 200);
+  // friction arrow
+  const f1 = parseFloat(fr.value) * parseFloat(m.value) * 9.8;
+  const farr = f1 * 12;
+  if (running) {
+    ctx.strokeStyle = '#f87171'; ctx.beginPath();
+    ctx.moveTo(tx - massSize / 2, 220); ctx.lineTo(tx - massSize / 2 - farr, 220); ctx.stroke();
+  }
+}
+function tick(now) {
+  if (!running) return;
+  const dt = (now - lastT) / 1000; lastT = now;
+  const Fnet = parseFloat(F.value) - parseFloat(fr.value) * parseFloat(m.value) * 9.8;
+  const a = Fnet / parseFloat(m.value);
+  v += a * dt;
+  if (v < 0) v = 0;
+  x += v * dt;
+  if (x > 8) x = 8;
+  document.getElementById('ad').textContent = a.toFixed(3) + ' m/s²';
+  document.getElementById('vd').textContent = v.toFixed(3) + ' m/s';
+  draw();
+  requestAnimationFrame(tick);
+}
+['change', 'input'].forEach(ev => {
+  F.addEventListener(ev, update); m.addEventListener(ev, update); fr.addEventListener(ev, update);
+});
+document.getElementById('run').addEventListener('click', () => {
+  if (running) return; running = true; lastT = performance.now(); requestAnimationFrame(tick);
+});
+document.getElementById('stop').addEventListener('click', () => { running = false; });
+document.getElementById('reset').addEventListener('click', () => {
+  running = false; x = 0; v = 0; F.value = '2.0'; m.value = '1.0'; fr.value = '0.05';
+  document.getElementById('ad').textContent = '—';
+  document.getElementById('vd').textContent = '—';
+  update();
+});
+update();
+</script>
+</body>
+</html>

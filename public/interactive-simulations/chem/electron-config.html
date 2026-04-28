@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><title>Electron Configuration</title><link rel="stylesheet" href="../styles.css"></head>
+<body>
+<header><a href="../index.html"><h1>Electron Configuration Builder</h1></a><p>Fill orbitals using Aufbau, Pauli, and Hund's rules.</p></header>
+<main>
+<a class="back-link" href="../index.html">&larr; All simulations</a>
+<div class="sim-container">
+  <div>
+    <div class="canvas-wrap"><canvas id="cv" width="800" height="500"></canvas></div>
+    <div class="info-box">
+      <h3>The Chemistry</h3>
+      <p>Electrons fill orbitals in order of increasing energy (<b>Aufbau</b>), no two electrons can have the same four quantum numbers (<b>Pauli</b>), and degenerate orbitals fill singly first (<b>Hund's rule</b>).</p>
+      <div class="formula">Filling order: 1s 2s 2p 3s 3p 4s 3d 4p 5s 4d 5p 6s 4f 5d 6p 7s 5f 6d 7p</div>
+    </div>
+  </div>
+  <div class="controls">
+    <h3>Controls</h3>
+    <div class="control-row"><label>Atomic number Z <span class="val" id="vZ">8</span></label><input type="range" id="z" min="1" max="36" value="8"></div>
+    <div class="readouts" style="grid-template-columns:1fr;">
+      <div>Element: <span id="rEl">—</span></div>
+      <div>Configuration: <span id="rCfg">—</span></div>
+      <div>Valence electrons: <span id="rVal">—</span></div>
+    </div>
+  </div>
+</div>
+</main>
+<script>
+const cv=document.getElementById('cv'), ctx=cv.getContext('2d');
+const orbitals = [
+  // [name, capacity, energy_level_y]
+  ['1s', 2, 460],
+  ['2s', 2, 410],
+  ['2p', 6, 360],
+  ['3s', 2, 310],
+  ['3p', 6, 270],
+  ['4s', 2, 230],
+  ['3d', 10, 200],
+  ['4p', 6, 170],
+  ['5s', 2, 140],
+  ['4d', 10, 110],
+  ['5p', 6, 80],
+];
+const elements = ['','H','He','Li','Be','B','C','N','O','F','Ne','Na','Mg','Al','Si','P','S','Cl','Ar','K','Ca','Sc','Ti','V','Cr','Mn','Fe','Co','Ni','Cu','Zn','Ga','Ge','As','Se','Br','Kr'];
+
+function configFor(z){
+  let remaining = z;
+  const result = [];
+  for(const [n, cap] of orbitals){
+    if(remaining <= 0) break;
+    const fill = Math.min(remaining, cap);
+    result.push([n, fill, cap]);
+    remaining -= fill;
+  }
+  return result;
+}
+
+function draw(){
+  const z = +document.getElementById('z').value;
+  ctx.clearRect(0,0,cv.width,cv.height);
+  ctx.fillStyle='#000000'; ctx.fillRect(0,0,cv.width,cv.height);
+  const cfg = configFor(z);
+  // axis
+  ctx.strokeStyle='#444'; ctx.beginPath(); ctx.moveTo(80,30); ctx.lineTo(80,480); ctx.stroke();
+  ctx.fillStyle='#fff'; ctx.font='12px sans-serif'; ctx.fillText('Energy →', 30, 250); ctx.save(); ctx.translate(30,250); ctx.rotate(-Math.PI/2); ctx.restore();
+  // orbital lines and electrons
+  orbitals.forEach(([name, cap, y])=>{
+    const filled = cfg.find(c=>c[0]===name);
+    const numFilled = filled ? filled[1] : 0;
+    // sublevels for p (3 boxes), d (5), f (7)
+    let boxes = 1;
+    if(name.endsWith('p')) boxes = 3;
+    else if(name.endsWith('d')) boxes = 5;
+    else if(name.endsWith('f')) boxes = 7;
+    ctx.fillStyle='#fff'; ctx.font='13px sans-serif';
+    ctx.fillText(name, 95, y+5);
+    // boxes
+    const boxW = 30, boxH = 20, startX = 140;
+    let placed = 0;
+    for(let b=0; b<boxes; b++){
+      const bx = startX + b*(boxW+5);
+      ctx.strokeStyle='#888'; ctx.lineWidth=1;
+      ctx.strokeRect(bx, y-boxH/2, boxW, boxH);
+    }
+    // Hund's rule: fill singly first then pair
+    const arr = Array(boxes).fill(0);
+    for(let i=0;i<numFilled;i++){
+      arr[i % boxes]++;
+    }
+    arr.forEach((cnt, b)=>{
+      const bx = startX + b*(boxW+5);
+      if(cnt>=1){
+        ctx.strokeStyle='#dddddd'; ctx.lineWidth=2;
+        ctx.beginPath(); ctx.moveTo(bx+8, y+8); ctx.lineTo(bx+8, y-8); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(bx+5, y-5); ctx.lineTo(bx+8, y-8); ctx.lineTo(bx+11, y-5); ctx.stroke();
+      }
+      if(cnt>=2){
+        ctx.strokeStyle='#cccccc'; ctx.lineWidth=2;
+        ctx.beginPath(); ctx.moveTo(bx+22, y-8); ctx.lineTo(bx+22, y+8); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(bx+19, y+5); ctx.lineTo(bx+22, y+8); ctx.lineTo(bx+25, y+5); ctx.stroke();
+      }
+    });
+  });
+
+  // text
+  document.getElementById('vZ').textContent = z;
+  document.getElementById('rEl').textContent = (elements[z]||'?')+' (Z='+z+')';
+  document.getElementById('rCfg').textContent = cfg.map(c=>c[0]+(c[1])).join(' ').replace(/(\d+)$/g, m=>{
+    return m;
+  });
+  // valence: highest principal n
+  const lastN = Math.max(...cfg.map(c=>parseInt(c[0])));
+  const val = cfg.filter(c=>parseInt(c[0])===lastN).reduce((s,c)=>s+c[1], 0);
+  document.getElementById('rVal').textContent = val;
+}
+
+document.getElementById('z').oninput = draw;
+draw();
+</script>
+</body></html>

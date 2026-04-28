@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Functional Group Identification</title>
+<link rel="stylesheet" href="/simulations/_shared.css" />
+</head>
+<body>
+<div class="app">
+  <header>
+    <h1>Functional Group Identification — Group Tests</h1>
+    <span class="pill">Class 12 · Chemistry</span>
+  </header>
+  <div class="grid">
+    <div class="card">
+      <h2>Test Tube Rack</h2>
+      <div class="viz"><canvas id="cv" width="780" height="380"></canvas></div>
+      <p class="note">Pick a sample, then click a reagent button to perform a test. Observation appears in the panel.</p>
+    </div>
+    <div class="card controls">
+      <h2>Controls</h2>
+      <label>Unknown Sample
+        <select id="sample">
+          <option value="alcohol">Sample A — Ethanol</option>
+          <option value="acid">Sample B — Acetic acid</option>
+          <option value="aldehyde">Sample C — Acetaldehyde</option>
+          <option value="phenol">Sample D — Phenol</option>
+          <option value="alkene">Sample E — Hex-1-ene</option>
+        </select>
+      </label>
+      <div class="row" style="margin-top:14px">
+        <button class="btn" data-test="bromine">Bromine water (Br₂)</button>
+        <button class="btn" data-test="nahco3">NaHCO₃ test</button>
+        <button class="btn" data-test="fecl3">FeCl₃ test</button>
+        <button class="btn" data-test="tollens">Tollen's reagent</button>
+        <button class="btn" data-test="sodium">Sodium metal</button>
+      </div>
+      <button class="btn secondary" id="reset" style="margin-top:10px">Reset</button>
+      <div class="values" style="grid-template-columns:1fr">
+        <div class="value"><div class="label">Last Test</div><div class="v" id="last">—</div></div>
+        <div class="value"><div class="label">Observation</div><div class="v" id="obs" style="font-size:13px">—</div></div>
+        <div class="value"><div class="label">Inference</div><div class="v" id="inf" style="font-size:13px">—</div></div>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+const cv = document.getElementById('cv'); const ctx = cv.getContext('2d');
+const sample = document.getElementById('sample');
+const tests = {
+  bromine: { name: 'Bromine water', alkene: ['Decolourised', 'Unsaturation present'], phenol: ['White ppt', 'Phenol present'], default: ['No change', 'No unsaturation / phenol'] },
+  nahco3: { name: 'NaHCO₃', acid: ['Brisk effervescence (CO₂)', 'Carboxylic acid'], default: ['No change', 'Not a carboxylic acid'] },
+  fecl3: { name: 'FeCl₃', phenol: ['Violet colour', 'Phenol present'], default: ['No change', 'Phenol absent'] },
+  tollens: { name: 'Tollen\'s reagent', aldehyde: ['Silver mirror', 'Aldehyde present'], default: ['No change', 'No aldehyde'] },
+  sodium: { name: 'Sodium metal', alcohol: ['H₂ evolution', '–OH group present'], acid: ['H₂ evolution', '–COOH or –OH'], phenol: ['H₂ evolution', '–OH group'], default: ['No reaction', 'No active H'] },
+};
+let lastFlash = 0, flashTest = null;
+function runTest(testKey) {
+  const s = sample.value;
+  const t = tests[testKey];
+  const result = t[s] || t.default;
+  document.getElementById('last').textContent = t.name;
+  document.getElementById('obs').textContent = result[0];
+  document.getElementById('inf').textContent = result[1];
+  flashTest = testKey;
+  lastFlash = Date.now();
+  draw();
+}
+function draw() {
+  const W = cv.width, H = cv.height;
+  ctx.fillStyle = '#0b1220'; ctx.fillRect(0, 0, W, H);
+  // rack
+  ctx.fillStyle = '#475569'; ctx.fillRect(60, 290, 660, 60);
+  // five test tubes
+  const labels = ['Br₂', 'NaHCO₃', 'FeCl₃', "Tollen's", 'Na'];
+  const keys = ['bromine', 'nahco3', 'fecl3', 'tollens', 'sodium'];
+  const colors = {
+    bromine: 'rgba(254,243,199,0.85)',
+    nahco3: 'rgba(165,243,252,0.85)',
+    fecl3: 'rgba(196,181,253,0.85)',
+    tollens: 'rgba(229,231,235,0.85)',
+    sodium: 'rgba(254,202,202,0.85)',
+  };
+  for (let i = 0; i < 5; i++) {
+    const x = 110 + i * 130;
+    ctx.fillStyle = '#0b1220';
+    ctx.fillRect(x - 18, 80, 36, 220);
+    ctx.strokeStyle = '#cbd5e1'; ctx.strokeRect(x - 18, 80, 36, 220);
+    ctx.fillStyle = colors[keys[i]];
+    ctx.fillRect(x - 16, 200, 32, 88);
+    // bubble effect when flash
+    if (flashTest === keys[i] && Date.now() - lastFlash < 1500) {
+      const phase = (Date.now() - lastFlash) / 200;
+      for (let j = 0; j < 8; j++) {
+        const py = 280 - ((j * 10 + phase * 4) % 80);
+        ctx.fillStyle = 'rgba(255,255,255,0.6)';
+        ctx.beginPath(); ctx.arc(x + Math.sin(j) * 6, py, 2, 0, Math.PI * 2); ctx.fill();
+      }
+      ctx.strokeStyle = '#34d399'; ctx.lineWidth = 2;
+      ctx.strokeRect(x - 22, 76, 44, 228);
+    }
+    ctx.fillStyle = '#cbd5e1'; ctx.font = '11px Arial';
+    ctx.textAlign = 'center';
+    ctx.fillText(labels[i], x, 70);
+  }
+  ctx.textAlign = 'left';
+  ctx.fillStyle = '#cbd5e1'; ctx.font = '13px Arial';
+  ctx.fillText('Sample: ' + sample.options[sample.selectedIndex].text, 30, 30);
+  setTimeout(draw, 80);
+}
+document.querySelectorAll('[data-test]').forEach(b => b.addEventListener('click', () => runTest(b.dataset.test)));
+document.getElementById('reset').addEventListener('click', () => {
+  ['last', 'obs', 'inf'].forEach(id => document.getElementById(id).textContent = '—');
+  flashTest = null;
+});
+sample.addEventListener('change', () => {
+  ['last', 'obs', 'inf'].forEach(id => document.getElementById(id).textContent = '—');
+});
+draw();
+</script>
+</body>
+</html>

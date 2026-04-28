@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><title>Double-Slit Diffraction</title><link rel="stylesheet" href="../styles.css"></head>
+<body>
+<header><a href="../index.html"><h1>Double-Slit Diffraction</h1></a><p>Coherent waves through two slits.</p></header>
+<main>
+<a class="back-link" href="../index.html">&larr; All simulations</a>
+<div class="sim-container">
+  <div>
+    <div class="canvas-wrap"><canvas id="cv" width="800" height="500"></canvas></div>
+    <div class="info-box">
+      <h3>The Physics</h3>
+      <p>Light through two narrow slits creates an interference pattern with bright fringes where path difference is an integer wavelength.</p>
+      <div class="formula">d sin θ = m λ &nbsp;&nbsp; (bright fringes)</div>
+      <p>Fringe spacing on screen: <em>Δy ≈ λL/d</em>.</p>
+    </div>
+  </div>
+  <div class="controls">
+    <h3>Controls</h3>
+    <div class="control-row"><label>Wavelength <span class="val" id="vL">30</span></label><input type="range" id="L" min="10" max="80" value="30"></div>
+    <div class="control-row"><label>Slit separation d <span class="val" id="vD">80</span></label><input type="range" id="d" min="20" max="200" value="80"></div>
+    <div class="btn-row"><button id="run">Start</button><button class="secondary" id="pause">Pause</button></div>
+  </div>
+</div>
+</main>
+<script>
+const cv=document.getElementById('cv'), ctx=cv.getContext('2d');
+let L=30, d=80, t=0, running=false;
+const W=cv.width, H=cv.height;
+const img = ctx.createImageData(W,H);
+const slitX = 250, screenX = 700;
+
+function draw(){
+  const w = 2*Math.PI/L;
+  const s1y = H/2 - d/2, s2y = H/2 + d/2;
+  const data = img.data;
+  for(let y=0;y<H;y+=2) for(let x=0;x<W;x+=2){
+    let v = 0;
+    if(x < slitX){
+      v = Math.sin(w*x - 5*t)*1.5;
+    } else {
+      const r1 = Math.hypot(x-slitX, y-s1y);
+      const r2 = Math.hypot(x-slitX, y-s2y);
+      v = Math.sin(w*r1 - 5*t)/Math.sqrt(r1/30+1) + Math.sin(w*r2 - 5*t)/Math.sqrt(r2/30+1);
+    }
+    const g = Math.max(0, Math.min(255, Math.floor(127 + v*60)));
+    for(let dy=0;dy<2;dy++) for(let dx=0;dx<2;dx++){
+      const idx = ((y+dy)*W + (x+dx))*4;
+      data[idx]=g; data[idx+1]=g; data[idx+2]=g; data[idx+3]=255;
+    }
+  }
+  ctx.putImageData(img,0,0);
+  // barrier
+  ctx.fillStyle='#888888';
+  ctx.fillRect(slitX-5, 0, 10, s1y-15);
+  ctx.fillRect(slitX-5, s1y+15, 10, s2y-s1y-30);
+  ctx.fillRect(slitX-5, s2y+15, 10, H-s2y-15);
+  // screen with intensity
+  ctx.fillStyle='#dddddd'; ctx.fillRect(screenX-3, 50, 6, H-100);
+  for(let y=50;y<H-50;y++){
+    const r1 = Math.hypot(screenX-slitX, y-s1y);
+    const r2 = Math.hypot(screenX-slitX, y-s2y);
+    const a = Math.cos(w*(r2-r1)/2);
+    const I = a*a;
+    const g = Math.floor(I*255);
+    ctx.fillStyle = `rgb(${g},${g},${g})`;
+    ctx.fillRect(screenX+5, y, 80, 1);
+  }
+}
+function step(){ if(!running)return; t+=0.05; draw(); requestAnimationFrame(step); }
+document.getElementById('L').oninput=e=>{L=+e.target.value; document.getElementById('vL').textContent=L; if(!running)draw();};
+document.getElementById('d').oninput=e=>{d=+e.target.value; document.getElementById('vD').textContent=d; if(!running)draw();};
+document.getElementById('run').onclick=()=>{if(!running){running=true; step();}};
+document.getElementById('pause').onclick=()=>running=false;
+draw();
+</script>
+</body></html>

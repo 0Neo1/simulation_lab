@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><title>Relative Velocity</title><link rel="stylesheet" href="../styles.css"></head>
+<body>
+<header><a href="../index.html"><h1>Relative Velocity — River Crossing</h1></a><p>A boat tries to cross a flowing river.</p></header>
+<main>
+<a class="back-link" href="../index.html">&larr; All simulations</a>
+<div class="sim-container">
+  <div>
+    <div class="canvas-wrap"><canvas id="cv" width="800" height="500"></canvas></div>
+    <div class="info-box">
+      <h3>The Physics</h3>
+      <p>The boat's velocity relative to the ground is the vector sum of its velocity relative to the water and the water's velocity relative to the ground.</p>
+      <div class="formula">v⃗_BG = v⃗_BW + v⃗_WG</div>
+      <p>Even if the boat aims straight across, the current carries it downstream.</p>
+    </div>
+  </div>
+  <div class="controls">
+    <h3>Controls</h3>
+    <div class="control-row"><label>Boat speed (rel. water) <span class="val" id="vBs">8 m/s</span></label><input type="range" id="boat" min="1" max="20" value="8"></div>
+    <div class="control-row"><label>Boat heading <span class="val" id="vBh">90°</span></label><input type="range" id="head" min="0" max="180" value="90"></div>
+    <div class="control-row"><label>River current <span class="val" id="vC">3 m/s</span></label><input type="range" id="cur" min="0" max="15" value="3"></div>
+    <div class="btn-row"><button id="run">Start</button><button class="secondary" id="reset">Reset</button></div>
+    <div class="readouts">
+      <div>v_ground: <span id="rVG">0</span></div>
+      <div>angle: <span id="rAng">0°</span></div>
+      <div>cross time: <span id="rT">0 s</span></div>
+      <div>drift: <span id="rD">0 m</span></div>
+    </div>
+  </div>
+</div>
+</main>
+<script>
+const cv = document.getElementById('cv'), ctx = cv.getContext('2d');
+let boat = 8, head = 90, cur = 3;
+let bx = 50, by = 400, t = 0, running = false;
+const scale = 5, riverW = 60; // 60 m wide
+
+function draw(){
+  ctx.clearRect(0,0,cv.width,cv.height);
+  // banks
+  ctx.fillStyle = '#1f1f1f'; ctx.fillRect(0,0,cv.width,50); ctx.fillRect(0,450,cv.width,50);
+  // river
+  ctx.fillStyle = '#3a3a3a'; ctx.fillRect(0,50,cv.width,400);
+  // current arrows
+  ctx.strokeStyle = 'rgba(255,255,255,0.5)'; ctx.lineWidth = 2;
+  for(let y=80;y<450;y+=50) for(let x=20;x<cv.width;x+=80){
+    ctx.beginPath(); ctx.moveTo(x,y); ctx.lineTo(x+cur*4,y); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(x+cur*4,y); ctx.lineTo(x+cur*4-6,y-4); ctx.lineTo(x+cur*4-6,y+4); ctx.closePath();
+    ctx.fillStyle = 'rgba(255,255,255,0.5)'; ctx.fill();
+  }
+  // boat
+  ctx.save(); ctx.translate(bx, by);
+  ctx.rotate(-(head-90)*Math.PI/180);
+  ctx.fillStyle = '#3a3a3a';
+  ctx.beginPath(); ctx.moveTo(0,-15); ctx.lineTo(8,10); ctx.lineTo(-8,10); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = '#fff'; ctx.fillRect(-2,-10,4,12);
+  ctx.restore();
+  // start marker
+  ctx.strokeStyle = '#dddddd'; ctx.setLineDash([5,5]);
+  ctx.beginPath(); ctx.moveTo(50,50); ctx.lineTo(50,450); ctx.stroke();
+  ctx.setLineDash([]);
+}
+
+function step(){
+  if(!running) return;
+  const dt = 0.05; t += dt;
+  const vbx = boat*Math.cos(head*Math.PI/180);
+  const vby = -boat*Math.sin(head*Math.PI/180);
+  bx += (vbx + cur)*scale*dt;
+  by += vby*scale*dt;
+  if(by < 50 || bx > cv.width || bx < 0){ running = false; }
+  document.getElementById('rVG').textContent = Math.hypot(vbx+cur, vby).toFixed(2)+' m/s';
+  document.getElementById('rAng').textContent = (Math.atan2(-vby, vbx+cur)*180/Math.PI).toFixed(1)+'°';
+  document.getElementById('rT').textContent = t.toFixed(2)+' s';
+  document.getElementById('rD').textContent = ((bx-50)/scale).toFixed(1)+' m';
+  draw(); requestAnimationFrame(step);
+}
+
+document.getElementById('boat').oninput = e=>{boat=+e.target.value; document.getElementById('vBs').textContent=boat+' m/s';};
+document.getElementById('head').oninput = e=>{head=+e.target.value; document.getElementById('vBh').textContent=head+'°';};
+document.getElementById('cur').oninput = e=>{cur=+e.target.value; document.getElementById('vC').textContent=cur+' m/s'; draw();};
+document.getElementById('run').onclick = ()=>{ if(!running){running=true; step();} };
+document.getElementById('reset').onclick = ()=>{ running=false; bx=50; by=400; t=0; draw(); };
+draw();
+</script>
+</body></html>

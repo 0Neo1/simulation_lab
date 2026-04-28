@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><title>Ohm's Law</title><link rel="stylesheet" href="../styles.css"></head>
+<body>
+<header><a href="../index.html"><h1>Ohm's Law Circuit</h1></a><p>Voltage, current, and resistance.</p></header>
+<main>
+<a class="back-link" href="../index.html">&larr; All simulations</a>
+<div class="sim-container">
+  <div>
+    <div class="canvas-wrap"><canvas id="cv" width="800" height="500"></canvas></div>
+    <div class="info-box">
+      <h3>The Physics</h3>
+      <p>Current is proportional to voltage and inversely proportional to resistance.</p>
+      <div class="formula">V = I R &nbsp;&nbsp; P = VI = I²R</div>
+      <p>Watch electrons flow faster when V increases or R decreases.</p>
+    </div>
+  </div>
+  <div class="controls">
+    <h3>Controls</h3>
+    <div class="control-row"><label>Voltage <span class="val" id="vV">9 V</span></label><input type="range" id="v" min="0" max="24" value="9"></div>
+    <div class="control-row"><label>Resistance <span class="val" id="vR">3 Ω</span></label><input type="range" id="r" min="1" max="20" value="3"></div>
+    <div class="readouts">
+      <div>I: <span id="rI">0 A</span></div>
+      <div>P: <span id="rP">0 W</span></div>
+    </div>
+  </div>
+</div>
+</main>
+<script>
+const cv=document.getElementById('cv'), ctx=cv.getContext('2d');
+let V=9, R=3, t=0;
+let electrons = [];
+const path = [
+  {x:150,y:400},{x:150,y:150},{x:650,y:150},{x:650,y:400}
+];
+const totalLen = 250+500+250;
+for(let i=0;i<30;i++) electrons.push({s:i/30 * totalLen});
+
+function pos(s){
+  s = ((s%totalLen)+totalLen)%totalLen;
+  if(s<250) return {x:150, y:400-s};
+  if(s<750) return {x:150 + (s-250), y:150};
+  return {x:650, y:150 + (s-750)};
+}
+
+function draw(){
+  ctx.clearRect(0,0,cv.width,cv.height);
+  ctx.fillStyle='#0a0a0a'; ctx.fillRect(0,0,cv.width,cv.height);
+  // wires
+  ctx.strokeStyle='#888888'; ctx.lineWidth=4;
+  ctx.beginPath();
+  ctx.moveTo(150,400); ctx.lineTo(150,150); ctx.lineTo(650,150); ctx.lineTo(650,400);
+  ctx.lineTo(450, 400); ctx.moveTo(350, 400); ctx.lineTo(150,400);
+  ctx.stroke();
+  // battery
+  ctx.fillStyle='#fff'; ctx.fillRect(370, 380, 60, 40); ctx.strokeRect(370,380,60,40);
+  ctx.beginPath(); ctx.moveTo(360, 390); ctx.lineTo(360, 410); ctx.lineWidth=4; ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(440, 395); ctx.lineTo(440, 405); ctx.stroke();
+  ctx.fillStyle='#dddddd'; ctx.font='14px sans-serif'; ctx.fillText(V+'V', 385, 405);
+  // resistor (zigzag) on top wire
+  ctx.strokeStyle='#888888'; ctx.lineWidth=3;
+  ctx.beginPath();
+  ctx.moveTo(350,150);
+  for(let i=0;i<10;i++){
+    ctx.lineTo(350+i*10+5, 150+(i%2===0?-12:12));
+  }
+  ctx.lineTo(450,150);
+  ctx.stroke();
+  ctx.fillStyle='#dddddd'; ctx.fillText(R+'Ω', 390, 130);
+  // electrons
+  const I = V/R;
+  electrons.forEach(e=>{
+    e.s += I*1.5;
+    const p = pos(e.s);
+    ctx.fillStyle='#ffffff'; ctx.beginPath(); ctx.arc(p.x,p.y,5,0,2*Math.PI); ctx.fill();
+    ctx.fillStyle='#fff'; ctx.font='bold 9px sans-serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillText('-', p.x, p.y); ctx.textAlign='left'; ctx.textBaseline='alphabetic';
+  });
+  // bulb glow proportional to power
+  const P = V*I;
+  const glow = Math.min(1, P/50);
+  ctx.fillStyle = `rgba(255,200,0,${glow})`;
+  ctx.beginPath(); ctx.arc(400, 150, 30+glow*10, 0, 2*Math.PI); ctx.fill();
+  document.getElementById('rI').textContent = I.toFixed(2)+' A';
+  document.getElementById('rP').textContent = P.toFixed(1)+' W';
+}
+
+document.getElementById('v').oninput=e=>{V=+e.target.value; document.getElementById('vV').textContent=V+' V';};
+document.getElementById('r').oninput=e=>{R=+e.target.value; document.getElementById('vR').textContent=R+' Ω';};
+function loop(){ draw(); requestAnimationFrame(loop); }
+loop();
+</script>
+</body></html>

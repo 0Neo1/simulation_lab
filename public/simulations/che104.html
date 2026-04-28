@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Carbonate Reaction Rate</title>
+<link rel="stylesheet" href="/simulations/_shared.css" />
+</head>
+<body>
+<div class="app">
+  <header>
+    <h1>CaCO₃ Reaction Rate — Water vs Dilute HCl</h1>
+    <span class="pill">Class 10 · Chemistry</span>
+  </header>
+  <div class="grid">
+    <div class="card">
+      <h2>Side-by-side Beakers</h2>
+      <div class="viz"><canvas id="cv" width="780" height="380"></canvas></div>
+      <p class="note">CaCO₃ + 2HCl → CaCl₂ + H₂O + CO₂↑. With water there is little reaction; with HCl, vigorous bubbles.</p>
+    </div>
+    <div class="card controls">
+      <h2>Controls</h2>
+      <button class="btn" id="add">Add CaCO₃ to both</button>
+      <button class="btn warn" id="reset">Reset</button>
+      <div class="values">
+        <div class="value"><div class="label">Beaker 1 (water)</div><div class="v" id="b1" style="font-size:13px">—</div></div>
+        <div class="value"><div class="label">Beaker 2 (HCl)</div><div class="v" id="b2" style="font-size:13px">—</div></div>
+        <div class="value"><div class="label">Time</div><div class="v" id="t">0.0 s</div></div>
+        <div class="value"><div class="label">Bubbles in HCl</div><div class="v" id="bb">0</div></div>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+const cv = document.getElementById('cv'); const ctx = cv.getContext('2d');
+let added = false, t0 = 0;
+let bubblesL = [], bubblesR = [];
+function draw() {
+  const W = cv.width, H = cv.height;
+  ctx.fillStyle = '#0b1220'; ctx.fillRect(0, 0, W, H);
+  // beakers
+  for (let i = 0; i < 2; i++) {
+    const x = 120 + i * 320;
+    ctx.strokeStyle = '#cbd5e1'; ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(x, 80); ctx.lineTo(x, 320); ctx.lineTo(x + 200, 320); ctx.lineTo(x + 200, 80); ctx.stroke();
+    // liquid
+    ctx.fillStyle = i === 0 ? 'rgba(56,189,248,0.3)' : 'rgba(254,243,199,0.4)';
+    ctx.fillRect(x + 2, 160, 196, 158);
+    // CaCO3 chips
+    if (added) {
+      ctx.fillStyle = '#cbd5e1';
+      for (let j = 0; j < 6; j++) {
+        ctx.beginPath();
+        ctx.arc(x + 60 + j * 16, 310 - j % 2 * 4, 5, 0, Math.PI * 2); ctx.fill();
+      }
+    }
+    ctx.fillStyle = '#cbd5e1'; ctx.font = '12px Arial';
+    ctx.fillText(i === 0 ? 'Distilled Water' : 'Dilute HCl', x + 50, 70);
+  }
+  // bubbles
+  if (added) {
+    // few in left
+    if (Math.random() < 0.05) bubblesL.push({ x: 220 + Math.random() * 160, y: 320, s: 2 + Math.random() * 3, v: 0.3 + Math.random() * 0.3 });
+    // many in right
+    for (let k = 0; k < 4; k++) if (Math.random() < 0.45) bubblesR.push({ x: 540 + Math.random() * 160, y: 320, s: 3 + Math.random() * 5, v: 0.6 + Math.random() * 1.2 });
+  }
+  bubblesL = bubblesL.filter(b => b.y > 165);
+  bubblesR = bubblesR.filter(b => b.y > 165);
+  bubblesL.forEach(b => { b.y -= b.v; ctx.fillStyle = 'rgba(255,255,255,0.5)'; ctx.beginPath(); ctx.arc(b.x, b.y, b.s, 0, Math.PI * 2); ctx.fill(); });
+  bubblesR.forEach(b => { b.y -= b.v; ctx.fillStyle = 'rgba(255,255,255,0.7)'; ctx.beginPath(); ctx.arc(b.x, b.y, b.s, 0, Math.PI * 2); ctx.fill(); });
+  if (added) {
+    const tElapsed = (Date.now() - t0) / 1000;
+    document.getElementById('t').textContent = tElapsed.toFixed(1) + ' s';
+    document.getElementById('bb').textContent = bubblesR.length;
+    document.getElementById('b1').textContent = 'Hardly any bubbles';
+    document.getElementById('b2').textContent = 'Vigorous CO₂ effervescence';
+  }
+  requestAnimationFrame(draw);
+}
+document.getElementById('add').addEventListener('click', () => { if (!added) { added = true; t0 = Date.now(); } });
+document.getElementById('reset').addEventListener('click', () => {
+  added = false; bubblesL = []; bubblesR = [];
+  document.getElementById('t').textContent = '0.0 s'; document.getElementById('bb').textContent = '0';
+  document.getElementById('b1').textContent = '—'; document.getElementById('b2').textContent = '—';
+});
+draw();
+</script>
+</body>
+</html>

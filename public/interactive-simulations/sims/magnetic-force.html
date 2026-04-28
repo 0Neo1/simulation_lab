@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><title>Lorentz Force</title><link rel="stylesheet" href="../styles.css"></head>
+<body>
+<header><a href="../index.html"><h1>Charged Particle in a Magnetic Field</h1></a><p>The Lorentz force creates circular motion.</p></header>
+<main>
+<a class="back-link" href="../index.html">&larr; All simulations</a>
+<div class="sim-container">
+  <div>
+    <div class="canvas-wrap"><canvas id="cv" width="800" height="500"></canvas></div>
+    <div class="info-box">
+      <h3>The Physics</h3>
+      <p>A magnetic field exerts a force perpendicular to a charge's velocity. With B out of the page, a positive charge moving right experiences an upward force.</p>
+      <div class="formula">F⃗ = q v⃗ × B⃗ &nbsp;&nbsp; r = mv/(qB)</div>
+    </div>
+  </div>
+  <div class="controls">
+    <h3>Controls</h3>
+    <div class="control-row"><label>B field <span class="val" id="vB">1.0</span></label><input type="range" id="B" min="-30" max="30" value="10"></div>
+    <div class="control-row"><label>Initial speed <span class="val" id="vV">3</span></label><input type="range" id="v" min="1" max="10" value="3"></div>
+    <div class="control-row"><label>Charge q <span class="val" id="vQ">+1</span></label><input type="range" id="q" min="-3" max="3" value="1" step="1"></div>
+    <div class="btn-row"><button id="run">Start</button><button class="danger" id="reset">Reset</button></div>
+    <div class="readouts">
+      <div>r: <span id="rR">0</span></div>
+      <div>T: <span id="rT">0</span></div>
+    </div>
+  </div>
+</div>
+</main>
+<script>
+const cv=document.getElementById('cv'), ctx=cv.getContext('2d');
+let B=1.0, v0=3, q=1;
+let p={x:100,y:250, vx:3, vy:0};
+let trail=[], running=false;
+
+function step(){
+  if(!running) return;
+  const dt = 0.05;
+  // F = qv x B (B out of page = +z), so Fx = qvy*B, Fy = -qvx*B
+  const ax = q*p.vy*B;
+  const ay = -q*p.vx*B;
+  p.vx += ax*dt; p.vy += ay*dt;
+  p.x += p.vx*dt*30; p.y += p.vy*dt*30;
+  trail.push({x:p.x,y:p.y});
+  if(trail.length>500) trail.shift();
+  if(p.x<0||p.x>cv.width||p.y<0||p.y>cv.height){ running=false; }
+  draw(); requestAnimationFrame(step);
+}
+
+function draw(){
+  ctx.clearRect(0,0,cv.width,cv.height);
+  ctx.fillStyle='#0d0d0d'; ctx.fillRect(0,0,cv.width,cv.height);
+  // B-field dots (out of page)
+  ctx.fillStyle='#888';
+  for(let y=20;y<cv.height;y+=40) for(let x=20;x<cv.width;x+=40){
+    if(B>0){
+      ctx.beginPath(); ctx.arc(x,y,2,0,2*Math.PI); ctx.fill();
+      ctx.strokeStyle='#888'; ctx.beginPath(); ctx.arc(x,y,7,0,2*Math.PI); ctx.stroke();
+    } else if(B<0){
+      ctx.strokeStyle='#888'; ctx.lineWidth=1;
+      ctx.beginPath(); ctx.arc(x,y,7,0,2*Math.PI); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(x-5,y-5); ctx.lineTo(x+5,y+5); ctx.moveTo(x+5,y-5); ctx.lineTo(x-5,y+5); ctx.stroke();
+    }
+  }
+  // trail
+  ctx.strokeStyle='rgba(140,140,140,0.6)'; ctx.lineWidth=2;
+  ctx.beginPath();
+  trail.forEach((t,i)=>{ if(i===0) ctx.moveTo(t.x,t.y); else ctx.lineTo(t.x,t.y); });
+  ctx.stroke();
+  // particle
+  ctx.fillStyle = q>0?'#888888':'#ffffff';
+  ctx.beginPath(); ctx.arc(p.x,p.y,10,0,2*Math.PI); ctx.fill();
+  ctx.strokeStyle='#dddddd'; ctx.stroke();
+  ctx.fillStyle='#fff'; ctx.font='bold 12px sans-serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.fillText(q>0?'+':'−', p.x, p.y); ctx.textAlign='left'; ctx.textBaseline='alphabetic';
+  // velocity
+  ctx.strokeStyle='#aaaaaa'; ctx.lineWidth=2;
+  ctx.beginPath(); ctx.moveTo(p.x,p.y); ctx.lineTo(p.x+p.vx*15,p.y+p.vy*15); ctx.stroke();
+  // force
+  const Fx = q*p.vy*B, Fy = -q*p.vx*B;
+  ctx.strokeStyle='#888888'; ctx.beginPath(); ctx.moveTo(p.x,p.y); ctx.lineTo(p.x+Fx*8,p.y+Fy*8); ctx.stroke();
+
+  if(B!==0){
+    const m = 1, vMag = Math.hypot(p.vx,p.vy);
+    document.getElementById('rR').textContent = (m*vMag/(Math.abs(q*B))).toFixed(2);
+    document.getElementById('rT').textContent = (2*Math.PI*m/(Math.abs(q*B))).toFixed(2);
+  }
+}
+
+document.getElementById('B').oninput=e=>{B=+e.target.value/10; document.getElementById('vB').textContent=B.toFixed(1); if(!running) draw();};
+document.getElementById('v').oninput=e=>{v0=+e.target.value; document.getElementById('vV').textContent=v0;};
+document.getElementById('q').oninput=e=>{q=+e.target.value; document.getElementById('vQ').textContent=(q>=0?'+':'')+q;};
+document.getElementById('run').onclick=()=>{
+  if(!running){ p={x:100,y:250,vx:v0,vy:0}; trail=[]; running=true; step(); }
+};
+document.getElementById('reset').onclick=()=>{ running=false; p={x:100,y:250,vx:v0,vy:0}; trail=[]; draw(); };
+draw();
+</script>
+</body></html>

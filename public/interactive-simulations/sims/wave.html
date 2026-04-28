@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><title>Traveling Wave</title><link rel="stylesheet" href="../styles.css"></head>
+<body>
+<header><a href="../index.html"><h1>Traveling Wave</h1></a><p>See amplitude, wavelength, and frequency in action.</p></header>
+<main>
+<a class="back-link" href="../index.html">&larr; All simulations</a>
+<div class="sim-container">
+  <div>
+    <div class="canvas-wrap"><canvas id="cv" width="800" height="400"></canvas></div>
+    <div class="info-box">
+      <h3>The Physics</h3>
+      <p>A traveling wave: <em>y(x,t) = A sin(kx − ωt)</em>. Wave speed <em>v = ω/k = λf</em>.</p>
+      <div class="formula">v = f λ &nbsp;&nbsp; T = 1/f &nbsp;&nbsp; k = 2π/λ &nbsp;&nbsp; ω = 2πf</div>
+    </div>
+  </div>
+  <div class="controls">
+    <h3>Controls</h3>
+    <div class="control-row"><label>Amplitude <span class="val" id="vA">60</span></label><input type="range" id="A" min="10" max="100" value="60"></div>
+    <div class="control-row"><label>Wavelength <span class="val" id="vL">200</span></label><input type="range" id="L" min="50" max="400" value="200"></div>
+    <div class="control-row"><label>Frequency <span class="val" id="vF">1.0 Hz</span></label><input type="range" id="f" min="2" max="40" value="10"></div>
+    <div class="control-row"><label>Direction
+      <select id="dir"><option value="1">Right</option><option value="-1">Left</option></select></label></div>
+    <div class="btn-row"><button id="run">Start</button><button class="secondary" id="pause">Pause</button></div>
+    <div class="readouts">
+      <div>v: <span id="rV">0</span></div>
+      <div>T: <span id="rT">0</span></div>
+    </div>
+  </div>
+</div>
+</main>
+<script>
+const cv=document.getElementById('cv'), ctx=cv.getContext('2d');
+let A=60, L=200, f=1.0, dir=1, t=0, running=false;
+function draw(){
+  ctx.clearRect(0,0,cv.width,cv.height);
+  ctx.fillStyle='#0a0a0a'; ctx.fillRect(0,0,cv.width,cv.height);
+  // axis
+  const midY = 200;
+  ctx.strokeStyle='#bbbbbb'; ctx.beginPath(); ctx.moveTo(0,midY); ctx.lineTo(cv.width,midY); ctx.stroke();
+  // wave
+  ctx.strokeStyle='#ffffff'; ctx.lineWidth=3;
+  ctx.beginPath();
+  const k = 2*Math.PI/L, w = 2*Math.PI*f;
+  for(let x=0;x<=cv.width;x++){
+    const y = midY - A*Math.sin(k*x - dir*w*t);
+    if(x===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+  }
+  ctx.stroke();
+  // crest markers
+  for(let x=0;x<=cv.width;x++){
+    const phase = k*x - dir*w*t;
+    if(Math.abs(((phase%(2*Math.PI))+2*Math.PI)%(2*Math.PI) - Math.PI/2) < 0.05){
+      ctx.fillStyle='#888888'; ctx.beginPath(); ctx.arc(x, midY-A, 5, 0, 2*Math.PI); ctx.fill();
+    }
+  }
+  document.getElementById('rV').textContent=(L*f).toFixed(1)+' px/s';
+  document.getElementById('rT').textContent=(1/f).toFixed(2)+' s';
+}
+function step(){ if(!running)return; t+=0.02; draw(); requestAnimationFrame(step); }
+['A','L','f','dir'].forEach(id=>document.getElementById(id).oninput=()=>{
+  A=+document.getElementById('A').value; L=+document.getElementById('L').value;
+  f=+document.getElementById('f').value/10; dir=+document.getElementById('dir').value;
+  document.getElementById('vA').textContent=A;
+  document.getElementById('vL').textContent=L;
+  document.getElementById('vF').textContent=f.toFixed(1)+' Hz';
+  if(!running) draw();
+});
+document.getElementById('run').onclick=()=>{if(!running){running=true; step();}};
+document.getElementById('pause').onclick=()=>running=false;
+draw();
+</script>
+</body></html>

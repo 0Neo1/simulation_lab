@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Litmus & pH Test</title>
+<link rel="stylesheet" href="/simulations/_shared.css" />
+</head>
+<body>
+<div class="app">
+  <header>
+    <h1>Litmus & pH Test on Common Foods</h1>
+    <span class="pill">Class 10 · Chemistry</span>
+  </header>
+  <div class="grid">
+    <div class="card">
+      <h2>Test Strip</h2>
+      <div class="viz"><canvas id="cv" width="780" height="380"></canvas></div>
+      <p class="note">Click a food sample. The pH paper colour and litmus colour change tell you if it is acidic, basic or neutral.</p>
+    </div>
+    <div class="card controls">
+      <h2>Foods</h2>
+      <div class="row" id="foods"></div>
+      <button class="btn secondary" id="reset">Reset</button>
+      <div class="values">
+        <div class="value"><div class="label">Sample</div><div class="v" id="s">—</div></div>
+        <div class="value"><div class="label">pH</div><div class="v" id="p">—</div></div>
+        <div class="value"><div class="label">Litmus</div><div class="v" id="l" style="font-size:12px">—</div></div>
+        <div class="value"><div class="label">Nature</div><div class="v" id="n">—</div></div>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+const cv = document.getElementById('cv'); const ctx = cv.getContext('2d');
+const foods = [
+  { name: 'Lemon', pH: 2, lit: 'Blue → Red', nat: 'Acid' },
+  { name: 'Vinegar', pH: 3, lit: 'Blue → Red', nat: 'Acid' },
+  { name: 'Tomato', pH: 4, lit: 'Blue → Red', nat: 'Weak acid' },
+  { name: 'Milk', pH: 6.5, lit: 'No change', nat: 'Near neutral' },
+  { name: 'Pure water', pH: 7, lit: 'No change', nat: 'Neutral' },
+  { name: 'Baking soda', pH: 9, lit: 'Red → Blue', nat: 'Base' },
+  { name: 'Soap', pH: 10, lit: 'Red → Blue', nat: 'Base' },
+];
+let active = null;
+const cont = document.getElementById('foods');
+foods.forEach((f, i) => {
+  const b = document.createElement('button');
+  b.className = 'btn'; b.textContent = f.name;
+  b.addEventListener('click', () => { active = i; updateVals(); });
+  cont.appendChild(b);
+});
+function updateVals() {
+  if (active === null) return;
+  const f = foods[active];
+  document.getElementById('s').textContent = f.name;
+  document.getElementById('p').textContent = f.pH.toFixed(1);
+  document.getElementById('l').textContent = f.lit;
+  document.getElementById('n').textContent = f.nat;
+}
+function pHcol(p) {
+  if (p <= 3) return [220, 38, 38];
+  if (p <= 5) return [251, 146, 60];
+  if (p <= 6.7) return [254, 240, 138];
+  if (p <= 7.3) return [134, 239, 172];
+  if (p <= 9) return [56, 189, 248];
+  return [99, 102, 241];
+}
+function draw() {
+  const W = cv.width, H = cv.height;
+  ctx.fillStyle = '#0b1220'; ctx.fillRect(0, 0, W, H);
+  // pH chart
+  for (let i = 0; i < 14; i++) {
+    const c = pHcol(i + 0.5);
+    ctx.fillStyle = `rgb(${c.join(',')})`;
+    ctx.fillRect(60 + i * 40, 60, 40, 30);
+    ctx.fillStyle = '#0b1220'; ctx.font = '11px Arial';
+    ctx.fillText(i + '', 76 + i * 40, 80);
+  }
+  ctx.fillStyle = '#cbd5e1'; ctx.fillText('Universal pH chart', 60, 50);
+  // strip 1: pH paper
+  const c = active !== null ? pHcol(foods[active].pH) : [254, 252, 232];
+  ctx.fillStyle = `rgba(${c.join(',')},0.95)`;
+  ctx.fillRect(120, 160, 80, 160);
+  ctx.strokeStyle = '#cbd5e1'; ctx.strokeRect(120, 160, 80, 160);
+  ctx.fillStyle = '#cbd5e1'; ctx.font = '12px Arial'; ctx.fillText('pH paper', 130, 154);
+  // strip 2: red litmus
+  let redCol = [248, 113, 113];
+  if (active !== null && foods[active].lit.startsWith('Red')) redCol = [56, 189, 248];
+  ctx.fillStyle = `rgba(${redCol.join(',')},0.95)`;
+  ctx.fillRect(260, 160, 80, 160);
+  ctx.strokeRect(260, 160, 80, 160);
+  ctx.fillText('Red litmus', 268, 154);
+  // strip 3: blue litmus
+  let blueCol = [56, 189, 248];
+  if (active !== null && foods[active].lit.startsWith('Blue')) blueCol = [248, 113, 113];
+  ctx.fillStyle = `rgba(${blueCol.join(',')},0.95)`;
+  ctx.fillRect(400, 160, 80, 160);
+  ctx.strokeRect(400, 160, 80, 160);
+  ctx.fillText('Blue litmus', 408, 154);
+  // beaker on right
+  ctx.strokeStyle = '#cbd5e1'; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(580, 130); ctx.lineTo(580, 320); ctx.lineTo(720, 320); ctx.lineTo(720, 130); ctx.stroke();
+  if (active !== null) {
+    const c2 = pHcol(foods[active].pH);
+    ctx.fillStyle = `rgba(${c2.join(',')},0.45)`;
+    ctx.fillRect(582, 220, 138, 100);
+  }
+  ctx.fillStyle = '#cbd5e1'; ctx.fillText('Sample beaker', 590, 124);
+  if (active !== null) {
+    ctx.fillStyle = '#fff'; ctx.font = 'bold 13px Arial';
+    ctx.fillText(foods[active].name + '  · pH ' + foods[active].pH, 30, 30);
+  }
+}
+document.getElementById('reset').addEventListener('click', () => { active = null;
+  ['s', 'p', 'l', 'n'].forEach(id => document.getElementById(id).textContent = '—');
+  draw();
+});
+setInterval(draw, 80); draw();
+</script>
+</body>
+</html>

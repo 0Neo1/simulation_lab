@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><title>Uniform Circular Motion</title><link rel="stylesheet" href="../styles.css"></head>
+<body>
+<header><a href="../index.html"><h1>Uniform Circular Motion</h1></a><p>Centripetal acceleration always points to center.</p></header>
+<main>
+<a class="back-link" href="../index.html">&larr; All simulations</a>
+<div class="sim-container">
+  <div>
+    <div class="canvas-wrap"><canvas id="cv" width="800" height="500"></canvas></div>
+    <div class="info-box">
+      <h3>The Physics</h3>
+      <p>An object moving in a circle at constant speed is constantly accelerating because its direction changes.</p>
+      <div class="formula">a_c = v²/r = ω²r &nbsp;&nbsp; F_c = m a_c</div>
+    </div>
+  </div>
+  <div class="controls">
+    <h3>Controls</h3>
+    <div class="control-row"><label>Radius <span class="val" id="vR">120</span></label><input type="range" id="r" min="40" max="200" value="120"></div>
+    <div class="control-row"><label>Angular velocity <span class="val" id="vW">2.0</span></label><input type="range" id="w" min="2" max="60" value="20"></div>
+    <div class="btn-row"><button id="run">Start</button><button class="secondary" id="pause">Pause</button></div>
+    <div class="readouts">
+      <div>v: <span id="rV">0</span></div>
+      <div>a_c: <span id="rA">0</span></div>
+      <div>T: <span id="rT">0 s</span></div>
+      <div>θ: <span id="rTh">0°</span></div>
+    </div>
+  </div>
+</div>
+</main>
+<script>
+const cv=document.getElementById('cv'), ctx=cv.getContext('2d');
+const cx=400, cy=250;
+let r=120, w=2.0, theta=0, running=false;
+function draw(){
+  ctx.clearRect(0,0,cv.width,cv.height);
+  ctx.fillStyle='#0a0a0a'; ctx.fillRect(0,0,cv.width,cv.height);
+  ctx.strokeStyle='#cccccc'; ctx.lineWidth=2;
+  ctx.beginPath(); ctx.arc(cx,cy,r,0,2*Math.PI); ctx.stroke();
+  ctx.fillStyle='#dddddd'; ctx.beginPath(); ctx.arc(cx,cy,3,0,2*Math.PI); ctx.fill();
+  const px=cx+r*Math.cos(theta), py=cy+r*Math.sin(theta);
+  // velocity (tangent)
+  const vx = -r*w*Math.sin(theta), vy = r*w*Math.cos(theta);
+  // acceleration (toward center)
+  const ax = -r*w*w*Math.cos(theta), ay = -r*w*w*Math.sin(theta);
+  drawArrow(px,py, px+vx*3, py+vy*3, '#aaaaaa','v');
+  drawArrow(px,py, px+ax*1.5, py+ay*1.5, '#888888','a_c');
+  ctx.fillStyle='#ffffff'; ctx.beginPath(); ctx.arc(px,py,12,0,2*Math.PI); ctx.fill();
+  ctx.strokeStyle='#dddddd'; ctx.stroke();
+}
+function drawArrow(x1,y1,x2,y2,c,l){
+  ctx.strokeStyle=c; ctx.fillStyle=c; ctx.lineWidth=2;
+  ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(x2,y2); ctx.stroke();
+  const a=Math.atan2(y2-y1,x2-x1);
+  ctx.beginPath(); ctx.moveTo(x2,y2);
+  ctx.lineTo(x2-10*Math.cos(a-0.4),y2-10*Math.sin(a-0.4));
+  ctx.lineTo(x2-10*Math.cos(a+0.4),y2-10*Math.sin(a+0.4));
+  ctx.closePath(); ctx.fill();
+  ctx.font='bold 14px sans-serif'; ctx.fillText(l,x2+5,y2);
+}
+function step(){
+  if(!running) return;
+  theta += w*0.03;
+  document.getElementById('rV').textContent=(r*w).toFixed(1);
+  document.getElementById('rA').textContent=(r*w*w).toFixed(1);
+  document.getElementById('rT').textContent=(2*Math.PI/w).toFixed(2)+' s';
+  document.getElementById('rTh').textContent=((theta*180/Math.PI)%360).toFixed(0)+'°';
+  draw(); requestAnimationFrame(step);
+}
+document.getElementById('r').oninput=e=>{r=+e.target.value; document.getElementById('vR').textContent=r; if(!running)draw();};
+document.getElementById('w').oninput=e=>{w=+e.target.value/10; document.getElementById('vW').textContent=w.toFixed(1);};
+document.getElementById('run').onclick=()=>{if(!running){running=true; step();}};
+document.getElementById('pause').onclick=()=>running=false;
+draw();
+</script>
+</body></html>

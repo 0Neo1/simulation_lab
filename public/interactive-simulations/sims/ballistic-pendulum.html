@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><title>Ballistic Pendulum</title><link rel="stylesheet" href="../styles.css"></head>
+<body>
+<header><a href="../index.html"><h1>Ballistic Pendulum</h1></a><p>Bullet embeds in block — momentum becomes height.</p></header>
+<main>
+<a class="back-link" href="../index.html">&larr; All simulations</a>
+<div class="sim-container">
+  <div>
+    <div class="canvas-wrap"><canvas id="cv" width="800" height="500"></canvas></div>
+    <div class="info-box">
+      <h3>The Physics</h3>
+      <p>An inelastic collision conserves momentum but loses kinetic energy. After embedding, the combined mass swings up converting KE to PE.</p>
+      <div class="formula">v_bullet = ((m+M)/m) · √(2gh)</div>
+    </div>
+  </div>
+  <div class="controls">
+    <h3>Controls</h3>
+    <div class="control-row"><label>Bullet mass m <span class="val" id="vMb">0.05 kg</span></label><input type="range" id="mb" min="1" max="50" value="5"></div>
+    <div class="control-row"><label>Block mass M <span class="val" id="vMB">2 kg</span></label><input type="range" id="MB" min="5" max="50" value="20"></div>
+    <div class="control-row"><label>Bullet speed <span class="val" id="vV">300 m/s</span></label><input type="range" id="vb" min="50" max="500" value="300"></div>
+    <div class="control-row"><label>String length <span class="val" id="vL">2 m</span></label><input type="range" id="L" min="10" max="40" value="20"></div>
+    <div class="btn-row"><button id="fire">Fire</button><button class="secondary" id="reset">Reset</button></div>
+    <div class="readouts">
+      <div>v_block: <span id="rVb">0</span></div>
+      <div>height: <span id="rH">0</span></div>
+      <div>angle: <span id="rA">0°</span></div>
+      <div>KE lost: <span id="rE">0</span></div>
+    </div>
+  </div>
+</div>
+</main>
+<script>
+const cv=document.getElementById('cv'), ctx=cv.getContext('2d');
+const px=600, py=80;
+let mb=0.05, MB=2, vb=300, L=2;
+let phase='idle', theta=0, omega=0, bulletX=50, fired=false;
+let maxAngle=0;
+const scale=80;
+
+function reset(){
+  mb=+document.getElementById('mb').value/100;
+  MB=+document.getElementById('MB').value/10;
+  vb=+document.getElementById('vb').value;
+  L=+document.getElementById('L').value/10;
+  phase='idle'; theta=0; omega=0; bulletX=50; fired=false; maxAngle=0;
+}
+
+function fire(){
+  phase='bullet'; bulletX=50;
+}
+
+function step(){
+  if(phase==='bullet'){
+    bulletX += 12;
+    const targetX = px + L*scale*Math.sin(theta);
+    if(bulletX >= targetX-30){
+      // collision: conserve momentum
+      const Vafter = mb*vb/(mb+MB);
+      omega = Vafter/L;
+      phase='swing';
+      document.getElementById('rVb').textContent = Vafter.toFixed(2)+' m/s';
+      const KEi = 0.5*mb*vb*vb;
+      const KEf = 0.5*(mb+MB)*Vafter*Vafter;
+      document.getElementById('rE').textContent = (KEi-KEf).toFixed(1)+' J';
+    }
+  } else if(phase==='swing'){
+    const dt = 0.02;
+    const a = -(9.8/L)*Math.sin(theta);
+    omega += a*dt;
+    theta += omega*dt;
+    if(Math.abs(theta) > Math.abs(maxAngle)) maxAngle = theta;
+    if(omega < 0 && theta < 0.001){
+      phase='hang';
+      const h = L*(1-Math.cos(maxAngle));
+      document.getElementById('rH').textContent = h.toFixed(3)+' m';
+      document.getElementById('rA').textContent = (maxAngle*180/Math.PI).toFixed(1)+'°';
+    }
+  }
+  draw();
+  requestAnimationFrame(step);
+}
+
+function draw(){
+  ctx.clearRect(0,0,cv.width,cv.height);
+  ctx.fillStyle='#1a1a1a'; ctx.fillRect(0,0,cv.width,cv.height);
+  // ceiling
+  ctx.fillStyle='#888'; ctx.fillRect(px-50, py-15, 100, 12);
+  // string
+  const bx = px + L*scale*Math.sin(theta);
+  const by = py + L*scale*Math.cos(theta);
+  ctx.strokeStyle='#888888'; ctx.lineWidth=2;
+  ctx.beginPath(); ctx.moveTo(px,py); ctx.lineTo(bx,by); ctx.stroke();
+  // block
+  ctx.fillStyle='#3a3a3a'; ctx.fillRect(bx-30,by-30,60,60);
+  ctx.strokeStyle='#dddddd'; ctx.strokeRect(bx-30,by-30,60,60);
+  // bullet
+  if(phase==='bullet'){
+    ctx.fillStyle='#dddddd'; ctx.beginPath(); ctx.arc(bulletX, by, 5, 0, 2*Math.PI); ctx.fill();
+    ctx.fillStyle='#888'; ctx.fillRect(bulletX-12, by-1, 12, 2);
+  }
+  // gun
+  ctx.fillStyle='#444'; ctx.fillRect(20, by-8, 30, 16);
+}
+
+['mb','MB','vb','L'].forEach(id=>document.getElementById(id).oninput=()=>{
+  document.getElementById('vMb').textContent=(+document.getElementById('mb').value/100).toFixed(2)+' kg';
+  document.getElementById('vMB').textContent=(+document.getElementById('MB').value/10).toFixed(1)+' kg';
+  document.getElementById('vV').textContent=document.getElementById('vb').value+' m/s';
+  document.getElementById('vL').textContent=(+document.getElementById('L').value/10).toFixed(1)+' m';
+  if(phase==='idle'){ reset(); draw(); }
+});
+document.getElementById('fire').onclick=()=>{ if(phase==='idle'){ fire(); }};
+document.getElementById('reset').onclick=()=>{ reset(); draw(); };
+reset(); draw(); step();
+</script>
+</body></html>

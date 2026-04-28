@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><title>Vector Addition</title><link rel="stylesheet" href="../styles.css"></head>
+<body>
+<header><a href="../index.html"><h1>Vector Addition</h1></a><p>Drag the heads of two vectors to see the resultant.</p></header>
+<main>
+<a class="back-link" href="../index.html">&larr; All simulations</a>
+<div class="sim-container">
+  <div>
+    <div class="canvas-wrap"><canvas id="cv" width="800" height="600"></canvas></div>
+    <div class="info-box">
+      <h3>The Physics</h3>
+      <p>Vectors add by placing them head to tail. The resultant goes from the start of the first vector to the end of the last.</p>
+      <div class="formula">R = A + B<br>|R|² = |A|² + |B|² + 2|A||B|cos(θ)</div>
+    </div>
+  </div>
+  <div class="controls">
+    <h3>Vectors</h3>
+    <p style="font-size:13px; color:#888888; margin-bottom:12px;">Drag the colored arrowheads on the canvas.</p>
+    <div class="readouts" style="grid-template-columns:1fr;">
+      <div><b style="color:#ffffff">Vector A</b>: <span id="rA">0,0</span> &nbsp; |A|=<span id="rAm">0</span></div>
+      <div><b style="color:#888888">Vector B</b>: <span id="rB">0,0</span> &nbsp; |B|=<span id="rBm">0</span></div>
+      <div><b style="color:#aaaaaa">Resultant</b>: <span id="rR">0,0</span> &nbsp; |R|=<span id="rRm">0</span></div>
+      <div>Angle of R: <span id="rTheta">0°</span></div>
+    </div>
+    <div class="btn-row"><button id="reset">Reset</button></div>
+  </div>
+</div>
+</main>
+<script>
+const cv = document.getElementById('cv'), ctx = cv.getContext('2d');
+const cx = cv.width/2, cy = cv.height/2;
+let A = {x: 150, y: -80}, B = {x: 80, y: 150};
+let drag = null;
+
+function drawArrow(x1,y1,x2,y2,color,width=3){
+  ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = width;
+  ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(x2,y2); ctx.stroke();
+  const ang = Math.atan2(y2-y1, x2-x1);
+  ctx.beginPath();
+  ctx.moveTo(x2,y2);
+  ctx.lineTo(x2-12*Math.cos(ang-0.4), y2-12*Math.sin(ang-0.4));
+  ctx.lineTo(x2-12*Math.cos(ang+0.4), y2-12*Math.sin(ang+0.4));
+  ctx.closePath(); ctx.fill();
+}
+
+function draw() {
+  ctx.clearRect(0,0,cv.width,cv.height);
+  // grid
+  ctx.strokeStyle = '#222222'; ctx.lineWidth = 1;
+  for(let i=0;i<cv.width;i+=40){ctx.beginPath();ctx.moveTo(i,0);ctx.lineTo(i,cv.height);ctx.stroke();}
+  for(let j=0;j<cv.height;j+=40){ctx.beginPath();ctx.moveTo(0,j);ctx.lineTo(cv.width,j);ctx.stroke();}
+  // axes
+  ctx.strokeStyle = '#bbbbbb'; ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.moveTo(0,cy); ctx.lineTo(cv.width,cy); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(cx,0); ctx.lineTo(cx,cv.height); ctx.stroke();
+  // A from origin
+  drawArrow(cx, cy, cx+A.x, cy-A.y, '#ffffff');
+  // B head-to-tail from end of A
+  drawArrow(cx+A.x, cy-A.y, cx+A.x+B.x, cy-A.y-B.y, '#888888');
+  // resultant
+  drawArrow(cx, cy, cx+A.x+B.x, cy-A.y-B.y, '#aaaaaa', 4);
+  // handles
+  ctx.fillStyle = '#ffffff'; ctx.beginPath(); ctx.arc(cx+A.x, cy-A.y, 8, 0, 2*Math.PI); ctx.fill();
+  ctx.fillStyle = '#888888'; ctx.beginPath(); ctx.arc(cx+A.x+B.x, cy-A.y-B.y, 8, 0, 2*Math.PI); ctx.fill();
+
+  document.getElementById('rA').textContent = `(${A.x.toFixed(0)}, ${A.y.toFixed(0)})`;
+  document.getElementById('rB').textContent = `(${B.x.toFixed(0)}, ${B.y.toFixed(0)})`;
+  document.getElementById('rAm').textContent = Math.hypot(A.x,A.y).toFixed(1);
+  document.getElementById('rBm').textContent = Math.hypot(B.x,B.y).toFixed(1);
+  const Rx = A.x+B.x, Ry = A.y+B.y;
+  document.getElementById('rR').textContent = `(${Rx.toFixed(0)}, ${Ry.toFixed(0)})`;
+  document.getElementById('rRm').textContent = Math.hypot(Rx,Ry).toFixed(1);
+  document.getElementById('rTheta').textContent = (Math.atan2(Ry,Rx)*180/Math.PI).toFixed(1)+'°';
+}
+
+cv.onmousedown = e=>{
+  const r = cv.getBoundingClientRect(), s = cv.width/r.width;
+  const mx = (e.clientX-r.left)*s, my = (e.clientY-r.top)*s;
+  if (Math.hypot(mx-(cx+A.x), my-(cy-A.y)) < 14) drag = 'A';
+  else if (Math.hypot(mx-(cx+A.x+B.x), my-(cy-A.y-B.y)) < 14) drag = 'B';
+};
+cv.onmousemove = e=>{
+  if(!drag) return;
+  const r = cv.getBoundingClientRect(), s = cv.width/r.width;
+  const mx = (e.clientX-r.left)*s, my = (e.clientY-r.top)*s;
+  if(drag==='A'){ A.x = mx-cx; A.y = cy-my; }
+  else { B.x = mx-cx-A.x; B.y = cy-my-(-A.y); }
+  draw();
+};
+cv.onmouseup = ()=> drag=null;
+cv.onmouseleave = ()=> drag=null;
+document.getElementById('reset').onclick = ()=>{ A={x:150,y:-80}; B={x:80,y:150}; draw(); };
+draw();
+</script>
+</body></html>

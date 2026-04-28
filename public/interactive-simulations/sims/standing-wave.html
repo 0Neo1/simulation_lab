@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><title>Standing Waves</title><link rel="stylesheet" href="../styles.css"></head>
+<body>
+<header><a href="../index.html"><h1>Standing Waves</h1></a><p>Two opposing waves create nodes and antinodes.</p></header>
+<main>
+<a class="back-link" href="../index.html">&larr; All simulations</a>
+<div class="sim-container">
+  <div>
+    <div class="canvas-wrap"><canvas id="cv" width="800" height="400"></canvas></div>
+    <div class="info-box">
+      <h3>The Physics</h3>
+      <p>Two waves of equal amplitude traveling in opposite directions form a standing wave with stationary nodes (zeros) and antinodes (maxima).</p>
+      <div class="formula">y = 2A sin(kx) cos(ωt)<br>For string fixed at both ends: λ_n = 2L/n &nbsp; (n = 1, 2, 3, ...)</div>
+    </div>
+  </div>
+  <div class="controls">
+    <h3>Controls</h3>
+    <div class="control-row"><label>Mode (harmonic) <span class="val" id="vN">2</span></label><input type="range" id="n" min="1" max="8" value="2"></div>
+    <div class="control-row"><label>Amplitude <span class="val" id="vA">60</span></label><input type="range" id="A" min="10" max="100" value="60"></div>
+    <div class="control-row"><label>Speed <span class="val" id="vS">2.0</span></label><input type="range" id="s" min="2" max="40" value="20"></div>
+    <div class="control-row"><label>Show component waves <input type="checkbox" id="comp" checked></label></div>
+    <div class="btn-row"><button id="run">Start</button><button class="secondary" id="pause">Pause</button></div>
+  </div>
+</div>
+</main>
+<script>
+const cv=document.getElementById('cv'), ctx=cv.getContext('2d');
+let n=2, A=60, s=2.0, t=0, running=false;
+const x0=80, x1=720, midY=200;
+function draw(){
+  ctx.clearRect(0,0,cv.width,cv.height);
+  ctx.fillStyle='#0a0a0a'; ctx.fillRect(0,0,cv.width,cv.height);
+  // walls (fixed ends)
+  ctx.fillStyle='#444'; ctx.fillRect(x0-15,midY-50,15,100); ctx.fillRect(x1,midY-50,15,100);
+  ctx.strokeStyle='#bbbbbb'; ctx.beginPath(); ctx.moveTo(x0,midY); ctx.lineTo(x1,midY); ctx.stroke();
+  const Ls = x1-x0, k = n*Math.PI/Ls;
+  if(document.getElementById('comp').checked){
+    // right-moving
+    ctx.strokeStyle='rgba(140,140,140,0.4)'; ctx.lineWidth=1.5;
+    ctx.beginPath();
+    for(let xx=x0;xx<=x1;xx++){ const y = midY - A*Math.sin(k*(xx-x0) - s*t); if(xx===x0) ctx.moveTo(xx,y); else ctx.lineTo(xx,y); }
+    ctx.stroke();
+    // left-moving
+    ctx.strokeStyle='rgba(180,180,180,0.4)';
+    ctx.beginPath();
+    for(let xx=x0;xx<=x1;xx++){ const y = midY - A*Math.sin(k*(xx-x0) + s*t); if(xx===x0) ctx.moveTo(xx,y); else ctx.lineTo(xx,y); }
+    ctx.stroke();
+  }
+  // standing wave
+  ctx.strokeStyle='#ffffff'; ctx.lineWidth=3;
+  ctx.beginPath();
+  for(let xx=x0;xx<=x1;xx++){
+    const y = midY - 2*A*Math.sin(k*(xx-x0))*Math.cos(s*t);
+    if(xx===x0) ctx.moveTo(xx,y); else ctx.lineTo(xx,y);
+  }
+  ctx.stroke();
+  // nodes
+  for(let i=0;i<=n;i++){
+    const nx = x0 + i*Ls/n;
+    ctx.fillStyle='#dddddd'; ctx.beginPath(); ctx.arc(nx,midY,5,0,2*Math.PI); ctx.fill();
+  }
+  // labels
+  ctx.fillStyle='#dddddd'; ctx.font='14px sans-serif';
+  ctx.fillText(`Mode n = ${n}`, 350, 30);
+}
+function step(){ if(!running) return; t+=0.05; draw(); requestAnimationFrame(step); }
+document.getElementById('n').oninput=e=>{n=+e.target.value; document.getElementById('vN').textContent=n; if(!running)draw();};
+document.getElementById('A').oninput=e=>{A=+e.target.value; document.getElementById('vA').textContent=A;};
+document.getElementById('s').oninput=e=>{s=+e.target.value/10; document.getElementById('vS').textContent=s.toFixed(1);};
+document.getElementById('comp').onchange=()=>{if(!running)draw();};
+document.getElementById('run').onclick=()=>{if(!running){running=true; step();}};
+document.getElementById('pause').onclick=()=>running=false;
+draw();
+</script>
+</body></html>

@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><title>Thin Lens</title><link rel="stylesheet" href="../styles.css"></head>
+<body>
+<header><a href="../index.html"><h1>Thin Lens — Image Formation</h1></a><p>Drag the object to see real and virtual images.</p></header>
+<main>
+<a class="back-link" href="../index.html">&larr; All simulations</a>
+<div class="sim-container">
+  <div>
+    <div class="canvas-wrap"><canvas id="cv" width="800" height="400"></canvas></div>
+    <div class="info-box">
+      <h3>The Physics</h3>
+      <p>Three principal rays through a thin lens locate the image: parallel ray bends through F, central ray goes straight, focal-point ray emerges parallel.</p>
+      <div class="formula">1/d_o + 1/d_i = 1/f &nbsp;&nbsp; M = −d_i/d_o</div>
+      <p>Positive f = converging lens. Image is real if d_i &gt; 0, virtual if d_i &lt; 0.</p>
+    </div>
+  </div>
+  <div class="controls">
+    <h3>Controls</h3>
+    <div class="control-row"><label>Focal length <span class="val" id="vF">100</span></label><input type="range" id="f" min="-200" max="200" value="100"></div>
+    <div class="control-row"><label>Object distance <span class="val" id="vDo">250</span></label><input type="range" id="do" min="20" max="350" value="250"></div>
+    <div class="control-row"><label>Object height <span class="val" id="vH">60</span></label><input type="range" id="h" min="20" max="100" value="60"></div>
+    <div class="readouts">
+      <div>d_i: <span id="rDi">0</span></div>
+      <div>M: <span id="rM">0</span></div>
+      <div>Type: <span id="rT">—</span></div>
+    </div>
+  </div>
+</div>
+</main>
+<script>
+const cv=document.getElementById('cv'), ctx=cv.getContext('2d');
+const cy=200, lensX=400;
+let f=100, dO=250, h=60;
+function draw(){
+  ctx.clearRect(0,0,cv.width,cv.height);
+  ctx.fillStyle='#0a0a0a'; ctx.fillRect(0,0,cv.width,cv.height);
+  // optic axis
+  ctx.strokeStyle='#cccccc'; ctx.beginPath(); ctx.moveTo(0,cy); ctx.lineTo(cv.width,cy); ctx.stroke();
+  // lens
+  ctx.strokeStyle='#ffffff'; ctx.lineWidth=3;
+  ctx.beginPath();
+  if(f>0){
+    ctx.moveTo(lensX,40); ctx.lineTo(lensX,360);
+    // arrows up/down
+    ctx.moveTo(lensX-8,48); ctx.lineTo(lensX,40); ctx.lineTo(lensX+8,48);
+    ctx.moveTo(lensX-8,352); ctx.lineTo(lensX,360); ctx.lineTo(lensX+8,352);
+  } else {
+    ctx.moveTo(lensX,40); ctx.lineTo(lensX,360);
+    ctx.moveTo(lensX-8,48); ctx.lineTo(lensX,52); ctx.lineTo(lensX+8,48);
+    ctx.moveTo(lensX-8,352); ctx.lineTo(lensX,348); ctx.lineTo(lensX+8,352);
+  }
+  ctx.stroke();
+  // focal points
+  ctx.fillStyle='#ffffff';
+  ctx.beginPath(); ctx.arc(lensX-Math.abs(f),cy,4,0,2*Math.PI); ctx.fill();
+  ctx.beginPath(); ctx.arc(lensX+Math.abs(f),cy,4,0,2*Math.PI); ctx.fill();
+  ctx.fillStyle='#dddddd'; ctx.font='12px sans-serif';
+  ctx.fillText('F', lensX-Math.abs(f)-5, cy+18);
+  ctx.fillText('F', lensX+Math.abs(f)-5, cy+18);
+  // object
+  const objX = lensX - dO;
+  ctx.strokeStyle='#aaaaaa'; ctx.lineWidth=3;
+  ctx.beginPath(); ctx.moveTo(objX, cy); ctx.lineTo(objX, cy-h); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(objX-6,cy-h+8); ctx.lineTo(objX,cy-h); ctx.lineTo(objX+6,cy-h+8); ctx.stroke();
+  // image via lens equation
+  let dI;
+  if(Math.abs(dO - f) < 0.01) dI = Infinity;
+  else dI = 1/(1/f - 1/dO);
+  const imgX = lensX + dI;
+  const M = -dI/dO;
+  const imgH = M*h;
+  // rays:
+  // 1. parallel from top of object → through F on far side
+  if(isFinite(dI)){
+    const ox = objX, oy = cy - h;
+    // ray 1: parallel then through far F
+    ctx.strokeStyle='#888888'; ctx.lineWidth=1.5;
+    ctx.beginPath(); ctx.moveTo(ox,oy); ctx.lineTo(lensX, oy); ctx.stroke();
+    // after lens, goes through F (or its extension)
+    if(f>0){
+      // through far F
+      ctx.beginPath(); ctx.moveTo(lensX,oy);
+      const slope = (cy-oy)/Math.abs(f);
+      ctx.lineTo(cv.width, oy + slope*(cv.width-lensX)); ctx.stroke();
+    } else {
+      // appears to come from near F (diverge)
+      const slope = (oy-cy)/Math.abs(f);
+      ctx.beginPath(); ctx.moveTo(lensX,oy); ctx.lineTo(cv.width, oy + slope*(cv.width-lensX)); ctx.stroke();
+      // virtual extension
+      ctx.setLineDash([3,3]); ctx.beginPath(); ctx.moveTo(lensX,oy); ctx.lineTo(0, oy - slope*lensX); ctx.stroke(); ctx.setLineDash([]);
+    }
+    // ray 2: through center → straight
+    ctx.strokeStyle='#aaaaaa';
+    ctx.beginPath(); ctx.moveTo(ox,oy);
+    const slope2 = (cy-oy)/(lensX-ox);
+    ctx.lineTo(cv.width, oy + slope2*(cv.width-ox));
+    ctx.stroke();
+    // ray 3: through near F → parallel after
+    if(f>0 && dO > f){
+      ctx.strokeStyle='#888888';
+      const fx = lensX - f;
+      const slope3 = (cy-oy)/(fx-ox);
+      ctx.beginPath(); ctx.moveTo(ox,oy); ctx.lineTo(lensX, oy + slope3*(lensX-ox)); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(lensX, oy + slope3*(lensX-ox)); ctx.lineTo(cv.width, oy + slope3*(lensX-ox)); ctx.stroke();
+    }
+  }
+  // image
+  if(isFinite(dI) && imgX > 0 && imgX < cv.width){
+    ctx.strokeStyle = dI > 0 ? '#bbbbbb' : '#888';
+    ctx.setLineDash(dI>0 ? [] : [4,4]);
+    ctx.lineWidth=3;
+    ctx.beginPath(); ctx.moveTo(imgX, cy); ctx.lineTo(imgX, cy-imgH); ctx.stroke();
+    if(imgH<0){
+      ctx.beginPath(); ctx.moveTo(imgX-6,cy-imgH-8); ctx.lineTo(imgX,cy-imgH); ctx.lineTo(imgX+6,cy-imgH-8); ctx.stroke();
+    } else {
+      ctx.beginPath(); ctx.moveTo(imgX-6,cy-imgH+8); ctx.lineTo(imgX,cy-imgH); ctx.lineTo(imgX+6,cy-imgH+8); ctx.stroke();
+    }
+    ctx.setLineDash([]);
+  }
+  document.getElementById('rDi').textContent = isFinite(dI) ? dI.toFixed(1) : '∞';
+  document.getElementById('rM').textContent = isFinite(dI) ? M.toFixed(2) : '—';
+  document.getElementById('rT').textContent = !isFinite(dI) ? 'No image' : (dI>0 ? 'Real, '+(M<0?'inverted':'upright') : 'Virtual, upright');
+}
+['f','do','h'].forEach(id=>document.getElementById(id).oninput=()=>{
+  f=+document.getElementById('f').value; dO=+document.getElementById('do').value; h=+document.getElementById('h').value;
+  document.getElementById('vF').textContent=f;
+  document.getElementById('vDo').textContent=dO;
+  document.getElementById('vH').textContent=h;
+  draw();
+});
+draw();
+</script>
+</body></html>

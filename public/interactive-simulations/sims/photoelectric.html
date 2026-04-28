@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><title>Photoelectric Effect</title><link rel="stylesheet" href="../styles.css"></head>
+<body>
+<header><a href="../index.html"><h1>Photoelectric Effect</h1></a><p>Light ejects electrons — only above a threshold frequency.</p></header>
+<main>
+<a class="back-link" href="../index.html">&larr; All simulations</a>
+<div class="sim-container">
+  <div>
+    <div class="canvas-wrap"><canvas id="cv" width="800" height="500"></canvas></div>
+    <div class="info-box">
+      <h3>The Physics</h3>
+      <p>Einstein showed light comes in photons of energy <em>hf</em>. An electron is ejected only if a single photon has more energy than the metal's work function.</p>
+      <div class="formula">KE_max = h f − φ</div>
+      <p>Increasing intensity ejects more electrons but doesn't change KE. Increasing frequency increases KE.</p>
+    </div>
+  </div>
+  <div class="controls">
+    <h3>Controls</h3>
+    <div class="control-row"><label>Frequency (×10¹⁴ Hz) <span class="val" id="vF">7</span></label><input type="range" id="f" min="3" max="15" value="7"></div>
+    <div class="control-row"><label>Intensity <span class="val" id="vI">5</span></label><input type="range" id="i" min="1" max="10" value="5"></div>
+    <div class="control-row"><label>Metal: <select id="metal">
+      <option value="2.3">Sodium (φ=2.3 eV)</option>
+      <option value="4.5">Copper (φ=4.5 eV)</option>
+      <option value="2.1">Cesium (φ=2.1 eV)</option>
+      <option value="4.3">Iron (φ=4.3 eV)</option>
+    </select></label></div>
+    <div class="readouts">
+      <div>E_photon: <span id="rE">0 eV</span></div>
+      <div>f₀: <span id="rF0">0</span></div>
+      <div>KE_max: <span id="rK">0 eV</span></div>
+      <div>Status: <span id="rS">—</span></div>
+    </div>
+  </div>
+</div>
+</main>
+<script>
+const cv=document.getElementById('cv'), ctx=cv.getContext('2d');
+let f=7, intensity=5, phi=2.3;
+const h_eV = 4.136e-15; // h in eV·s
+let photons=[], electrons=[];
+
+function step(){
+  const E = h_eV*f*1e14;
+  const KE = Math.max(0, E - phi);
+  // emit photons
+  if(Math.random() < intensity*0.15){
+    const wl = 600/f; // visual wavelength
+    photons.push({x:50, y:100+Math.random()*300, wl, color: freqToColor(f)});
+  }
+  photons.forEach(p=>p.x += 8);
+  // hit metal at x=400
+  photons.filter(p=>p.x>=400).forEach(p=>{
+    if(KE>0){
+      electrons.push({x:400, y:p.y, vx: 2+KE*2, vy:(Math.random()-0.5)*1.5});
+    }
+  });
+  photons = photons.filter(p=>p.x<400);
+  electrons.forEach(e=>{e.x += e.vx; e.y += e.vy;});
+  electrons = electrons.filter(e=>e.x<cv.width && e.x>0);
+  draw(E,KE);
+  requestAnimationFrame(step);
+}
+
+function freqToColor(f){
+  // f in 10^14 Hz; visible 4-7.5
+  if(f<4) return '#444444';
+  if(f<4.5) return '#888888';
+  if(f<5) return '#888888';
+  if(f<5.5) return '#cccccc';
+  if(f<6) return '#999999';
+  if(f<6.5) return '#aaaaaa';
+  if(f<7) return '#bbbbbb';
+  if(f<7.5) return '#666666';
+  if(f<10) return '#444444';
+  return '#aaaaaa';
+}
+
+function draw(E,KE){
+  ctx.clearRect(0,0,cv.width,cv.height);
+  ctx.fillStyle='#000000'; ctx.fillRect(0,0,cv.width,cv.height);
+  // metal plate
+  ctx.fillStyle='#888'; ctx.fillRect(400, 50, 25, 400);
+  ctx.strokeStyle='#fff'; ctx.strokeRect(400,50,25,400);
+  ctx.fillStyle='#fff'; ctx.font='14px sans-serif'; ctx.fillText('Metal', 405, 40);
+  // light source
+  ctx.fillStyle='#fff'; ctx.fillText('Light', 30, 40);
+  ctx.fillStyle='#444'; ctx.fillRect(20,80,40,300);
+  // detector
+  ctx.fillStyle='#444'; ctx.fillRect(720,180,40,140);
+  ctx.fillStyle='#fff'; ctx.fillText('Detector', 700, 170);
+  // photons
+  photons.forEach(p=>{
+    ctx.strokeStyle = p.color; ctx.lineWidth=2;
+    for(let dx=0; dx<25; dx+=4){
+      ctx.beginPath();
+      ctx.moveTo(p.x-dx, p.y + 4*Math.sin(dx*0.3));
+      ctx.lineTo(p.x-dx-3, p.y + 4*Math.sin((dx+3)*0.3));
+      ctx.stroke();
+    }
+  });
+  // electrons
+  ctx.fillStyle='#dddddd';
+  electrons.forEach(e=>{
+    ctx.beginPath(); ctx.arc(e.x, e.y, 4, 0, 2*Math.PI); ctx.fill();
+  });
+  // info
+  document.getElementById('rE').textContent = E.toFixed(2)+' eV';
+  document.getElementById('rF0').textContent = (phi/h_eV/1e14).toFixed(2)+' ×10¹⁴ Hz';
+  document.getElementById('rK').textContent = KE.toFixed(2)+' eV';
+  document.getElementById('rS').textContent = KE>0 ? 'Electrons emitted' : 'No emission (E < φ)';
+}
+
+document.getElementById('f').oninput=e=>{f=+e.target.value; document.getElementById('vF').textContent=f;};
+document.getElementById('i').oninput=e=>{intensity=+e.target.value; document.getElementById('vI').textContent=intensity;};
+document.getElementById('metal').onchange=e=>{phi=+e.target.value;};
+step();
+</script>
+</body></html>

@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><title>Titration</title><link rel="stylesheet" href="../styles.css"></head>
+<body>
+<header><a href="../index.html"><h1>Acid-Base Titration</h1></a><p>Watch the equivalence point arrive sharply.</p></header>
+<main>
+<a class="back-link" href="../index.html">&larr; All simulations</a>
+<div class="sim-container">
+  <div>
+    <div class="canvas-wrap"><canvas id="cv" width="800" height="500"></canvas></div>
+    <div class="info-box">
+      <h3>The Chemistry</h3>
+      <p>A known volume of acid is titrated with base of known concentration. The pH rises slowly at first, then jumps sharply through the equivalence point.</p>
+      <div class="formula">M_acid · V_acid = M_base · V_base (at eq. point, monoprotic)</div>
+    </div>
+  </div>
+  <div class="controls">
+    <h3>Controls</h3>
+    <div class="control-row"><label>Acid concentration <span class="val" id="vMa">0.1 M</span></label><input type="range" id="ma" min="1" max="20" value="10"></div>
+    <div class="control-row"><label>Base concentration <span class="val" id="vMb">0.1 M</span></label><input type="range" id="mb" min="1" max="20" value="10"></div>
+    <div class="control-row"><label>Acid volume <span class="val" id="vVa">25 mL</span></label><input type="range" id="va" min="10" max="50" value="25"></div>
+    <div class="btn-row"><button id="add1">Add 1 mL</button><button id="add5">Add 5 mL</button><button id="reset">Reset</button></div>
+    <div class="readouts">
+      <div>Volume base added: <span id="rV">0 mL</span></div>
+      <div>pH: <span id="rP">1.0</span></div>
+      <div>Eq. point: <span id="rE">25 mL</span></div>
+      <div>Color: <span id="rC">—</span></div>
+    </div>
+  </div>
+</div>
+</main>
+<script>
+const cv=document.getElementById('cv'), ctx=cv.getContext('2d');
+let Ma=0.1, Mb=0.1, Va=25;
+let Vb = 0;
+let history = [];
+
+function pH(){
+  const molA = Ma*Va/1000;
+  const molB = Mb*Vb/1000;
+  const Vt = (Va+Vb)/1000;
+  if(molA > molB){
+    const Hconc = (molA-molB)/Vt;
+    return -Math.log10(Hconc);
+  } else if(molB > molA){
+    const OHconc = (molB-molA)/Vt;
+    return 14+Math.log10(OHconc);
+  } else {
+    return 7;
+  }
+}
+
+function colorFor(p){
+  if(p<6) return '#aaaaaa'; // pink (phenolphthalein colorless in acid; using pH paper colors)
+  if(p<7.5) return '#fff';
+  return '#aaaaaa';
+}
+
+function indicatorColor(p){
+  // phenolphthalein: colorless below 8.2, pink above 10
+  if(p<8.2) return '#ffffff';
+  if(p<10) return '#999999';
+  return '#bbbbbb';
+}
+
+function draw(){
+  ctx.clearRect(0,0,cv.width,cv.height);
+  ctx.fillStyle='#0a0a0a'; ctx.fillRect(0,0,cv.width,cv.height);
+  // burette
+  ctx.strokeStyle='#999999'; ctx.lineWidth=2;
+  ctx.beginPath(); ctx.rect(120,40,40,250); ctx.stroke();
+  // base in burette
+  const Vmax = Va*2.5;
+  const fill = 1 - Vb/Vmax;
+  ctx.fillStyle='#aaaaaa'; ctx.fillRect(122, 42+(1-fill)*245, 36, fill*245);
+  ctx.fillStyle='#dddddd'; ctx.font='12px sans-serif';
+  ctx.fillText('NaOH', 165, 60);
+  ctx.fillText(Mb.toFixed(2)+' M', 165, 75);
+  // tip
+  ctx.beginPath(); ctx.moveTo(120,290); ctx.lineTo(160,290); ctx.lineTo(140,310); ctx.closePath();
+  ctx.fillStyle='#888'; ctx.fill(); ctx.stroke();
+  // flask
+  ctx.beginPath();
+  ctx.moveTo(220, 350); ctx.lineTo(220, 380); ctx.lineTo(160, 470);
+  ctx.lineTo(360, 470); ctx.lineTo(300, 380); ctx.lineTo(300, 350);
+  ctx.closePath();
+  ctx.strokeStyle='#999999'; ctx.lineWidth=3; ctx.stroke();
+  // liquid in flask
+  ctx.fillStyle = indicatorColor(pH());
+  ctx.beginPath();
+  ctx.moveTo(220, 380); ctx.lineTo(170, 460);
+  ctx.lineTo(350, 460); ctx.lineTo(300, 380);
+  ctx.closePath();
+  ctx.fill();
+  ctx.strokeStyle='#999999'; ctx.stroke();
+  ctx.fillStyle='#dddddd';
+  ctx.fillText('HCl '+Ma.toFixed(2)+' M', 240, 470);
+  ctx.fillText(Va+' mL', 250, 488);
+  // graph: pH vs volume
+  history.push({V: Vb, pH: pH()});
+  const gX=420, gY=80, gW=350, gH=380;
+  ctx.fillStyle='#f5f5f5'; ctx.fillRect(gX,gY,gW,gH);
+  ctx.strokeStyle='#999999'; ctx.strokeRect(gX,gY,gW,gH);
+  ctx.fillStyle='#dddddd'; ctx.font='14px sans-serif';
+  ctx.fillText('Titration Curve (pH vs Vol)', gX+90, gY-5);
+  // y axis
+  for(let p=0;p<=14;p+=2){
+    const py = gY + gH - p/14*gH;
+    ctx.strokeStyle='#dddddd'; ctx.beginPath(); ctx.moveTo(gX,py); ctx.lineTo(gX+gW,py); ctx.stroke();
+    ctx.fillStyle='#aaaaaa'; ctx.font='11px sans-serif';
+    ctx.fillText(p, gX-18, py+4);
+  }
+  // eq point line
+  const eqV = Ma*Va/Mb;
+  const Vmaxg = Math.max(eqV*2, 30);
+  const eqX = gX + eqV/Vmaxg*gW;
+  ctx.strokeStyle='#888888'; ctx.setLineDash([3,3]);
+  ctx.beginPath(); ctx.moveTo(eqX, gY); ctx.lineTo(eqX, gY+gH); ctx.stroke();
+  ctx.setLineDash([]);
+  // curve
+  ctx.strokeStyle='#ffffff'; ctx.lineWidth=2;
+  ctx.beginPath();
+  history.forEach((h,i)=>{
+    const px = gX + h.V/Vmaxg*gW;
+    const py = gY + gH - h.pH/14*gH;
+    if(i===0) ctx.moveTo(px,py); else ctx.lineTo(px,py);
+  });
+  ctx.stroke();
+  // current point
+  const cP = pH();
+  const cpx = gX + Vb/Vmaxg*gW;
+  const cpy = gY + gH - cP/14*gH;
+  ctx.fillStyle='#888888'; ctx.beginPath(); ctx.arc(cpx,cpy,5,0,2*Math.PI); ctx.fill();
+  // axis labels
+  ctx.fillStyle='#dddddd'; ctx.fillText('mL base', gX+gW/2-20, gY+gH+20);
+  // drops animation
+  if(dropping){
+    ctx.fillStyle='#aaaaaa';
+    drops.forEach(d=>{
+      ctx.beginPath(); ctx.arc(140, d.y, 3, 0, 2*Math.PI); ctx.fill();
+    });
+  }
+  document.getElementById('rV').textContent = Vb.toFixed(1)+' mL';
+  document.getElementById('rP').textContent = cP.toFixed(2);
+  document.getElementById('rE').textContent = eqV.toFixed(1)+' mL';
+  document.getElementById('rC').textContent = cP<8.2 ? 'Colorless' : cP<10 ? 'Pink' : 'Magenta';
+}
+
+let drops = [], dropping = false;
+
+function addBase(amt){
+  dropping = true;
+  let added = 0;
+  const id = setInterval(()=>{
+    if(added < amt){
+      drops.push({y:310});
+      Vb += amt/40;
+      added += amt/40;
+      if(Vb < Vmax()) draw();
+    } else {
+      dropping = false;
+      drops = [];
+      clearInterval(id);
+      draw();
+    }
+    drops.forEach(d=>d.y+=4);
+    drops = drops.filter(d=>d.y < 380);
+  }, 30);
+}
+function Vmax(){ return Va*5; }
+
+document.getElementById('ma').oninput=e=>{Ma=+e.target.value/100; document.getElementById('vMa').textContent=Ma.toFixed(2)+' M'; draw();};
+document.getElementById('mb').oninput=e=>{Mb=+e.target.value/100; document.getElementById('vMb').textContent=Mb.toFixed(2)+' M'; draw();};
+document.getElementById('va').oninput=e=>{Va=+e.target.value; document.getElementById('vVa').textContent=Va+' mL'; draw();};
+document.getElementById('add1').onclick=()=>addBase(1);
+document.getElementById('add5').onclick=()=>addBase(5);
+document.getElementById('reset').onclick=()=>{Vb=0; history=[]; draw();};
+draw();
+</script>
+</body></html>

@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Inclined Plane — Average Speed</title>
+<link rel="stylesheet" href="/simulations/_shared.css" />
+</head>
+<body>
+<div class="app">
+  <header>
+    <h1>Inclined Plane — Average Speed of a Marble</h1>
+    <span class="pill">Class 10 · Physics</span>
+  </header>
+  <div class="grid">
+    <div class="card">
+      <h2>Visualization</h2>
+      <div class="viz"><canvas id="cv" width="780" height="380"></canvas></div>
+      <p class="note">Adjust angle, click Release. The timer measures travel time over the marked distance.</p>
+    </div>
+    <div class="card controls">
+      <h2>Controls</h2>
+      <label>Angle θ (°) — <span id="av">30</span></label>
+      <input id="ang" type="range" min="5" max="60" step="1" value="30" />
+      <label>Distance d (m)
+        <input id="d" type="number" value="1.0" step="0.1" min="0.2" max="3" />
+      </label>
+      <label>Friction
+        <input id="f" type="range" min="0" max="0.4" step="0.01" value="0.05" />
+      </label>
+      <button class="btn" id="release">Release Marble</button>
+      <button class="btn secondary" id="reset">Reset</button>
+      <div class="values">
+        <div class="value"><div class="label">Time t</div><div class="v" id="td">— s</div></div>
+        <div class="value"><div class="label">Final velocity</div><div class="v" id="vd">— m/s</div></div>
+        <div class="value"><div class="label">Average speed</div><div class="v" id="ad">— m/s</div></div>
+        <div class="value"><div class="label">Acceleration</div><div class="v" id="acc">— m/s²</div></div>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+const cv = document.getElementById('cv'); const ctx = cv.getContext('2d');
+const ang = document.getElementById('ang');
+const d = document.getElementById('d');
+const f = document.getElementById('f');
+let ballPos = 0; // 0..1 along ramp
+let running = false, t0 = 0, lastT = 0;
+function update() {
+  document.getElementById('av').textContent = ang.value;
+  draw();
+}
+function draw() {
+  const W = cv.width, H = cv.height;
+  ctx.fillStyle = '#0b1220'; ctx.fillRect(0, 0, W, H);
+  const theta = parseFloat(ang.value) * Math.PI / 180;
+  const len = 540;
+  const x0 = 100, y0 = H - 50;
+  const x1 = x0 + Math.cos(theta) * len;
+  const y1 = y0 - Math.sin(theta) * len;
+  // ramp
+  ctx.strokeStyle = '#7c3aed'; ctx.lineWidth = 6;
+  ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke();
+  // base
+  ctx.strokeStyle = '#475569';
+  ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y0); ctx.stroke();
+  // angle arc
+  ctx.strokeStyle = '#fbbf24'; ctx.beginPath(); ctx.arc(x0, y0, 30, -theta, 0); ctx.stroke();
+  ctx.fillStyle = '#fbbf24'; ctx.font = '12px Arial';
+  ctx.fillText(ang.value + '°', x0 + 36, y0 - 6);
+  // marble
+  const px = x0 + (x1 - x0) * ballPos;
+  const py = y0 + (y1 - y0) * ballPos;
+  ctx.fillStyle = '#fbbf24';
+  ctx.beginPath(); ctx.arc(px - 6 * Math.sin(theta), py - 6 * Math.cos(theta), 9, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = '#0b1220'; ctx.stroke();
+  // labels
+  ctx.fillStyle = '#cbd5e1'; ctx.font = '12px Arial';
+  ctx.fillText('Distance ' + d.value + ' m', x0 + 250, y0 + 25);
+}
+function tick(now) {
+  if (!running) return;
+  const dt = (now - lastT) / 1000; lastT = now;
+  const theta = parseFloat(ang.value) * Math.PI / 180;
+  const fric = parseFloat(f.value);
+  const a = 9.8 * (Math.sin(theta) - fric * Math.cos(theta));
+  if (a <= 0) { running = false; return; }
+  const distance = parseFloat(d.value);
+  const tElapsed = (now - t0) / 1000;
+  const x = 0.5 * a * tElapsed * tElapsed;
+  if (x >= distance) {
+    ballPos = 1;
+    const tFinal = Math.sqrt(2 * distance / a);
+    document.getElementById('td').textContent = tFinal.toFixed(3) + ' s';
+    document.getElementById('vd').textContent = (a * tFinal).toFixed(3) + ' m/s';
+    document.getElementById('ad').textContent = (distance / tFinal).toFixed(3) + ' m/s';
+    document.getElementById('acc').textContent = a.toFixed(3) + ' m/s²';
+    running = false;
+    return;
+  }
+  ballPos = x / distance;
+  draw();
+  requestAnimationFrame(tick);
+}
+['change', 'input'].forEach(ev => {
+  ang.addEventListener(ev, update); d.addEventListener(ev, update); f.addEventListener(ev, update);
+});
+document.getElementById('release').addEventListener('click', () => {
+  ballPos = 0; running = true; t0 = performance.now(); lastT = t0;
+  requestAnimationFrame(tick);
+});
+document.getElementById('reset').addEventListener('click', () => {
+  running = false; ballPos = 0; ang.value = '30'; d.value = '1.0'; f.value = '0.05';
+  ['td', 'vd', 'ad', 'acc'].forEach(id => document.getElementById(id).textContent = '—');
+  update();
+});
+update();
+</script>
+</body>
+</html>

@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Spring Constant</title>
+<link rel="stylesheet" href="/simulations/_shared.css" />
+</head>
+<body>
+<div class="app">
+  <header>
+    <h1>Spring Constant of a Helical Spring</h1>
+    <span class="pill">Class 11 · Physics</span>
+  </header>
+  <div class="grid">
+    <div class="card">
+      <h2>Visualization</h2>
+      <div class="viz"><canvas id="cv" width="780" height="380"></canvas></div>
+      <p class="note">Add load, observe extension, plot F vs x. Slope = spring constant k.</p>
+    </div>
+    <div class="card controls">
+      <h2>Controls</h2>
+      <label>Spring Constant k (N/m)
+        <input id="k" type="number" value="25" min="2" />
+      </label>
+      <label>Applied Force F (N) — <span id="fv">2.0</span></label>
+      <input id="F" type="range" min="0" max="10" step="0.1" value="2.0" />
+      <button class="btn" id="record">Record Reading</button>
+      <button class="btn warn" id="clear">Clear</button>
+      <button class="btn secondary" id="reset">Reset</button>
+      <div class="values">
+        <div class="value"><div class="label">Force F</div><div class="v" id="Fd">2.0 N</div></div>
+        <div class="value"><div class="label">Extension x</div><div class="v" id="xd">8.0 cm</div></div>
+        <div class="value"><div class="label">k = F/x</div><div class="v" id="kc">25 N/m</div></div>
+        <div class="value"><div class="label">Readings</div><div class="v" id="cnt">0</div></div>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+const cv = document.getElementById('cv'); const ctx = cv.getContext('2d');
+const k = document.getElementById('k');
+const F = document.getElementById('F');
+const fv = document.getElementById('fv');
+const readings = [];
+function update() {
+  const kk = parseFloat(k.value) || 1;
+  const f = parseFloat(F.value);
+  const x = (f / kk) * 100; // m to cm
+  fv.textContent = f.toFixed(1);
+  document.getElementById('Fd').textContent = f.toFixed(2) + ' N';
+  document.getElementById('xd').textContent = x.toFixed(2) + ' cm';
+  document.getElementById('kc').textContent = (x > 0 ? (f / (x / 100)).toFixed(2) : '—') + ' N/m';
+  draw(f, x, kk);
+}
+function draw(f, x, kk) {
+  const W = cv.width, H = cv.height;
+  ctx.fillStyle = '#0b1220'; ctx.fillRect(0, 0, W, H);
+  // ceiling
+  ctx.fillStyle = '#475569'; ctx.fillRect(60, 20, 200, 14);
+  // spring with extension
+  const sx = 160, sy0 = 34;
+  const naturalLen = 100;
+  const stretchedLen = naturalLen + Math.min(180, x * 2);
+  ctx.strokeStyle = '#06b6d4'; ctx.lineWidth = 2;
+  ctx.beginPath();
+  const turns = 12;
+  for (let i = 0; i <= turns * 12; i++) {
+    const t = i / (turns * 12);
+    const py = sy0 + t * stretchedLen;
+    const px = sx + Math.sin(i * 0.6) * 20;
+    if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+  }
+  ctx.stroke();
+  // pan
+  const panY = sy0 + stretchedLen + 4;
+  ctx.fillStyle = '#94a3b8'; ctx.fillRect(sx - 30, panY, 60, 6);
+  // weights
+  const wts = Math.round(f);
+  for (let i = 0; i < wts; i++) {
+    ctx.fillStyle = '#7c3aed'; ctx.fillRect(sx - 24 + (i % 4) * 12, panY + 8 + Math.floor(i / 4) * 12, 10, 10);
+  }
+  // pointer + scale
+  ctx.fillStyle = '#fbbf24'; ctx.fillRect(sx + 24, panY - 2, 30, 4);
+  ctx.strokeStyle = '#475569'; ctx.beginPath(); ctx.moveTo(sx + 60, sy0); ctx.lineTo(sx + 60, sy0 + 280); ctx.stroke();
+  for (let i = 0; i <= 14; i++) {
+    const yy = sy0 + i * 20;
+    ctx.fillStyle = '#94a3b8'; ctx.fillRect(sx + 56, yy, 6, 1);
+    if (i % 2 === 0) ctx.fillText((i * 2) + ' cm', sx + 66, yy + 4);
+  }
+  // graph (right side)
+  const gx = 380, gy = 20, gw = 380, gh = H - 40;
+  ctx.fillStyle = 'rgba(15,23,42,0.6)'; ctx.fillRect(gx, gy, gw, gh);
+  ctx.strokeStyle = '#475569'; ctx.strokeRect(gx, gy, gw, gh);
+  ctx.strokeStyle = '#cbd5e1';
+  ctx.beginPath(); ctx.moveTo(gx + 40, gy + gh - 30); ctx.lineTo(gx + gw - 10, gy + gh - 30); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(gx + 40, gy + gh - 30); ctx.lineTo(gx + 40, gy + 10); ctx.stroke();
+  ctx.fillStyle = '#94a3b8'; ctx.font = '11px Arial';
+  ctx.fillText('x (cm)', gx + gw / 2, gy + gh - 10);
+  ctx.save(); ctx.translate(gx + 14, gy + gh / 2); ctx.rotate(-Math.PI / 2); ctx.fillText('F (N)', 0, 0); ctx.restore();
+  // points
+  const xMax = 30, yMax = 10;
+  const xs = (gw - 60) / xMax; const ys = (gh - 50) / yMax;
+  ctx.fillStyle = '#fbbf24';
+  readings.forEach(p => {
+    const px = gx + 40 + p.x * xs;
+    const py = gy + gh - 30 - p.f * ys;
+    ctx.beginPath(); ctx.arc(px, py, 4, 0, Math.PI * 2); ctx.fill();
+  });
+  if (readings.length >= 2) {
+    const xs1 = readings.map(p => p.x), ys1 = readings.map(p => p.f);
+    const mx = xs1.reduce((a, b) => a + b, 0) / xs1.length;
+    const my = ys1.reduce((a, b) => a + b, 0) / ys1.length;
+    let n = 0, d = 0;
+    for (let i = 0; i < xs1.length; i++) { n += (xs1[i] - mx) * (ys1[i] - my); d += (xs1[i] - mx) ** 2; }
+    const slope = d ? n / d : kk / 100;
+    const k_calc = slope * 100;
+    ctx.strokeStyle = '#34d399'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(gx + 40, gy + gh - 30); ctx.lineTo(gx + 40 + xs * xMax, gy + gh - 30 - ys * (slope * xMax)); ctx.stroke();
+    ctx.fillStyle = '#34d399'; ctx.font = 'bold 12px Arial';
+    ctx.fillText('k = ' + k_calc.toFixed(2) + ' N/m', gx + 60, gy + 28);
+  }
+}
+['change', 'input'].forEach(ev => {
+  k.addEventListener(ev, update); F.addEventListener(ev, update);
+});
+document.getElementById('record').addEventListener('click', () => {
+  const kk = parseFloat(k.value) || 1;
+  const f = parseFloat(F.value);
+  const x = (f / kk) * 100;
+  readings.push({ f, x });
+  document.getElementById('cnt').textContent = readings.length;
+  update();
+});
+document.getElementById('clear').addEventListener('click', () => {
+  readings.length = 0; document.getElementById('cnt').textContent = 0; update();
+});
+document.getElementById('reset').addEventListener('click', () => {
+  k.value = '25'; F.value = '2.0'; readings.length = 0; document.getElementById('cnt').textContent = 0; update();
+});
+update();
+</script>
+</body>
+</html>

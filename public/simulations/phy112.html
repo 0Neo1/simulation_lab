@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Young's Modulus</title>
+<link rel="stylesheet" href="/simulations/_shared.css" />
+</head>
+<body>
+<div class="app">
+  <header>
+    <h1>Young's Modulus of a Wire</h1>
+    <span class="pill">Class 11 · Physics</span>
+  </header>
+  <div class="grid">
+    <div class="card">
+      <h2>Searle's Apparatus</h2>
+      <div class="viz"><canvas id="cv" width="780" height="380"></canvas></div>
+      <p class="note">Add load to the hanger; observe the wire stretch on the Vernier scale. Compute Y from stress and strain.</p>
+    </div>
+    <div class="card controls">
+      <h2>Controls</h2>
+      <label>Wire length L (m)
+        <input id="L" type="number" value="1.5" step="0.01" min="0.5" max="3" />
+      </label>
+      <label>Wire radius r (mm)
+        <input id="r" type="number" value="0.25" step="0.01" min="0.05" max="2" />
+      </label>
+      <label>Load M (kg) — <span id="mv">2.0</span></label>
+      <input id="M" type="range" min="0" max="10" step="0.1" value="2.0" />
+      <label>Material
+        <select id="mat">
+          <option value="2.0e11" selected>Steel (Y = 2.0×10¹¹)</option>
+          <option value="1.2e11">Copper (1.2×10¹¹)</option>
+          <option value="0.7e11">Aluminium (0.7×10¹¹)</option>
+        </select>
+      </label>
+      <button class="btn secondary" id="reset">Reset</button>
+      <div class="values">
+        <div class="value"><div class="label">Force F</div><div class="v" id="F">19.6 N</div></div>
+        <div class="value"><div class="label">Elongation ΔL</div><div class="v" id="dL">— mm</div></div>
+        <div class="value"><div class="label">Stress</div><div class="v" id="stress">—</div></div>
+        <div class="value"><div class="label">Young's Y</div><div class="v" id="Y">—</div></div>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+const cv = document.getElementById('cv'); const ctx = cv.getContext('2d');
+const Linp = document.getElementById('L');
+const rinp = document.getElementById('r');
+const Minp = document.getElementById('M');
+const mat = document.getElementById('mat');
+const mv = document.getElementById('mv');
+function update() {
+  const L = parseFloat(Linp.value);
+  const r = parseFloat(rinp.value) / 1000; // m
+  const M = parseFloat(Minp.value);
+  const Ymat = parseFloat(mat.value);
+  const F = M * 9.8;
+  const stress = F / (Math.PI * r * r);
+  const strain = stress / Ymat;
+  const dL = strain * L * 1000; // mm
+  mv.textContent = M.toFixed(1);
+  document.getElementById('F').textContent = F.toFixed(2) + ' N';
+  document.getElementById('dL').textContent = dL.toFixed(3) + ' mm';
+  document.getElementById('stress').textContent = stress.toExponential(2) + ' Pa';
+  document.getElementById('Y').textContent = Ymat.toExponential(2) + ' Pa';
+  draw(M, dL, L);
+}
+function draw(M, dL, L) {
+  const W = cv.width, H = cv.height;
+  ctx.fillStyle = '#0b1220'; ctx.fillRect(0, 0, W, H);
+  // ceiling
+  ctx.fillStyle = '#475569'; ctx.fillRect(W/2 - 90, 20, 180, 14);
+  // wire (left ref, right test)
+  const stretchPx = Math.min(60, dL * 8);
+  ctx.strokeStyle = '#cbd5e1'; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(W/2 - 50, 34); ctx.lineTo(W/2 - 50, 240); ctx.stroke();
+  ctx.strokeStyle = '#fbbf24';
+  ctx.beginPath(); ctx.moveTo(W/2 + 50, 34); ctx.lineTo(W/2 + 50, 240 + stretchPx); ctx.stroke();
+  // pans
+  ctx.fillStyle = '#94a3b8'; ctx.fillRect(W/2 - 80, 240, 60, 6);
+  ctx.fillRect(W/2 + 20, 240 + stretchPx, 60, 6);
+  // weights
+  for (let i = 0; i < Math.round(M); i++) {
+    ctx.fillStyle = '#7c3aed';
+    ctx.fillRect(W/2 + 22 + (i % 4) * 14, 250 + Math.floor(i / 4) * 14 + stretchPx, 12, 10);
+  }
+  // vernier scale
+  ctx.fillStyle = '#1e293b'; ctx.fillRect(W/2 - 40, 250, 80, 80);
+  ctx.fillStyle = '#06b6d4'; ctx.fillRect(W/2 - 30, 260 + stretchPx * 0.3, 60, 4);
+  ctx.fillStyle = '#cbd5e1'; ctx.font = '11px Arial';
+  ctx.fillText('Vernier', W/2 - 18, 245);
+  ctx.fillText('Reference', W/2 - 78, 50);
+  ctx.fillText('Test wire', W/2 + 12, 50);
+  ctx.fillText('ΔL = ' + dL.toFixed(3) + ' mm', 30, H - 30);
+  ctx.fillText('L = ' + L.toFixed(2) + ' m', 30, H - 10);
+}
+['change', 'input'].forEach(ev => {
+  Linp.addEventListener(ev, update); rinp.addEventListener(ev, update);
+  Minp.addEventListener(ev, update); mat.addEventListener(ev, update);
+});
+document.getElementById('reset').addEventListener('click', () => {
+  Linp.value = '1.5'; rinp.value = '0.25'; Minp.value = '2.0'; mat.value = '2.0e11'; update();
+});
+update();
+</script>
+</body>
+</html>

@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Paper Chromatography</title>
+<link rel="stylesheet" href="/simulations/_shared.css" />
+</head>
+<body>
+<div class="app">
+  <header>
+    <h1>Paper Chromatography — Separate Mixture &amp; Find R<sub>f</sub></h1>
+    <span class="pill">Class 11 · Chemistry</span>
+  </header>
+  <div class="grid">
+    <div class="card">
+      <h2>Chromatography Jar</h2>
+      <div class="viz"><canvas id="cv" width="780" height="380"></canvas></div>
+      <p class="note">Click Run to start the experiment. Each component moves at a different rate. R_f = d_component / d_solvent.</p>
+    </div>
+    <div class="card controls">
+      <h2>Controls</h2>
+      <label>Mixture
+        <select id="mix">
+          <option value="ink">Ink (Red, Yellow, Blue)</option>
+          <option value="leaf">Leaf pigments (Chl a, Chl b, Carot)</option>
+        </select>
+      </label>
+      <button class="btn" id="run">Run</button>
+      <button class="btn secondary" id="reset">Reset</button>
+      <div class="values" style="grid-template-columns:1fr">
+        <div class="value"><div class="label">Solvent front</div><div class="v" id="ds">— cm</div></div>
+        <div class="value"><div class="label">Spot 1 / R_f</div><div class="v" id="r1">—</div></div>
+        <div class="value"><div class="label">Spot 2 / R_f</div><div class="v" id="r2">—</div></div>
+        <div class="value"><div class="label">Spot 3 / R_f</div><div class="v" id="r3">—</div></div>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+const cv = document.getElementById('cv'); const ctx = cv.getContext('2d');
+const mix = document.getElementById('mix');
+const mixtures = {
+  ink: [
+    { name: 'Red', rgb: [248, 113, 113], rf: 0.85 },
+    { name: 'Yellow', rgb: [251, 191, 36], rf: 0.55 },
+    { name: 'Blue', rgb: [59, 130, 246], rf: 0.30 },
+  ],
+  leaf: [
+    { name: 'Carotene', rgb: [251, 146, 60], rf: 0.95 },
+    { name: 'Chl a', rgb: [34, 197, 94], rf: 0.55 },
+    { name: 'Chl b', rgb: [16, 185, 129], rf: 0.40 },
+  ],
+};
+let progress = 0; // 0..1
+let running = false;
+function update() {
+  const m = mixtures[mix.value];
+  const ds = (progress * 7.5).toFixed(2);
+  document.getElementById('ds').textContent = ds + ' cm';
+  for (let i = 0; i < 3; i++) {
+    const dc = (progress * 7.5 * m[i].rf).toFixed(2);
+    document.getElementById('r' + (i + 1)).textContent = m[i].name + ': d=' + dc + ' cm, R_f=' + m[i].rf.toFixed(2);
+  }
+}
+function draw() {
+  const W = cv.width, H = cv.height;
+  ctx.fillStyle = '#0b1220'; ctx.fillRect(0, 0, W, H);
+  // jar
+  ctx.fillStyle = 'rgba(56,189,248,0.06)';
+  ctx.fillRect(120, 30, 540, 320);
+  ctx.strokeStyle = '#cbd5e1'; ctx.lineWidth = 2;
+  ctx.strokeRect(120, 30, 540, 320);
+  // solvent at bottom
+  ctx.fillStyle = 'rgba(56,189,248,0.18)';
+  ctx.fillRect(122, 320, 536, 28);
+  ctx.fillStyle = '#cbd5e1'; ctx.font = '11px Arial';
+  ctx.fillText('Solvent', 130, 338);
+  // paper strip
+  const px = W / 2 - 40, py = 50, pw = 80, ph = 280;
+  ctx.fillStyle = 'rgba(254,252,232,0.9)';
+  ctx.fillRect(px, py, pw, ph);
+  ctx.strokeStyle = '#cbd5e1'; ctx.strokeRect(px, py, pw, ph);
+  // baseline (start mark)
+  const baseY = py + ph - 40;
+  ctx.strokeStyle = '#94a3b8'; ctx.setLineDash([3, 3]);
+  ctx.beginPath(); ctx.moveTo(px - 10, baseY); ctx.lineTo(px + pw + 10, baseY); ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle = '#cbd5e1';
+  ctx.fillText('start', px - 30, baseY + 4);
+  // solvent front line
+  const frontY = baseY - progress * (ph - 60);
+  ctx.strokeStyle = '#06b6d4'; ctx.setLineDash([4, 4]);
+  ctx.beginPath(); ctx.moveTo(px - 10, frontY); ctx.lineTo(px + pw + 10, frontY); ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle = '#06b6d4'; ctx.fillText('front', px + pw + 12, frontY + 4);
+  // spots
+  const m = mixtures[mix.value];
+  for (let i = 0; i < 3; i++) {
+    const cx = px + (pw / 4) + (i * pw / 4);
+    const dy = baseY - progress * (ph - 60) * m[i].rf;
+    const c = m[i].rgb;
+    const grd = ctx.createRadialGradient(cx, dy, 1, cx, dy, 12);
+    grd.addColorStop(0, `rgba(${c[0]},${c[1]},${c[2]},0.95)`);
+    grd.addColorStop(1, `rgba(${c[0]},${c[1]},${c[2]},0)`);
+    ctx.fillStyle = grd;
+    ctx.beginPath(); ctx.arc(cx, dy, 12, 0, Math.PI * 2); ctx.fill();
+  }
+  ctx.fillStyle = '#cbd5e1'; ctx.font = '12px Arial';
+  ctx.fillText('Paper', px + 24, py - 6);
+}
+function loop() {
+  if (running && progress < 1) {
+    progress += 0.005;
+    if (progress > 1) progress = 1;
+    update();
+  }
+  draw();
+  requestAnimationFrame(loop);
+}
+document.getElementById('run').addEventListener('click', () => { running = true; });
+document.getElementById('reset').addEventListener('click', () => { running = false; progress = 0; update(); });
+mix.addEventListener('change', update);
+update(); loop();
+</script>
+</body>
+</html>

@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><title>Reflection &amp; Refraction</title><link rel="stylesheet" href="../styles.css"></head>
+<body>
+<header><a href="../index.html"><h1>Reflection &amp; Refraction</h1></a><p>Snell's law and total internal reflection.</p></header>
+<main>
+<a class="back-link" href="../index.html">&larr; All simulations</a>
+<div class="sim-container">
+  <div>
+    <div class="canvas-wrap"><canvas id="cv" width="800" height="500"></canvas></div>
+    <div class="info-box">
+      <h3>The Physics</h3>
+      <p>Light bends when it crosses between media of different refractive index. The reflected ray makes an equal angle to the normal.</p>
+      <div class="formula">n₁ sin θ₁ = n₂ sin θ₂</div>
+      <p>If n₁ &gt; n₂ and θ₁ &gt; θ_c = arcsin(n₂/n₁), all light reflects (TIR).</p>
+    </div>
+  </div>
+  <div class="controls">
+    <h3>Controls</h3>
+    <div class="control-row"><label>Angle of incidence <span class="val" id="vT">30°</span></label><input type="range" id="theta" min="0" max="89" value="30"></div>
+    <div class="control-row"><label>n₁ (top) <span class="val" id="vN1">1.00</span></label><input type="range" id="n1" min="100" max="250" value="100"></div>
+    <div class="control-row"><label>n₂ (bottom) <span class="val" id="vN2">1.50</span></label><input type="range" id="n2" min="100" max="250" value="150"></div>
+    <div class="readouts">
+      <div>θ_refracted: <span id="rR">0°</span></div>
+      <div>Critical θ: <span id="rC">—</span></div>
+    </div>
+  </div>
+</div>
+</main>
+<script>
+const cv=document.getElementById('cv'), ctx=cv.getContext('2d');
+const cx=400, cy=250;
+let theta=30, n1=1.0, n2=1.5;
+
+function draw(){
+  ctx.clearRect(0,0,cv.width,cv.height);
+  // top medium
+  ctx.fillStyle = '#1a1a1a'; ctx.fillRect(0,0,cv.width,cy);
+  ctx.fillStyle = '#ffffff44'; ctx.fillRect(0,cy,cv.width,cv.height-cy);
+  ctx.strokeStyle='#dddddd'; ctx.beginPath(); ctx.moveTo(0,cy); ctx.lineTo(cv.width,cy); ctx.stroke();
+  // labels
+  ctx.fillStyle='#dddddd'; ctx.font='14px sans-serif';
+  ctx.fillText(`n₁ = ${n1.toFixed(2)}`, 20, 30);
+  ctx.fillText(`n₂ = ${n2.toFixed(2)}`, 20, cy+25);
+  // normal
+  ctx.strokeStyle='#888'; ctx.setLineDash([4,4]);
+  ctx.beginPath(); ctx.moveTo(cx, 50); ctx.lineTo(cx, 450); ctx.stroke();
+  ctx.setLineDash([]);
+  // incident ray
+  const t = theta*Math.PI/180;
+  const ix = cx - 200*Math.sin(t), iy = cy - 200*Math.cos(t);
+  drawRay(ix, iy, cx, cy, '#888888');
+  // reflected
+  const rx = cx + 200*Math.sin(t), ry = cy - 200*Math.cos(t);
+  drawRay(cx, cy, rx, ry, '#aaaaaa');
+  // refracted (Snell)
+  const sin2 = n1*Math.sin(t)/n2;
+  if(Math.abs(sin2) <= 1){
+    const t2 = Math.asin(sin2);
+    const ex = cx + 250*Math.sin(t2), ey = cy + 250*Math.cos(t2);
+    drawRay(cx, cy, ex, ey, '#ffffff');
+    document.getElementById('rR').textContent = (t2*180/Math.PI).toFixed(1)+'°';
+  } else {
+    document.getElementById('rR').textContent = 'TIR';
+    ctx.fillStyle = '#888888'; ctx.font='bold 16px sans-serif';
+    ctx.fillText('Total Internal Reflection', 500, 480);
+  }
+  document.getElementById('rC').textContent = n1>n2 ? (Math.asin(n2/n1)*180/Math.PI).toFixed(1)+'°' : '—';
+  // angles
+  ctx.strokeStyle='#888888'; ctx.beginPath(); ctx.arc(cx,cy,40, -Math.PI/2-t, -Math.PI/2); ctx.stroke();
+  ctx.strokeStyle='#aaaaaa'; ctx.beginPath(); ctx.arc(cx,cy,55, -Math.PI/2, -Math.PI/2+t); ctx.stroke();
+  ctx.fillStyle='#888888'; ctx.font='12px sans-serif'; ctx.fillText(`θ₁=${theta}°`, cx-80, cy-20);
+}
+
+function drawRay(x1,y1,x2,y2,color){
+  ctx.strokeStyle=color; ctx.fillStyle=color; ctx.lineWidth=3;
+  ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(x2,y2); ctx.stroke();
+  // arrow halfway
+  const mx = (x1+x2)/2, my = (y1+y2)/2;
+  const a = Math.atan2(y2-y1,x2-x1);
+  ctx.beginPath();
+  ctx.moveTo(mx+8*Math.cos(a),my+8*Math.sin(a));
+  ctx.lineTo(mx-4*Math.cos(a-0.4),my-4*Math.sin(a-0.4));
+  ctx.lineTo(mx-4*Math.cos(a+0.4),my-4*Math.sin(a+0.4));
+  ctx.closePath(); ctx.fill();
+}
+
+document.getElementById('theta').oninput=e=>{theta=+e.target.value; document.getElementById('vT').textContent=theta+'°'; draw();};
+document.getElementById('n1').oninput=e=>{n1=+e.target.value/100; document.getElementById('vN1').textContent=n1.toFixed(2); draw();};
+document.getElementById('n2').oninput=e=>{n2=+e.target.value/100; document.getElementById('vN2').textContent=n2.toFixed(2); draw();};
+draw();
+</script>
+</body></html>

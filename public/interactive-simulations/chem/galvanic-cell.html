@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><title>Galvanic Cell</title><link rel="stylesheet" href="../styles.css"></head>
+<body>
+<header><a href="../index.html"><h1>Galvanic (Voltaic) Cell</h1></a><p>Zinc-copper cell — chemistry as a battery.</p></header>
+<main>
+<a class="back-link" href="../index.html">&larr; All simulations</a>
+<div class="sim-container">
+  <div>
+    <div class="canvas-wrap"><canvas id="cv" width="800" height="500"></canvas></div>
+    <div class="info-box">
+      <h3>The Chemistry</h3>
+      <p>The more reactive metal (Zn) gives up electrons (oxidation) at the anode; they flow through the external wire to the copper cathode where Cu²⁺ ions get reduced.</p>
+      <div class="formula">Anode: Zn → Zn²⁺ + 2e⁻<br>Cathode: Cu²⁺ + 2e⁻ → Cu<br>E°_cell = E°_cathode − E°_anode = 1.10 V</div>
+      <p>The salt bridge keeps both half-cells electrically neutral.</p>
+    </div>
+  </div>
+  <div class="controls">
+    <h3>Controls</h3>
+    <div class="btn-row"><button id="run">Start</button><button class="secondary" id="pause">Pause</button></div>
+    <div class="readouts" style="grid-template-columns:1fr;">
+      <div>Voltage: <span id="rV">1.10 V</span></div>
+      <div>Anode: Zn (oxidation)</div>
+      <div>Cathode: Cu (reduction)</div>
+    </div>
+  </div>
+</div>
+</main>
+<script>
+const cv=document.getElementById('cv'), ctx=cv.getContext('2d');
+let running = true;
+let electrons = []; // along wire
+let cations = []; // in salt bridge
+
+const wirePoints = [
+  {x:200, y:200}, {x:200, y:80}, {x:600, y:80}, {x:600, y:200}
+];
+
+function pos(s){
+  // total wire length
+  const segs = [
+    [wirePoints[0], wirePoints[1]],
+    [wirePoints[1], wirePoints[2]],
+    [wirePoints[2], wirePoints[3]]
+  ];
+  const lens = segs.map(([a,b])=>Math.hypot(b.x-a.x, b.y-a.y));
+  const total = lens.reduce((a,b)=>a+b);
+  s = ((s%total)+total)%total;
+  let acc=0;
+  for(let i=0;i<segs.length;i++){
+    if(s < acc+lens[i]){
+      const t = (s-acc)/lens[i];
+      const [a,b] = segs[i];
+      return {x:a.x+(b.x-a.x)*t, y:a.y+(b.y-a.y)*t};
+    }
+    acc += lens[i];
+  }
+  return wirePoints[3];
+}
+
+for(let i=0;i<10;i++) electrons.push({s: i*60});
+
+function step(){
+  if(running){
+    electrons.forEach(e=>e.s += 2);
+    // salt bridge ions
+    if(Math.random() < 0.1) cations.push({x:300, y:180, vx:1.5, color:'#bbbbbb'});
+    cations.forEach(c=>{c.x += c.vx;});
+    cations = cations.filter(c=>c.x < 520);
+  }
+  draw();
+  requestAnimationFrame(step);
+}
+
+function draw(){
+  ctx.clearRect(0,0,cv.width,cv.height);
+  ctx.fillStyle='#0a0a0a'; ctx.fillRect(0,0,cv.width,cv.height);
+  // Zn beaker (left)
+  ctx.strokeStyle='#999999'; ctx.lineWidth=3;
+  ctx.beginPath(); ctx.moveTo(120,200); ctx.lineTo(120,420); ctx.lineTo(280,420); ctx.lineTo(280,200); ctx.stroke();
+  // ZnSO4 solution
+  ctx.fillStyle='rgba(220,220,220,0.4)'; ctx.fillRect(123,250,154,168);
+  ctx.fillStyle='#dddddd'; ctx.font='13px sans-serif'; ctx.fillText('ZnSO₄', 175, 415);
+  // Zn electrode
+  ctx.fillStyle='#888'; ctx.fillRect(195, 200, 10, 200);
+  ctx.fillStyle='#dddddd'; ctx.fillText('Zn', 195, 195);
+  // Cu beaker
+  ctx.beginPath(); ctx.moveTo(520,200); ctx.lineTo(520,420); ctx.lineTo(680,420); ctx.lineTo(680,200); ctx.stroke();
+  ctx.fillStyle='rgba(200,200,200,0.5)'; ctx.fillRect(523,250,154,168);
+  ctx.fillStyle='#dddddd'; ctx.fillText('CuSO₄', 575, 415);
+  // Cu electrode
+  ctx.fillStyle='#888888'; ctx.fillRect(595, 200, 10, 200);
+  ctx.fillStyle='#dddddd'; ctx.fillText('Cu', 595, 195);
+  // wire
+  ctx.strokeStyle='#888888'; ctx.lineWidth=4;
+  ctx.beginPath();
+  ctx.moveTo(200, 200); ctx.lineTo(200, 80); ctx.lineTo(600, 80); ctx.lineTo(600, 200);
+  ctx.stroke();
+  // voltmeter
+  ctx.fillStyle='#fff'; ctx.fillRect(360, 50, 80, 60);
+  ctx.strokeStyle='#dddddd'; ctx.strokeRect(360, 50, 80, 60);
+  ctx.fillStyle='#dddddd'; ctx.font='bold 18px sans-serif'; ctx.textAlign='center';
+  ctx.fillText('V', 400, 75);
+  ctx.fillText('1.10', 400, 100);
+  ctx.textAlign='left';
+  // salt bridge
+  ctx.strokeStyle='#888888'; ctx.lineWidth=15;
+  ctx.beginPath(); ctx.moveTo(280, 250); ctx.quadraticCurveTo(400, 170, 520, 250); ctx.stroke();
+  ctx.lineWidth=12; ctx.strokeStyle='#dddddd';
+  ctx.beginPath(); ctx.moveTo(280, 250); ctx.quadraticCurveTo(400, 170, 520, 250); ctx.stroke();
+  ctx.fillStyle='#dddddd'; ctx.font='12px sans-serif'; ctx.fillText('Salt bridge', 360, 200);
+  // electrons in wire
+  electrons.forEach(e=>{
+    const p = pos(e.s);
+    ctx.fillStyle='#dddddd';
+    ctx.beginPath(); ctx.arc(p.x, p.y, 6, 0, 2*Math.PI); ctx.fill();
+    ctx.strokeStyle='#dddddd'; ctx.stroke();
+    ctx.fillStyle='#dddddd'; ctx.font='bold 9px sans-serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillText('-', p.x, p.y);
+  });
+  ctx.textAlign='left'; ctx.textBaseline='alphabetic';
+  // arrow showing electron direction
+  ctx.fillStyle='#dddddd'; ctx.font='12px sans-serif';
+  ctx.fillText('→ e⁻ flow →', 300, 70);
+  // cations in salt bridge
+  cations.forEach(c=>{
+    ctx.fillStyle = c.color;
+    ctx.beginPath(); ctx.arc(c.x, 220 + Math.sin((c.x-300)/30)*15, 4, 0, 2*Math.PI); ctx.fill();
+  });
+  // labels
+  ctx.fillStyle='#888888'; ctx.font='bold 14px sans-serif';
+  ctx.fillText('Anode (−)', 165, 175);
+  ctx.fillStyle='#aaaaaa';
+  ctx.fillText('Cathode (+)', 565, 175);
+}
+
+document.getElementById('run').onclick=()=>running=true;
+document.getElementById('pause').onclick=()=>running=false;
+step();
+</script>
+</body></html>

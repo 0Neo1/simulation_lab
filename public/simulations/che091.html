@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Sublimation</title>
+<link rel="stylesheet" href="/simulations/_shared.css" />
+</head>
+<body>
+<div class="app">
+  <header>
+    <h1>Sublimation — Separate NH₄Cl from Common Salt</h1>
+    <span class="pill">Class 9 · Chemistry</span>
+  </header>
+  <div class="grid">
+    <div class="card">
+      <h2>China Dish &amp; Funnel</h2>
+      <div class="viz"><canvas id="cv" width="780" height="380"></canvas></div>
+      <p class="note">Heat the mixture; NH₄Cl sublimes and condenses on the cooler walls of the funnel. Salt remains.</p>
+    </div>
+    <div class="card controls">
+      <h2>Controls</h2>
+      <button class="btn" id="heat">Start Heating</button>
+      <button class="btn warn" id="stop">Stop</button>
+      <button class="btn secondary" id="reset">Reset</button>
+      <div class="values">
+        <div class="value"><div class="label">Mixture mass</div><div class="v" id="mm">5.00 g</div></div>
+        <div class="value"><div class="label">Sublimate (NH₄Cl)</div><div class="v" id="ms">0.00 g</div></div>
+        <div class="value"><div class="label">Residue (NaCl)</div><div class="v" id="mr">5.00 g</div></div>
+        <div class="value"><div class="label">% sublimed</div><div class="v" id="pct">0 %</div></div>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+const cv = document.getElementById('cv'); const ctx = cv.getContext('2d');
+let heating = false, frac = 0;
+const trueFrac = 0.42; // 42% NH4Cl
+function draw() {
+  const W = cv.width, H = cv.height;
+  ctx.fillStyle = '#0b1220'; ctx.fillRect(0, 0, W, H);
+  // china dish
+  ctx.strokeStyle = '#cbd5e1'; ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.moveTo(W / 2 - 100, 280); ctx.quadraticCurveTo(W / 2, 350, W / 2 + 100, 280); ctx.stroke();
+  // mixture
+  ctx.fillStyle = '#fbbf24';
+  ctx.fillRect(W / 2 - 80, 290, 160, 18);
+  // funnel inverted on top
+  ctx.strokeStyle = '#94a3b8'; ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(W / 2 - 80, 270); ctx.lineTo(W / 2 - 12, 80);
+  ctx.lineTo(W / 2 + 12, 80); ctx.lineTo(W / 2 + 80, 270);
+  ctx.stroke();
+  // cotton plug
+  ctx.fillStyle = '#f1f5f9'; ctx.fillRect(W / 2 - 12, 60, 24, 22);
+  ctx.fillStyle = '#cbd5e1'; ctx.font = '11px Arial';
+  ctx.fillText('Cotton plug', W / 2 + 16, 70);
+  // sublimate (NH4Cl crystals on funnel walls)
+  if (frac > 0.02) {
+    for (let i = 0; i < 80; i++) {
+      const t = Math.random();
+      const yy = 90 + t * 170;
+      const halfWidth = 12 + t * 68;
+      const xx = W / 2 + (Math.random() < 0.5 ? -halfWidth : halfWidth) + (Math.random() - 0.5) * 6;
+      ctx.fillStyle = `rgba(255,255,255,${0.4 + frac * 0.4})`;
+      ctx.beginPath(); ctx.arc(xx, yy, 1.5 + Math.random(), 0, Math.PI * 2); ctx.fill();
+    }
+  }
+  // burner flame
+  if (heating) {
+    ctx.fillStyle = '#475569'; ctx.fillRect(W / 2 - 30, 360, 60, 20);
+    for (let i = 0; i < 7; i++) {
+      const phase = Date.now() / 200 + i * 0.5;
+      ctx.fillStyle = `rgba(251,191,36,${0.6 + Math.sin(phase) * 0.2})`;
+      ctx.beginPath(); ctx.ellipse(W / 2 + (i - 3) * 8, 358 - Math.sin(phase) * 4, 6, 14, 0, 0, Math.PI * 2); ctx.fill();
+    }
+  }
+  // gas particles rising
+  if (heating) {
+    for (let i = 0; i < 20; i++) {
+      const phase = (Date.now() / 60 + i * 30) % 220;
+      ctx.fillStyle = `rgba(255,255,255,${0.04 + (220 - phase) / 1500})`;
+      ctx.beginPath(); ctx.arc(W / 2 + Math.sin(phase * 0.05 + i) * 30, 280 - phase + 30, 2 + Math.random(), 0, Math.PI * 2); ctx.fill();
+    }
+    frac += 0.0008;
+    if (frac > trueFrac) frac = trueFrac;
+  }
+  // values
+  const m = 5.0;
+  document.getElementById('ms').textContent = (frac * m).toFixed(2) + ' g';
+  document.getElementById('mr').textContent = ((1 - frac) * m).toFixed(2) + ' g';
+  document.getElementById('pct').textContent = (frac * 100).toFixed(0) + ' %';
+  requestAnimationFrame(draw);
+}
+document.getElementById('heat').addEventListener('click', () => heating = true);
+document.getElementById('stop').addEventListener('click', () => heating = false);
+document.getElementById('reset').addEventListener('click', () => { heating = false; frac = 0; });
+draw();
+</script>
+</body>
+</html>

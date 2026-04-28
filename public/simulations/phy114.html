@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Melde's Experiment — Standing Waves</title>
+<link rel="stylesheet" href="/simulations/_shared.css" />
+</head>
+<body>
+<div class="app">
+  <header>
+    <h1>Melde's Experiment — Frequency of Tuning Fork</h1>
+    <span class="pill">Class 11 · Physics</span>
+  </header>
+  <div class="grid">
+    <div class="card">
+      <h2>Vibrating String</h2>
+      <div class="viz"><canvas id="cv" width="780" height="380"></canvas></div>
+      <p class="note">Adjust tension to see clear loops. Standing wave equation: f = (p / 2L) · √(T / μ).</p>
+    </div>
+    <div class="card controls">
+      <h2>Controls</h2>
+      <label>Tension T (N) — <span id="Tv">0.5</span></label>
+      <input id="T" type="range" min="0.05" max="3" step="0.01" value="0.5" />
+      <label>String Length L (m)
+        <input id="L" type="number" value="0.80" step="0.01" min="0.2" max="2" />
+      </label>
+      <label>Linear density μ (kg/m)
+        <input id="mu" type="number" value="0.0005" step="0.0001" min="0.00005" max="0.01" />
+      </label>
+      <label>Loops p
+        <input id="p" type="number" value="4" min="1" max="10" step="1" />
+      </label>
+      <button class="btn secondary" id="reset">Reset</button>
+      <div class="values">
+        <div class="value"><div class="label">Loops p</div><div class="v" id="pd">4</div></div>
+        <div class="value"><div class="label">Frequency f</div><div class="v" id="fd">— Hz</div></div>
+        <div class="value"><div class="label">Wave speed</div><div class="v" id="vd">— m/s</div></div>
+        <div class="value"><div class="label">Wavelength</div><div class="v" id="ld">— m</div></div>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+const cv = document.getElementById('cv'); const ctx = cv.getContext('2d');
+const Tinp = document.getElementById('T');
+const Linp = document.getElementById('L');
+const muInp = document.getElementById('mu');
+const pinp = document.getElementById('p');
+let frame = 0, raf;
+function update() {
+  const T = parseFloat(Tinp.value);
+  const L = parseFloat(Linp.value);
+  const mu = parseFloat(muInp.value);
+  const p = parseInt(pinp.value);
+  const v = Math.sqrt(T / mu);
+  const f = (p / (2 * L)) * v;
+  const lambda = 2 * L / p;
+  document.getElementById('Tv').textContent = T.toFixed(2);
+  document.getElementById('pd').textContent = p;
+  document.getElementById('fd').textContent = f.toFixed(1) + ' Hz';
+  document.getElementById('vd').textContent = v.toFixed(2) + ' m/s';
+  document.getElementById('ld').textContent = lambda.toFixed(3) + ' m';
+}
+function draw() {
+  frame++;
+  const W = cv.width, H = cv.height;
+  ctx.fillStyle = '#0b1220'; ctx.fillRect(0, 0, W, H);
+  const p = parseInt(pinp.value);
+  const T = parseFloat(Tinp.value);
+  const ampMax = Math.min(70, 25 + T * 30);
+  // tuning fork (left)
+  ctx.fillStyle = '#94a3b8';
+  ctx.fillRect(40, 100, 14, 180);
+  ctx.fillRect(70, 100, 14, 180);
+  ctx.fillStyle = '#cbd5e1'; ctx.font = '11px Arial';
+  ctx.fillText('Fork', 50, 290);
+  // string with standing wave
+  const xStart = 100, xEnd = 660, yMid = 190;
+  ctx.strokeStyle = '#67e8f9'; ctx.lineWidth = 2;
+  ctx.beginPath();
+  const t = frame / 8;
+  for (let i = 0; i <= 200; i++) {
+    const x = xStart + (xEnd - xStart) * (i / 200);
+    const xi = i / 200;
+    const env = Math.sin(p * Math.PI * xi);
+    const y = yMid + ampMax * env * Math.sin(t);
+    if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+  }
+  ctx.stroke();
+  // pulley
+  ctx.fillStyle = '#475569';
+  ctx.beginPath(); ctx.arc(xEnd + 20, yMid, 12, 0, Math.PI * 2); ctx.fill();
+  // weight
+  ctx.fillStyle = '#fbbf24'; ctx.fillRect(xEnd + 10, yMid + 15, 24, 30);
+  ctx.fillStyle = '#0b1220'; ctx.font = '11px Arial'; ctx.fillText(T.toFixed(2)+'N', xEnd + 10, yMid + 35);
+  // loop count
+  ctx.fillStyle = '#cbd5e1'; ctx.font = '13px Arial';
+  ctx.fillText('Loops: ' + p, 30, 30);
+  raf = requestAnimationFrame(draw);
+}
+['change', 'input'].forEach(ev => {
+  Tinp.addEventListener(ev, update);
+  Linp.addEventListener(ev, update);
+  muInp.addEventListener(ev, update);
+  pinp.addEventListener(ev, update);
+});
+document.getElementById('reset').addEventListener('click', () => {
+  Tinp.value = '0.5'; Linp.value = '0.80'; muInp.value = '0.0005'; pinp.value = '4'; update();
+});
+update(); draw();
+</script>
+</body>
+</html>

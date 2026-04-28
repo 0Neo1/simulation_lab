@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><title>Bohr Atom Model</title><link rel="stylesheet" href="../styles.css"></head>
+<body>
+<header><a href="../index.html"><h1>Bohr Atom Model</h1></a><p>Watch electrons jump between energy levels.</p></header>
+<main>
+<a class="back-link" href="../index.html">&larr; All simulations</a>
+<div class="sim-container">
+  <div>
+    <div class="canvas-wrap"><canvas id="cv" width="800" height="500"></canvas></div>
+    <div class="info-box">
+      <h3>The Chemistry</h3>
+      <p>Bohr proposed that electrons orbit the nucleus only at specific allowed energy levels. When an electron drops to a lower level, it emits a photon equal in energy to the difference.</p>
+      <div class="formula">E_n = −13.6/n² eV (hydrogen)<br>E_photon = E_high − E_low = h f</div>
+      <p>Visible spectral lines (Balmer series): transitions ending at n=2.</p>
+    </div>
+  </div>
+  <div class="controls">
+    <h3>Controls</h3>
+    <div class="control-row"><label>Initial level n_i <span class="val" id="vNi">3</span></label><input type="range" id="ni" min="2" max="6" value="3"></div>
+    <div class="control-row"><label>Final level n_f <span class="val" id="vNf">2</span></label><input type="range" id="nf" min="1" max="5" value="2"></div>
+    <div class="btn-row"><button id="excite">Excite</button><button id="emit">Emit photon</button></div>
+    <div class="readouts">
+      <div>E_i: <span id="rEi">0</span></div>
+      <div>E_f: <span id="rEf">0</span></div>
+      <div>ΔE: <span id="rDE">0 eV</span></div>
+      <div>λ: <span id="rL">0 nm</span></div>
+    </div>
+  </div>
+</div>
+</main>
+<script>
+const cv=document.getElementById('cv'), ctx=cv.getContext('2d');
+const cx=400, cy=250;
+let ni=3, nf=2;
+let electronN = ni, electronAngle = 0;
+let photons = [];
+let mode = 'idle'; // idle, exciting, emitting
+
+function E(n){ return -13.6/(n*n); }
+
+function draw(){
+  ctx.clearRect(0,0,cv.width,cv.height);
+  ctx.fillStyle='#000000'; ctx.fillRect(0,0,cv.width,cv.height);
+  // orbits
+  for(let n=1;n<=6;n++){
+    ctx.strokeStyle = n===electronN ? '#fff' : 'rgba(255,255,255,0.25)';
+    ctx.lineWidth = n===electronN ? 1.5 : 1;
+    ctx.beginPath(); ctx.arc(cx,cy, 30*n, 0, 2*Math.PI); ctx.stroke();
+    ctx.fillStyle='#888'; ctx.font='12px sans-serif';
+    ctx.fillText('n='+n, cx + 30*n - 12, cy - 5);
+  }
+  // nucleus
+  const grd = ctx.createRadialGradient(cx,cy,2,cx,cy,18);
+  grd.addColorStop(0,'#cccccc'); grd.addColorStop(1,'#aaaaaa');
+  ctx.fillStyle = grd; ctx.beginPath(); ctx.arc(cx,cy,15,0,2*Math.PI); ctx.fill();
+  ctx.fillStyle='#fff'; ctx.font='bold 14px sans-serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.fillText('+', cx, cy);
+  ctx.textAlign='left'; ctx.textBaseline='alphabetic';
+  // electron
+  const r = 30*electronN;
+  const ex = cx + r*Math.cos(electronAngle), ey = cy + r*Math.sin(electronAngle);
+  ctx.fillStyle='#dddddd'; ctx.beginPath(); ctx.arc(ex,ey,7,0,2*Math.PI); ctx.fill();
+  ctx.strokeStyle='#fff'; ctx.stroke();
+  // photons
+  photons.forEach(p=>{
+    ctx.strokeStyle = p.color; ctx.lineWidth=2;
+    ctx.beginPath();
+    for(let i=0;i<8;i++){
+      const t = i/7;
+      ctx.lineTo(p.x + t*40*Math.cos(p.dir), p.y + t*40*Math.sin(p.dir) + Math.sin(t*8+performance.now()/100)*4);
+    }
+    ctx.stroke();
+  });
+  // info text
+  ctx.fillStyle='#fff'; ctx.font='14px sans-serif';
+  ctx.fillText('Current orbit: n = '+electronN, 30, 30);
+  ctx.fillText('E = '+E(electronN).toFixed(2)+' eV', 30, 50);
+}
+
+function wavelengthFromEnergy(eV){
+  const hc = 1240; // eV·nm
+  return hc/Math.abs(eV);
+}
+function colorFromWavelength(nm){
+  if(nm < 380) return '#777777';
+  if(nm < 450) return '#666666';
+  if(nm < 490) return '#999999';
+  if(nm < 570) return '#999999';
+  if(nm < 590) return '#cccccc';
+  if(nm < 620) return '#999999';
+  if(nm < 750) return '#888888';
+  return '#333333';
+}
+
+function loop(){
+  electronAngle += 0.05/electronN;
+  if(mode==='exciting'){
+    electronN += 0.05;
+    if(electronN >= ni){ electronN = ni; mode = 'idle'; }
+  } else if(mode==='emitting'){
+    electronN -= 0.05;
+    if(electronN <= nf){ electronN = nf; mode = 'idle'; }
+  }
+  // animate photons
+  photons.forEach(p=>{ p.x += 4*Math.cos(p.dir); p.y += 4*Math.sin(p.dir); });
+  photons = photons.filter(p=>p.x>0 && p.x<cv.width && p.y>0 && p.y<cv.height);
+  draw();
+  requestAnimationFrame(loop);
+}
+
+document.getElementById('ni').oninput=e=>{ni=+e.target.value; document.getElementById('vNi').textContent=ni; updateInfo();};
+document.getElementById('nf').oninput=e=>{nf=+e.target.value; document.getElementById('vNf').textContent=nf; updateInfo();};
+document.getElementById('excite').onclick=()=>{ mode='exciting'; };
+document.getElementById('emit').onclick=()=>{
+  if(electronN > nf){
+    const dE = Math.abs(E(electronN) - E(nf));
+    const wl = wavelengthFromEnergy(dE);
+    const col = colorFromWavelength(wl);
+    const r = 30*electronN;
+    photons.push({x:cx+r*Math.cos(electronAngle), y:cy+r*Math.sin(electronAngle), dir: electronAngle+Math.PI/2, color: col});
+    mode='emitting';
+  }
+};
+
+function updateInfo(){
+  const dE = Math.abs(E(ni)-E(nf));
+  const wl = wavelengthFromEnergy(dE);
+  document.getElementById('rEi').textContent = E(ni).toFixed(2)+' eV';
+  document.getElementById('rEf').textContent = E(nf).toFixed(2)+' eV';
+  document.getElementById('rDE').textContent = dE.toFixed(2)+' eV';
+  document.getElementById('rL').textContent = wl.toFixed(0)+' nm';
+}
+updateInfo(); loop();
+</script>
+</body></html>

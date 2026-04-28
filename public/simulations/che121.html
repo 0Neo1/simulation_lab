@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>KMnO₄ vs Fe²⁺ Titration</title>
+<link rel="stylesheet" href="/simulations/_shared.css" />
+</head>
+<body>
+<div class="app">
+  <header>
+    <h1>KMnO₄ vs Fe²⁺ Titration (Acidic Medium)</h1>
+    <span class="pill">Class 12 · Chemistry</span>
+  </header>
+  <div class="grid">
+    <div class="card">
+      <h2>Burette &amp; Conical Flask</h2>
+      <div class="viz"><canvas id="cv" width="780" height="380"></canvas></div>
+      <p class="note">Open the stopcock to add KMnO₄ slowly. End point: faint pink that persists for ~30 s. KMnO₄ acts as self-indicator.</p>
+    </div>
+    <div class="card controls">
+      <h2>Controls</h2>
+      <label>KMnO₄ molarity (M)
+        <input id="Mt" type="number" value="0.02" step="0.005" min="0.005" />
+      </label>
+      <label>Volume of Fe²⁺ taken (mL)
+        <input id="Vfe" type="number" value="20.0" step="0.1" />
+      </label>
+      <label>Drop rate
+        <input id="rate" type="range" min="0" max="3" step="0.05" value="0" />
+      </label>
+      <button class="btn" id="add">Add 0.5 mL</button>
+      <button class="btn warn" id="record">Record Endpoint</button>
+      <button class="btn secondary" id="reset">Reset</button>
+      <div class="values">
+        <div class="value"><div class="label">Burette</div><div class="v" id="burette">0.0 mL</div></div>
+        <div class="value"><div class="label">Endpoint at</div><div class="v" id="ep">— mL</div></div>
+        <div class="value"><div class="label">Molarity Fe²⁺</div><div class="v" id="MFe">— M</div></div>
+        <div class="value"><div class="label">Fe²⁺ in g/L</div><div class="v" id="gFe">—</div></div>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+const cv = document.getElementById('cv'); const ctx = cv.getContext('2d');
+const Mt = document.getElementById('Mt');
+const Vfe = document.getElementById('Vfe');
+const rate = document.getElementById('rate');
+let burette = 0, drops = []; // visible drops
+let endpoint = null;
+const trueEndpoint = 11.4; // for given concentration & 0.02M KMnO4 vs 0.0285 M Fe in 20 mL
+function update() {
+  document.getElementById('burette').textContent = burette.toFixed(2) + ' mL';
+  if (endpoint) {
+    document.getElementById('ep').textContent = endpoint.toFixed(2) + ' mL';
+    const M_KMnO4 = parseFloat(Mt.value);
+    const Vfe1 = parseFloat(Vfe.value);
+    const M_Fe = (5 * M_KMnO4 * endpoint) / Vfe1;
+    document.getElementById('MFe').textContent = M_Fe.toFixed(4) + ' M';
+    document.getElementById('gFe').textContent = (M_Fe * 55.85).toFixed(3) + ' g/L';
+  }
+}
+function draw() {
+  const W = cv.width, H = cv.height;
+  ctx.fillStyle = '#0b1220'; ctx.fillRect(0, 0, W, H);
+  // burette
+  const bX = W / 2 - 8, bY0 = 30, bH = 200;
+  ctx.fillStyle = '#1e293b'; ctx.fillRect(bX - 5, bY0, 26, bH);
+  ctx.strokeStyle = '#cbd5e1'; ctx.strokeRect(bX - 5, bY0, 26, bH);
+  // KMnO4 inside
+  const fillH = Math.max(0, bH - 20 - burette * 4);
+  ctx.fillStyle = 'rgba(168,85,247,0.85)'; // purple
+  ctx.fillRect(bX - 4, bY0 + 10 + (bH - 30 - fillH), 24, fillH);
+  // ticks
+  ctx.fillStyle = '#cbd5e1'; ctx.font = '10px Arial';
+  for (let i = 0; i <= 50; i++) {
+    const yy = bY0 + 10 + i * 4;
+    if (i % 5 === 0) {
+      ctx.fillRect(bX + 22, yy, 6, 1);
+      ctx.fillText(i + '', bX + 30, yy + 3);
+    } else if (i % 1 === 0) ctx.fillRect(bX + 22, yy, 3, 1);
+  }
+  // stopcock
+  ctx.fillStyle = '#fbbf24'; ctx.fillRect(bX - 8, bY0 + bH, 30, 8);
+  // dropping liquid
+  drops = drops.filter(d => d.y < 320);
+  drops.forEach(d => {
+    d.y += 4;
+    ctx.fillStyle = 'rgba(168,85,247,0.9)';
+    ctx.beginPath(); ctx.arc(d.x, d.y, 3, 0, Math.PI * 2); ctx.fill();
+  });
+  // conical flask
+  ctx.beginPath();
+  ctx.moveTo(W / 2 - 80, 320);
+  ctx.lineTo(W / 2 + 80, 320);
+  ctx.lineTo(W / 2 + 18, 250);
+  ctx.lineTo(W / 2 - 18, 250);
+  ctx.closePath();
+  ctx.strokeStyle = '#cbd5e1'; ctx.lineWidth = 2; ctx.stroke();
+  // liquid color (transparent until endpoint, then pink)
+  const overshoot = Math.max(0, burette - trueEndpoint);
+  let r = 8, g = 47, b = 73, alpha = 0.5;
+  if (burette < trueEndpoint) {
+    // pale yellow-green Fe
+    r = 254; g = 243; b = 199; alpha = 0.45;
+  } else {
+    // pink intensifies with overshoot
+    const k = Math.min(1, overshoot * 4);
+    r = 244; g = 114 - k * 60; b = 182 - k * 80; alpha = 0.6 + k * 0.3;
+  }
+  ctx.fillStyle = `rgba(${r},${g},${b},${alpha})`;
+  ctx.beginPath();
+  ctx.moveTo(W / 2 - 78, 318);
+  ctx.lineTo(W / 2 + 78, 318);
+  ctx.lineTo(W / 2 + 28, 270);
+  ctx.lineTo(W / 2 - 28, 270);
+  ctx.closePath();
+  ctx.fill();
+  // labels
+  ctx.fillStyle = '#cbd5e1'; ctx.font = '12px Arial';
+  ctx.fillText('Burette: KMnO₄', bX - 30, 24);
+  ctx.fillText('Conical flask: Fe²⁺ + dilute H₂SO₄', W / 2 - 80, 348);
+  if (Math.abs(burette - trueEndpoint) < 0.3) {
+    ctx.fillStyle = '#34d399'; ctx.font = 'bold 14px Arial';
+    ctx.fillText('End point near!', W / 2 - 50, 240);
+  }
+}
+function loop() {
+  draw();
+  const r = parseFloat(rate.value);
+  if (r > 0) {
+    burette += r * 0.02;
+    if (Math.random() < r * 0.5) drops.push({ x: cv.width / 2 + 6, y: 240 });
+    update();
+  }
+  requestAnimationFrame(loop);
+}
+document.getElementById('add').addEventListener('click', () => {
+  burette += 0.5;
+  drops.push({ x: cv.width / 2 + 6, y: 240 });
+  update();
+});
+document.getElementById('record').addEventListener('click', () => {
+  endpoint = burette;
+  update();
+});
+document.getElementById('reset').addEventListener('click', () => {
+  burette = 0; endpoint = null; drops = []; rate.value = '0';
+  document.getElementById('ep').textContent = '— mL';
+  document.getElementById('MFe').textContent = '— M';
+  document.getElementById('gFe').textContent = '—';
+  update();
+});
+['change', 'input'].forEach(ev => { Mt.addEventListener(ev, update); Vfe.addEventListener(ev, update); });
+update(); loop();
+</script>
+</body>
+</html>

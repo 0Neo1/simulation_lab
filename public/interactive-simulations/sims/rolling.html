@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><title>Rolling Motion</title><link rel="stylesheet" href="../styles.css"></head>
+<body>
+<header><a href="../index.html"><h1>Rolling Motion Race</h1></a><p>Different shapes, different rolling acceleration.</p></header>
+<main>
+<a class="back-link" href="../index.html">&larr; All simulations</a>
+<div class="sim-container">
+  <div>
+    <div class="canvas-wrap"><canvas id="cv" width="800" height="500"></canvas></div>
+    <div class="info-box">
+      <h3>The Physics</h3>
+      <p>For a body rolling without slipping down an incline, acceleration depends on the moment of inertia ratio <em>β = I/(mR²)</em>:</p>
+      <div class="formula">a = g sin θ / (1 + β)</div>
+      <p>Solid sphere β=2/5, hollow sphere 2/3, solid cylinder 1/2, hoop 1.</p>
+    </div>
+  </div>
+  <div class="controls">
+    <h3>Controls</h3>
+    <div class="control-row"><label>Incline angle <span class="val" id="vA">25°</span></label><input type="range" id="ang" min="5" max="45" value="25"></div>
+    <div class="btn-row"><button id="run">Race!</button><button class="danger" id="reset">Reset</button></div>
+    <div class="readouts" style="grid-template-columns:1fr;">
+      <div>Solid sphere: <span id="r1">—</span></div>
+      <div>Solid cylinder: <span id="r2">—</span></div>
+      <div>Hollow sphere: <span id="r3">—</span></div>
+      <div>Hoop: <span id="r4">—</span></div>
+    </div>
+  </div>
+</div>
+</main>
+<script>
+const cv=document.getElementById('cv'), ctx=cv.getContext('2d');
+let ang=25;
+const objects = [
+  {name:'Solid sphere', beta:2/5, color:'#888888', s:0, v:0, finT:null, label:'r1'},
+  {name:'Solid cylinder', beta:1/2, color:'#ffffff', s:0, v:0, finT:null, label:'r2'},
+  {name:'Hollow sphere', beta:2/3, color:'#aaaaaa', s:0, v:0, finT:null, label:'r3'},
+  {name:'Hoop', beta:1, color:'#888888', s:0, v:0, finT:null, label:'r4'},
+];
+let t=0, running=false;
+const ox=80, oy=460, L=600, R=22;
+
+function reset(){ objects.forEach(o=>{o.s=0; o.v=0; o.finT=null;}); t=0; }
+
+function step(){
+  if(!running) return;
+  const dt = 0.03; t += dt;
+  const a = ang*Math.PI/180;
+  const maxS = (L-100)/5;
+  objects.forEach(o=>{
+    if(o.finT) return;
+    const acc = 9.8*Math.sin(a)/(1+o.beta);
+    o.v += acc*dt;
+    o.s += o.v*dt;
+    if(o.s >= maxS){ o.finT = t; document.getElementById(o.label).textContent = t.toFixed(2)+' s'; }
+  });
+  if(objects.every(o=>o.finT)) running = false;
+  draw();
+  requestAnimationFrame(step);
+}
+
+function draw(){
+  ctx.clearRect(0,0,cv.width,cv.height);
+  ctx.fillStyle='#1a1a1a'; ctx.fillRect(0,0,cv.width,oy);
+  ctx.fillStyle='#1f1f1f'; ctx.fillRect(0,oy,cv.width,cv.height-oy);
+  // ramp
+  const a = ang*Math.PI/180;
+  const tx = ox + L*Math.cos(a), ty = oy - L*Math.sin(a);
+  ctx.fillStyle='#888';
+  ctx.beginPath(); ctx.moveTo(ox,oy); ctx.lineTo(tx,oy); ctx.lineTo(tx,ty); ctx.closePath(); ctx.fill();
+  ctx.strokeStyle='#dddddd'; ctx.stroke();
+  // objects (stacked along ramp)
+  objects.forEach((o,i)=>{
+    const sx = ox + (o.s*5)*Math.cos(a) + (i*2*R+R)*Math.sin(a);
+    const sy = oy - (o.s*5)*Math.sin(a) - (i*2*R+R)*Math.cos(a);
+    ctx.save();
+    ctx.translate(sx, sy);
+    ctx.rotate(-a);
+    if(o.name==='Hoop'){
+      ctx.strokeStyle = o.color; ctx.lineWidth = 5;
+      ctx.beginPath(); ctx.arc(0,0,R,0,2*Math.PI); ctx.stroke();
+    } else {
+      ctx.fillStyle = o.color; ctx.beginPath(); ctx.arc(0,0,R,0,2*Math.PI); ctx.fill();
+      ctx.strokeStyle='#dddddd'; ctx.stroke();
+    }
+    // rotation indicator
+    const theta = o.s/0.22; // arbitrary
+    ctx.strokeStyle='#dddddd'; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(R*Math.cos(theta), R*Math.sin(theta)); ctx.stroke();
+    ctx.restore();
+  });
+  // legend
+  ctx.font='14px sans-serif';
+  objects.forEach((o,i)=>{
+    ctx.fillStyle = o.color; ctx.fillRect(620, 30+i*22, 18, 14);
+    ctx.fillStyle='#dddddd'; ctx.fillText(o.name, 645, 42+i*22);
+  });
+}
+
+document.getElementById('ang').oninput=e=>{ang=+e.target.value; document.getElementById('vA').textContent=ang+'°'; if(!running) draw();};
+document.getElementById('run').onclick=()=>{ if(!running){ reset(); running=true; step(); } };
+document.getElementById('reset').onclick=()=>{ running=false; reset(); ['r1','r2','r3','r4'].forEach(id=>document.getElementById(id).textContent='—'); draw(); };
+draw();
+</script>
+</body></html>

@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>NH₄Cl + NaOH → NH₃</title>
+<link rel="stylesheet" href="/simulations/_shared.css" />
+</head>
+<body>
+<div class="app">
+  <header>
+    <h1>Ammonium Salt + Base → Ammonia Gas</h1>
+    <span class="pill">Class 10 · Chemistry</span>
+  </header>
+  <div class="grid">
+    <div class="card">
+      <h2>Test Tube Reaction</h2>
+      <div class="viz"><canvas id="cv" width="780" height="380"></canvas></div>
+      <p class="note">Heat NH₄Cl with NaOH. Pungent gas evolves and turns moist red litmus blue, confirming NH₃.</p>
+    </div>
+    <div class="card controls">
+      <h2>Controls</h2>
+      <button class="btn" id="heat">Start Heating</button>
+      <button class="btn" id="litmus">Bring Red Litmus</button>
+      <button class="btn warn" id="stop">Stop</button>
+      <button class="btn secondary" id="reset">Reset</button>
+      <div class="values" style="grid-template-columns:1fr">
+        <div class="value"><div class="label">Reaction</div><div class="v" style="font-size:13px">NH₄Cl + NaOH → NaCl + NH₃ + H₂O</div></div>
+        <div class="value"><div class="label">Observation</div><div class="v" id="obs" style="font-size:13px">No reaction</div></div>
+        <div class="value"><div class="label">Inference</div><div class="v" id="inf" style="font-size:13px">—</div></div>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+const cv = document.getElementById('cv'); const ctx = cv.getContext('2d');
+let heating = false, litmusIn = false, t0 = 0;
+function draw() {
+  const W = cv.width, H = cv.height;
+  ctx.fillStyle = '#0b1220'; ctx.fillRect(0, 0, W, H);
+  // test tube
+  const tx = W / 2, ty = 80;
+  ctx.fillStyle = '#0b1220';
+  ctx.beginPath();
+  ctx.moveTo(tx - 30, ty); ctx.lineTo(tx - 30, ty + 200);
+  ctx.quadraticCurveTo(tx, ty + 240, tx + 30, ty + 200);
+  ctx.lineTo(tx + 30, ty); ctx.closePath();
+  ctx.fillStyle = 'rgba(15,23,42,0.6)'; ctx.fill();
+  ctx.strokeStyle = '#cbd5e1'; ctx.lineWidth = 2; ctx.stroke();
+  // mixture
+  ctx.fillStyle = 'rgba(254,243,199,0.6)';
+  ctx.beginPath(); ctx.moveTo(tx - 28, ty + 160); ctx.lineTo(tx - 28, ty + 200);
+  ctx.quadraticCurveTo(tx, ty + 240, tx + 28, ty + 200); ctx.lineTo(tx + 28, ty + 160); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = '#cbd5e1'; ctx.font = '11px Arial';
+  ctx.fillText('NH₄Cl + NaOH', tx - 30, ty + 195);
+  // burner
+  if (heating) {
+    for (let i = 0; i < 6; i++) {
+      const phase = Date.now() / 200 + i * 0.5;
+      ctx.fillStyle = `rgba(251,191,36,${0.5 + Math.sin(phase) * 0.2})`;
+      ctx.beginPath(); ctx.ellipse(tx + (i - 2.5) * 8, ty + 270 - Math.sin(phase) * 4, 6, 14, 0, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.fillStyle = '#475569';
+    ctx.fillRect(tx - 30, ty + 286, 60, 16);
+  }
+  // gas
+  if (heating) {
+    for (let i = 0; i < 25; i++) {
+      const phase = (Date.now() / 80 + i * 30) % 240;
+      const yy = ty - phase + 220;
+      const xx = tx + Math.sin(phase * 0.05 + i) * (8 + i * 0.6);
+      if (yy > -10) {
+        ctx.fillStyle = `rgba(255,255,255,${0.06 + (240 - phase) / 1200})`;
+        ctx.beginPath(); ctx.arc(xx, yy, 3 + (240 - phase) / 80, 0, Math.PI * 2); ctx.fill();
+      }
+    }
+  }
+  // litmus paper
+  if (litmusIn) {
+    ctx.fillStyle = heating ? '#3b82f6' : '#f87171';
+    ctx.fillRect(tx + 60, ty - 10, 40, 60);
+    ctx.fillStyle = '#cbd5e1'; ctx.font = '11px Arial';
+    ctx.fillText('Red litmus', tx + 56, ty - 14);
+    ctx.fillText(heating ? '(now blue!)' : '(red)', tx + 56, ty + 65);
+  }
+  if (heating && litmusIn) {
+    document.getElementById('obs').textContent = 'Pungent gas; red litmus turns blue';
+    document.getElementById('inf').textContent = 'Gas is NH₃ (basic)';
+  } else if (heating) {
+    document.getElementById('obs').textContent = 'Pungent gas evolved';
+    document.getElementById('inf').textContent = 'Bring litmus to confirm';
+  }
+  requestAnimationFrame(draw);
+}
+document.getElementById('heat').addEventListener('click', () => { heating = true; });
+document.getElementById('litmus').addEventListener('click', () => { litmusIn = true; });
+document.getElementById('stop').addEventListener('click', () => { heating = false; });
+document.getElementById('reset').addEventListener('click', () => {
+  heating = false; litmusIn = false;
+  document.getElementById('obs').textContent = 'No reaction';
+  document.getElementById('inf').textContent = '—';
+});
+draw();
+</script>
+</body>
+</html>

@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><title>Doppler Effect</title><link rel="stylesheet" href="../styles.css"></head>
+<body>
+<header><a href="../index.html"><h1>Doppler Effect</h1></a><p>Wavefronts compress in front of a moving source.</p></header>
+<main>
+<a class="back-link" href="../index.html">&larr; All simulations</a>
+<div class="sim-container">
+  <div>
+    <div class="canvas-wrap"><canvas id="cv" width="800" height="500"></canvas></div>
+    <div class="info-box">
+      <h3>The Physics</h3>
+      <p>When a source moves through a medium, wavefronts ahead of it compress (higher frequency) and those behind expand (lower frequency).</p>
+      <div class="formula">f' = f · (v_wave) / (v_wave − v_source · cos θ)</div>
+      <p>Mach 1 produces a shock wave; supersonic motion creates a Mach cone.</p>
+    </div>
+  </div>
+  <div class="controls">
+    <h3>Controls</h3>
+    <div class="control-row"><label>Source speed <span class="val" id="vS">0.5 v</span></label><input type="range" id="vs" min="0" max="200" value="50"></div>
+    <div class="control-row"><label>Wave speed <span class="val" id="vW">100</span></label><input type="range" id="vw" min="50" max="200" value="100"></div>
+    <div class="control-row"><label>Frequency <span class="val" id="vF">1.0</span></label><input type="range" id="f" min="2" max="20" value="10"></div>
+    <div class="btn-row"><button id="run">Start</button><button class="secondary" id="pause">Pause</button><button class="danger" id="reset">Reset</button></div>
+  </div>
+</div>
+</main>
+<script>
+const cv=document.getElementById('cv'), ctx=cv.getContext('2d');
+let vs=50, vw=100, f=1.0, running=false;
+let x=100, y=250, t=0, fronts=[], lastEmit=0;
+
+function step(){
+  if(!running) return;
+  const dt = 0.03; t += dt;
+  x += vs*dt;
+  if(x > cv.width-50) { x = 100; fronts = []; }
+  if(t - lastEmit > 1/f){ fronts.push({x, y, t0: t}); lastEmit = t; }
+  fronts = fronts.filter(fr => t-fr.t0 < 6);
+  draw(); requestAnimationFrame(step);
+}
+
+function draw(){
+  ctx.clearRect(0,0,cv.width,cv.height);
+  ctx.fillStyle='#000000'; ctx.fillRect(0,0,cv.width,cv.height);
+  // wavefronts
+  fronts.forEach(fr=>{
+    const r = vw*(t-fr.t0);
+    ctx.strokeStyle = `rgba(200,200,200,${1-(t-fr.t0)/6})`;
+    ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(fr.x, fr.y, r, 0, 2*Math.PI); ctx.stroke();
+  });
+  // source
+  ctx.fillStyle='#cccccc'; ctx.beginPath(); ctx.arc(x,y,10,0,2*Math.PI); ctx.fill();
+  // observer (left)
+  ctx.fillStyle='#ffffff'; ctx.beginPath(); ctx.arc(50,250,8,0,2*Math.PI); ctx.fill();
+  ctx.fillStyle='#fff'; ctx.font='12px sans-serif'; ctx.fillText('observer', 30, 230);
+  // observer (right)
+  ctx.fillStyle='#ffffff'; ctx.beginPath(); ctx.arc(750,250,8,0,2*Math.PI); ctx.fill();
+  ctx.fillText('observer', 720, 230);
+  // mach speed indicator
+  ctx.fillStyle='#fff'; ctx.font='14px sans-serif';
+  const mach = vs/vw;
+  ctx.fillText(`Mach: ${mach.toFixed(2)}${mach>1?' (supersonic!)':''}`, 20, 30);
+  // Doppler shifted frequencies (approx for 1D)
+  const fL = f * vw/(vw + vs); // left observer (source moves away)
+  const fR = vs<vw ? f * vw/(vw - vs) : 0; // right (toward)
+  ctx.fillStyle='#ffffff';
+  ctx.fillText(`f_left ≈ ${fL.toFixed(2)} Hz`, 30, 290);
+  ctx.fillText(`f_right ≈ ${fR.toFixed(2)} Hz`, 700, 290);
+}
+
+document.getElementById('vs').oninput=e=>{vs=+e.target.value; document.getElementById('vS').textContent=(vs/vw).toFixed(2)+' v';};
+document.getElementById('vw').oninput=e=>{vw=+e.target.value; document.getElementById('vW').textContent=vw;};
+document.getElementById('f').oninput=e=>{f=+e.target.value/10; document.getElementById('vF').textContent=f.toFixed(1)+' Hz';};
+document.getElementById('run').onclick=()=>{if(!running){running=true; step();}};
+document.getElementById('pause').onclick=()=>running=false;
+document.getElementById('reset').onclick=()=>{running=false; x=100; fronts=[]; t=0; draw();};
+draw();
+</script>
+</body></html>

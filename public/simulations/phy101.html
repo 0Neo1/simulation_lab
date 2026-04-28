@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Vernier Calipers — Block Dimensions</title>
+<link rel="stylesheet" href="/simulations/_shared.css" />
+</head>
+<body>
+<div class="app">
+  <header>
+    <h1>Vernier Calipers — Volume of a Rectangular Block</h1>
+    <span class="pill">Class 10 · Physics</span>
+  </header>
+  <div class="grid">
+    <div class="card">
+      <h2>Calipers View</h2>
+      <div class="viz"><canvas id="cv" width="780" height="380"></canvas></div>
+      <p class="note">Use the slider to grip the block. The reading = main scale + (vernier coincidence × least count).</p>
+    </div>
+    <div class="card controls">
+      <h2>Controls</h2>
+      <label>Measure
+        <select id="dim">
+          <option value="l" selected>Length (l)</option>
+          <option value="b">Breadth (b)</option>
+          <option value="h">Height (h)</option>
+        </select>
+      </label>
+      <label>Caliper Jaw Position (cm) — <span id="vv">5.20</span></label>
+      <input id="cal" type="range" min="1" max="10" step="0.01" value="5.20" />
+      <button class="btn" id="record">Save Measurement</button>
+      <button class="btn secondary" id="reset">Reset</button>
+      <div class="values">
+        <div class="value"><div class="label">Length l</div><div class="v" id="ld">— cm</div></div>
+        <div class="value"><div class="label">Breadth b</div><div class="v" id="bd">— cm</div></div>
+        <div class="value"><div class="label">Height h</div><div class="v" id="hd">— cm</div></div>
+        <div class="value"><div class="label">Volume V</div><div class="v" id="vol">— cm³</div></div>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+const cv = document.getElementById('cv'); const ctx = cv.getContext('2d');
+const dim = document.getElementById('dim');
+const cal = document.getElementById('cal');
+const vv = document.getElementById('vv');
+const measured = { l: null, b: null, h: null };
+const trueDims = { l: 5.20, b: 3.10, h: 2.05 };
+function update() {
+  const v = parseFloat(cal.value);
+  vv.textContent = v.toFixed(2);
+  draw(v);
+}
+function draw(v) {
+  const W = cv.width, H = cv.height;
+  ctx.fillStyle = '#0b1220'; ctx.fillRect(0, 0, W, H);
+  // main scale
+  ctx.fillStyle = '#1e293b'; ctx.fillRect(40, 140, 700, 80);
+  ctx.fillStyle = '#fef3c7';
+  for (let i = 0; i <= 11; i++) {
+    const x = 60 + i * 60;
+    ctx.fillRect(x, 144, 1, 14);
+    ctx.font = '11px Arial';
+    ctx.fillStyle = '#cbd5e1'; ctx.fillText(i + '', x - 3, 175);
+    ctx.fillStyle = '#fef3c7';
+  }
+  // fixed jaw (left)
+  ctx.fillStyle = '#475569'; ctx.fillRect(40, 90, 30, 130);
+  // moving jaw + vernier
+  const jx = 60 + (v / 10) * 600;
+  ctx.fillStyle = '#7c3aed'; ctx.fillRect(jx, 90, 12, 80);
+  ctx.fillRect(jx - 8, 100, 80, 50);
+  ctx.fillStyle = '#fbbf24';
+  for (let i = 0; i <= 10; i++) {
+    const x = jx - 8 + i * 7;
+    ctx.fillRect(x, 100, 1, 12);
+  }
+  ctx.fillStyle = '#fff'; ctx.font = '11px Arial';
+  ctx.fillText('Vernier', jx + 8, 130);
+  // block being measured
+  const blockX = 80;
+  const blockW = jx - 80;
+  ctx.fillStyle = 'rgba(6,182,212,0.4)';
+  ctx.fillRect(blockX, 100, blockW, 80);
+  ctx.strokeStyle = '#06b6d4';
+  ctx.strokeRect(blockX, 100, blockW, 80);
+  // reading display
+  ctx.fillStyle = '#cbd5e1'; ctx.font = '13px Arial';
+  ctx.fillText('Reading: ' + v.toFixed(2) + ' cm', 30, 60);
+  ctx.fillText('Measuring: ' + dim.value.toUpperCase(), 30, 30);
+  // true target hint
+  const target = trueDims[dim.value];
+  ctx.fillStyle = '#34d399';
+  ctx.fillText('Target: ' + target.toFixed(2) + ' cm', 600, 30);
+}
+['change', 'input'].forEach(ev => {
+  cal.addEventListener(ev, update);
+  dim.addEventListener(ev, update);
+});
+document.getElementById('record').addEventListener('click', () => {
+  measured[dim.value] = parseFloat(cal.value);
+  if (measured.l) document.getElementById('ld').textContent = measured.l.toFixed(2) + ' cm';
+  if (measured.b) document.getElementById('bd').textContent = measured.b.toFixed(2) + ' cm';
+  if (measured.h) document.getElementById('hd').textContent = measured.h.toFixed(2) + ' cm';
+  if (measured.l && measured.b && measured.h) {
+    const V = measured.l * measured.b * measured.h;
+    document.getElementById('vol').textContent = V.toFixed(2) + ' cm³';
+  }
+});
+document.getElementById('reset').addEventListener('click', () => {
+  measured.l = measured.b = measured.h = null;
+  ['ld', 'bd', 'hd', 'vol'].forEach(id => document.getElementById(id).textContent = '—');
+  cal.value = '5.20'; dim.value = 'l'; update();
+});
+update();
+</script>
+</body>
+</html>

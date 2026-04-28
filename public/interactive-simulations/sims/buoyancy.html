@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><title>Buoyancy</title><link rel="stylesheet" href="../styles.css"></head>
+<body>
+<header><a href="../index.html"><h1>Buoyancy — Archimedes' Principle</h1></a><p>Will it float?</p></header>
+<main>
+<a class="back-link" href="../index.html">&larr; All simulations</a>
+<div class="sim-container">
+  <div>
+    <div class="canvas-wrap"><canvas id="cv" width="800" height="500"></canvas></div>
+    <div class="info-box">
+      <h3>The Physics</h3>
+      <p>An object submerged in a fluid experiences a buoyant force equal to the weight of the displaced fluid. It floats if its average density is less than the fluid's.</p>
+      <div class="formula">F_b = ρ_fluid · V_displaced · g</div>
+    </div>
+  </div>
+  <div class="controls">
+    <h3>Controls</h3>
+    <div class="control-row"><label>Object density <span class="val" id="vRO">800 kg/m³</span></label><input type="range" id="ro" min="100" max="3000" value="800"></div>
+    <div class="control-row"><label>Fluid density <span class="val" id="vRF">1000 kg/m³</span></label><input type="range" id="rf" min="500" max="2000" value="1000"></div>
+    <div class="control-row"><label>Object size <span class="val" id="vS">60</span></label><input type="range" id="s" min="20" max="100" value="60"></div>
+    <div class="btn-row"><button id="reset">Reset</button></div>
+    <div class="readouts">
+      <div>Weight: <span id="rW">0</span></div>
+      <div>Buoyant: <span id="rB">0</span></div>
+      <div>State: <span id="rS">—</span></div>
+      <div>Submerged: <span id="rSu">0%</span></div>
+    </div>
+  </div>
+</div>
+</main>
+<script>
+const cv=document.getElementById('cv'), ctx=cv.getContext('2d');
+let rho_o=800, rho_f=1000, size=60;
+let y=100, vy=0;
+const surfaceY = 200;
+const g=9.8;
+
+function step(){
+  const dt = 0.02;
+  const V = (size/100)**3; // m³ approx
+  const m = rho_o*V;
+  const W = m*g;
+  // submerged depth
+  const objTop = y - size/2, objBot = y + size/2;
+  let submergedH = 0;
+  if(objBot < surfaceY) submergedH = 0;
+  else if(objTop > surfaceY) submergedH = size;
+  else submergedH = objBot - surfaceY;
+  const Vsub = (submergedH/100)*(size/100)*(size/100);
+  const Fb = rho_f*Vsub*g;
+  const a = (Fb - W)/m - 0.3*vy; // damping
+  vy += a*dt*30;
+  y += vy*dt*30;
+  if(y > 480-size/2){ y=480-size/2; vy=0; }
+  if(y < size/2){ y = size/2; vy = 0;}
+
+  draw(submergedH/size);
+  document.getElementById('rW').textContent = W.toFixed(2)+' N';
+  document.getElementById('rB').textContent = Fb.toFixed(2)+' N';
+  document.getElementById('rS').textContent = rho_o<rho_f ? 'Floats' : (rho_o>rho_f?'Sinks':'Neutral');
+  document.getElementById('rSu').textContent = (submergedH/size*100).toFixed(0)+'%';
+  requestAnimationFrame(step);
+}
+
+function draw(){
+  ctx.clearRect(0,0,cv.width,cv.height);
+  ctx.fillStyle='#1a1a1a'; ctx.fillRect(0,0,cv.width,surfaceY);
+  // water
+  const grd = ctx.createLinearGradient(0,surfaceY,0,cv.height);
+  grd.addColorStop(0,'#3a3a3a'); grd.addColorStop(1,'#1a1a1a');
+  ctx.fillStyle = grd; ctx.fillRect(0,surfaceY,cv.width,cv.height-surfaceY);
+  // surface line
+  ctx.strokeStyle='#fff'; ctx.lineWidth=2;
+  ctx.beginPath();
+  for(let x=0;x<=cv.width;x++) ctx.lineTo(x, surfaceY + Math.sin(x/30+performance.now()/300)*2);
+  ctx.stroke();
+  // object
+  ctx.fillStyle='#3a3a3a'; ctx.fillRect(400-size/2, y-size/2, size, size);
+  ctx.strokeStyle='#dddddd'; ctx.lineWidth=2; ctx.strokeRect(400-size/2, y-size/2, size, size);
+  ctx.fillStyle='#fff'; ctx.font='bold 12px sans-serif'; ctx.textAlign='center';
+  ctx.fillText(rho_o, 400, y); ctx.textAlign='left';
+}
+
+['ro','rf','s'].forEach(id=>document.getElementById(id).oninput=()=>{
+  rho_o=+document.getElementById('ro').value;
+  rho_f=+document.getElementById('rf').value;
+  size=+document.getElementById('s').value;
+  document.getElementById('vRO').textContent=rho_o+' kg/m³';
+  document.getElementById('vRF').textContent=rho_f+' kg/m³';
+  document.getElementById('vS').textContent=size;
+});
+document.getElementById('reset').onclick=()=>{y=100; vy=0;};
+step();
+</script>
+</body></html>

@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Meter Bridge — Specific Resistance</title>
+<link rel="stylesheet" href="/simulations/_shared.css" />
+</head>
+<body>
+<div class="app">
+  <header>
+    <h1>Meter Bridge — Specific Resistance of a Wire</h1>
+    <span class="pill">Class 12 · Physics</span>
+  </header>
+  <div class="grid">
+    <div class="card">
+      <h2>Visualization</h2>
+      <div class="viz"><canvas id="cv" width="700" height="380"></canvas></div>
+      <p class="note">Move the jockey along the wire until the galvanometer reads zero. The balance length l gives the unknown resistance.</p>
+    </div>
+    <div class="card controls">
+      <h2>Controls</h2>
+      <label>Known Resistance R (Ω)
+        <select id="R">
+          <option value="1">1 Ω</option>
+          <option value="2" selected>2 Ω</option>
+          <option value="3">3 Ω</option>
+          <option value="5">5 Ω</option>
+          <option value="10">10 Ω</option>
+        </select>
+      </label>
+      <label>Jockey Position (cm) — <span id="lv">50</span></label>
+      <input id="l" type="range" min="1" max="99" step="1" value="50" />
+      <label>Wire Length L (cm)
+        <input id="L" type="number" value="50" min="10" max="200" />
+      </label>
+      <label>Wire Diameter d (mm)
+        <input id="d" type="number" value="0.42" step="0.01" min="0.05" max="3" />
+      </label>
+      <button class="btn" id="auto">Auto Find Null Point</button>
+      <button class="btn secondary" id="reset">Reset</button>
+      <div class="values">
+        <div class="value"><div class="label">Galvanometer</div><div class="v" id="gal">+0.0</div></div>
+        <div class="value"><div class="label">Balance length l</div><div class="v" id="bl">— cm</div></div>
+        <div class="value"><div class="label">Unknown X</div><div class="v" id="X">— Ω</div></div>
+        <div class="value"><div class="label">Resistivity ρ</div><div class="v" id="rho">— Ω·m</div></div>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+const cv = document.getElementById('cv');
+const ctx = cv.getContext('2d');
+const Rsel = document.getElementById('R');
+const lInput = document.getElementById('l');
+const lv = document.getElementById('lv');
+const Linput = document.getElementById('L');
+const dInput = document.getElementById('d');
+const galEl = document.getElementById('gal');
+const blEl = document.getElementById('bl');
+const Xel = document.getElementById('X');
+const rhoEl = document.getElementById('rho');
+const trueX = 1.84;
+
+function update() {
+  const R = parseFloat(Rsel.value);
+  const lPos = parseFloat(lInput.value);
+  const L = parseFloat(Linput.value);
+  const d = parseFloat(dInput.value);
+  lv.textContent = lPos.toFixed(0);
+  const balance = (R / (R + trueX)) * 100;
+  const diff = lPos - balance;
+  const gal = Math.max(-30, Math.min(30, diff * 1.4));
+  galEl.textContent = (gal >= 0 ? '+' : '') + gal.toFixed(1);
+  galEl.style.color = Math.abs(gal) < 1 ? '#34d399' : (gal > 0 ? '#f59e0b' : '#60a5fa');
+  draw(lPos, gal);
+  if (Math.abs(diff) < 0.6) {
+    const X = R * (100 - lPos) / lPos;
+    const rWire = (d / 2) / 1000;
+    const Lm = L / 100;
+    const rho = X * Math.PI * rWire * rWire / Lm;
+    blEl.textContent = lPos.toFixed(1) + ' cm';
+    Xel.textContent = X.toFixed(3) + ' Ω';
+    rhoEl.textContent = rho.toExponential(3) + ' Ω·m';
+  } else {
+    blEl.textContent = '— cm';
+    Xel.textContent = '— Ω';
+    rhoEl.textContent = '— Ω·m';
+  }
+}
+function draw(lPos, gal) {
+  const w = cv.width, h = cv.height;
+  ctx.clearRect(0, 0, w, h);
+  ctx.fillStyle = '#0b1220';
+  ctx.fillRect(0, 0, w, h);
+  // wood block
+  ctx.fillStyle = '#1e293b';
+  ctx.fillRect(40, 220, 620, 90);
+  // wire
+  ctx.lineWidth = 4;
+  ctx.strokeStyle = '#fbbf24';
+  ctx.beginPath(); ctx.moveTo(60, 250); ctx.lineTo(640, 250); ctx.stroke();
+  // scale ticks
+  ctx.fillStyle = '#cbd5e1';
+  ctx.font = '11px Arial';
+  for (let i = 0; i <= 10; i++) {
+    const x = 60 + i * 58;
+    ctx.fillRect(x, 260, 1, 8);
+    ctx.fillText(i * 10 + '', x - 6, 282);
+  }
+  // gaps for resistors
+  ctx.fillStyle = '#475569';
+  ctx.fillRect(120, 170, 80, 50); ctx.fillRect(500, 170, 80, 50);
+  ctx.fillStyle = '#fef3c7'; ctx.font = '12px Arial';
+  ctx.fillText('R box', 138, 200);
+  ctx.fillText('Wire X', 514, 200);
+  // jockey
+  const jx = 60 + (lPos / 100) * 580;
+  ctx.fillStyle = '#06b6d4';
+  ctx.beginPath(); ctx.moveTo(jx, 230); ctx.lineTo(jx - 8, 210); ctx.lineTo(jx + 8, 210); ctx.fill();
+  ctx.fillRect(jx - 2, 210, 4, 20);
+  // galvanometer
+  ctx.strokeStyle = '#94a3b8'; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.arc(350, 80, 40, 0, Math.PI * 2); ctx.stroke();
+  ctx.fillStyle = '#1e293b'; ctx.beginPath(); ctx.arc(350, 80, 38, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = '#cbd5e1'; ctx.font = '11px Arial';
+  ctx.fillText('Galvanometer', 318, 35);
+  // needle
+  const ang = -Math.PI / 2 + (gal / 30) * (Math.PI / 3);
+  ctx.strokeStyle = Math.abs(gal) < 1 ? '#34d399' : '#f87171';
+  ctx.lineWidth = 3;
+  ctx.beginPath(); ctx.moveTo(350, 80); ctx.lineTo(350 + Math.cos(ang) * 30, 80 + Math.sin(ang) * 30); ctx.stroke();
+  ctx.fillStyle = '#fbbf24'; ctx.beginPath(); ctx.arc(350, 80, 3, 0, Math.PI * 2); ctx.fill();
+  // wires from jockey to gal
+  ctx.strokeStyle = '#10b981';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.moveTo(jx, 220); ctx.lineTo(jx, 130); ctx.lineTo(350, 130); ctx.lineTo(350, 120); ctx.stroke();
+  // battery
+  ctx.fillStyle = '#fbbf24';
+  ctx.fillRect(310, 340, 30, 14);
+  ctx.fillStyle = '#94a3b8';
+  ctx.fillRect(345, 343, 8, 8);
+  ctx.fillStyle = '#cbd5e1';
+  ctx.fillText('Battery', 305, 332);
+}
+['change', 'input'].forEach(ev => {
+  Rsel.addEventListener(ev, update);
+  lInput.addEventListener(ev, update);
+  Linput.addEventListener(ev, update);
+  dInput.addEventListener(ev, update);
+});
+document.getElementById('auto').addEventListener('click', () => {
+  const R = parseFloat(Rsel.value);
+  const target = (R / (R + trueX)) * 100;
+  let cur = parseFloat(lInput.value);
+  const step = () => {
+    cur += (target - cur) * 0.18;
+    lInput.value = cur.toFixed(1);
+    update();
+    if (Math.abs(target - cur) > 0.2) requestAnimationFrame(step);
+    else { lInput.value = target.toFixed(1); update(); }
+  };
+  step();
+});
+document.getElementById('reset').addEventListener('click', () => {
+  Rsel.value = '2'; lInput.value = '50'; Linput.value = '50'; dInput.value = '0.42';
+  update();
+});
+update();
+</script>
+</body>
+</html>

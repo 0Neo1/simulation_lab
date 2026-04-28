@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><title>Energy on a Spring</title><link rel="stylesheet" href="../styles.css"></head>
+<body>
+<header><a href="../index.html"><h1>Energy on a Spring</h1></a><p>Kinetic and potential energy trade in SHM.</p></header>
+<main>
+<a class="back-link" href="../index.html">&larr; All simulations</a>
+<div class="sim-container">
+  <div>
+    <div class="canvas-wrap"><canvas id="cv" width="800" height="500"></canvas></div>
+    <div class="info-box">
+      <h3>The Physics</h3>
+      <p>For an ideal spring, total mechanical energy is conserved. KE is maximum at equilibrium; PE is maximum at the turning points.</p>
+      <div class="formula">PE = ½ k x² &nbsp;&nbsp; KE = ½ m v² &nbsp;&nbsp; E = ½ k A²</div>
+    </div>
+  </div>
+  <div class="controls">
+    <h3>Controls</h3>
+    <div class="control-row"><label>Spring constant k <span class="val" id="vK">20</span></label><input type="range" id="k" min="5" max="100" value="20"></div>
+    <div class="control-row"><label>Mass <span class="val" id="vM">1.0</span></label><input type="range" id="m" min="5" max="50" value="10"></div>
+    <div class="control-row"><label>Amplitude <span class="val" id="vA">100</span></label><input type="range" id="A" min="20" max="180" value="100"></div>
+    <div class="btn-row"><button id="run">Start</button><button class="secondary" id="pause">Pause</button><button class="danger" id="reset">Reset</button></div>
+    <div class="readouts">
+      <div>x: <span id="rX">0</span></div>
+      <div>v: <span id="rV">0</span></div>
+      <div>KE: <span id="rK">0</span></div>
+      <div>PE: <span id="rP">0</span></div>
+    </div>
+  </div>
+</div>
+</main>
+<script>
+const cv=document.getElementById('cv'), ctx=cv.getContext('2d');
+let k=20, m=1.0, A=100, x=100, v=0, t=0, running=false;
+const eqX = 200;
+
+function step(){
+  if(!running) return;
+  const dt = 0.02;
+  const a = -k/m * x;
+  v += a*dt; x += v*dt;
+  t += dt; draw();
+  document.getElementById('rX').textContent = x.toFixed(1);
+  document.getElementById('rV').textContent = v.toFixed(2);
+  const KE = 0.5*m*v*v, PE = 0.5*k*x*x/100;
+  document.getElementById('rK').textContent = KE.toFixed(2)+' J';
+  document.getElementById('rP').textContent = PE.toFixed(2)+' J';
+  requestAnimationFrame(step);
+}
+
+function draw(){
+  ctx.clearRect(0,0,cv.width,cv.height);
+  ctx.fillStyle='#0a0a0a'; ctx.fillRect(0,0,cv.width,cv.height);
+  // wall
+  ctx.fillStyle='#888'; ctx.fillRect(40,150,15,150);
+  // spring
+  const massX = eqX + x, massY = 225;
+  const turns = 12;
+  ctx.strokeStyle='#999999'; ctx.lineWidth=2;
+  ctx.beginPath();
+  ctx.moveTo(55, massY);
+  for(let i=0;i<=turns*4;i++){
+    const fr = i/(turns*4);
+    const sx = 55 + fr*(massX-90);
+    const sy = massY + (i%2===0?12:-12);
+    ctx.lineTo(sx, sy);
+  }
+  ctx.lineTo(massX-30, massY);
+  ctx.stroke();
+  // mass
+  ctx.fillStyle='#ffffff';
+  ctx.fillRect(massX-30, massY-30, 60, 60);
+  ctx.strokeStyle='#dddddd'; ctx.strokeRect(massX-30, massY-30, 60, 60);
+  // equilibrium marker
+  ctx.strokeStyle='#888'; ctx.setLineDash([4,4]);
+  ctx.beginPath(); ctx.moveTo(eqX, 100); ctx.lineTo(eqX, 360); ctx.stroke();
+  ctx.setLineDash([]);
+  // energy bars
+  const KE = 0.5*m*v*v, PE = 0.5*k*x*x/100, total = KE+PE;
+  const barW = 120, barX = 600, barY = 100, barH = 200;
+  ctx.fillStyle='#dddddd'; ctx.font='14px sans-serif'; ctx.fillText('Energy', barX+30, barY-10);
+  // PE
+  ctx.fillStyle='#dddddd'; ctx.fillRect(barX, barY, 50, barH);
+  ctx.fillStyle='#888888'; ctx.fillRect(barX, barY+barH-PE/total*barH, 50, PE/total*barH);
+  ctx.strokeStyle='#dddddd'; ctx.strokeRect(barX, barY, 50, barH);
+  ctx.fillStyle='#dddddd'; ctx.fillText('PE', barX+10, barY+barH+18);
+  // KE
+  ctx.fillStyle='#dddddd'; ctx.fillRect(barX+70, barY, 50, barH);
+  ctx.fillStyle='#aaaaaa'; ctx.fillRect(barX+70, barY+barH-KE/total*barH, 50, KE/total*barH);
+  ctx.strokeStyle='#dddddd'; ctx.strokeRect(barX+70, barY, 50, barH);
+  ctx.fillStyle='#dddddd'; ctx.fillText('KE', barX+85, barY+barH+18);
+}
+
+document.getElementById('k').oninput=e=>{k=+e.target.value; document.getElementById('vK').textContent=k;};
+document.getElementById('m').oninput=e=>{m=+e.target.value/10; document.getElementById('vM').textContent=m.toFixed(1);};
+document.getElementById('A').oninput=e=>{A=+e.target.value; document.getElementById('vA').textContent=A; if(!running){x=A;v=0;draw();}};
+document.getElementById('run').onclick=()=>{if(!running){running=true; step();}};
+document.getElementById('pause').onclick=()=>running=false;
+document.getElementById('reset').onclick=()=>{running=false; x=A; v=0; draw();};
+draw();
+</script>
+</body></html>

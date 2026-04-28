@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><title>Periodic Table</title><link rel="stylesheet" href="../styles.css">
+<style>
+.ptable { display:grid; grid-template-columns: repeat(18, 1fr); gap: 2px; background:#000000; padding:10px; border-radius:8px; }
+.el { background:#1a1a1a; border:1px solid #2a2a2a; padding:4px; text-align:center; cursor:pointer; min-height:48px; transition:all 0.1s; border-radius:3px;}
+.el:hover { transform: scale(1.15); z-index:10; box-shadow: 0 0 12px #dddddd; }
+.el .num { font-size:9px; color:#888888; }
+.el .sym { font-size:14px; font-weight:bold; color:#fff; }
+.el .name { font-size:7px; color:#888888; }
+.el.empty { background:transparent; border:none; cursor:default; }
+.el.alkali { background:#3a3a3a; }
+.el.alkaline { background:#444444; }
+.el.transition { background:#3a3a3a; }
+.el.posttrans { background:#3a3a3a; }
+.el.metalloid { background:#444444; }
+.el.nonmetal { background:#3a3a3a; }
+.el.halogen { background:#444444; }
+.el.noble { background:#3a3a3a; }
+.el.lanth { background:#3a3a3a; }
+.el.actin { background:#444444; }
+#info { background:#0a0a0a; border:1px solid #2a2a2a; border-radius:8px; padding:20px; margin-top:20px;}
+.legend { display:flex; gap:8px; flex-wrap:wrap; margin-top:12px; font-size:11px; color:#bbbbbb;}
+.legend span { padding: 2px 8px; border-radius:3px; }
+</style>
+</head>
+<body>
+<header><a href="../index.html"><h1>Interactive Periodic Table</h1></a><p>Click any element to see its properties.</p></header>
+<main>
+<a class="back-link" href="../index.html">&larr; All simulations</a>
+<div class="ptable" id="ptable"></div>
+<div class="legend">
+  <span class="el alkali">Alkali metals</span>
+  <span class="el alkaline">Alkaline earth</span>
+  <span class="el transition">Transition</span>
+  <span class="el posttrans">Post-transition</span>
+  <span class="el metalloid">Metalloids</span>
+  <span class="el nonmetal">Nonmetals</span>
+  <span class="el halogen">Halogens</span>
+  <span class="el noble">Noble gases</span>
+  <span class="el lanth">Lanthanides</span>
+  <span class="el actin">Actinides</span>
+</div>
+<div id="info">
+  <h3 id="iName" style="color:#fff; font-size:18px; margin-bottom:8px;">Click an element</h3>
+  <p id="iDesc">The periodic table is organized by atomic number. Elements in the same column (group) have similar chemical properties.</p>
+  <div id="iProps"></div>
+</div>
+</main>
+<script>
+const elements = [
+  ['H',1,1,1,'Hydrogen','nonmetal',1.008,'1s¹','Forms water (H₂O), most abundant element in the universe.'],
+  ['He',2,1,18,'Helium','noble',4.003,'1s²','Inert noble gas, lighter than air, used in balloons.'],
+  ['Li',3,2,1,'Lithium','alkali',6.94,'[He] 2s¹','Soft alkali metal, used in batteries.'],
+  ['Be',4,2,2,'Beryllium','alkaline',9.01,'[He] 2s²','Light, strong metal used in aerospace.'],
+  ['B',5,2,13,'Boron','metalloid',10.81,'[He] 2s² 2p¹','Metalloid used in glass and detergents.'],
+  ['C',6,2,14,'Carbon','nonmetal',12.01,'[He] 2s² 2p²','Basis of all organic chemistry.'],
+  ['N',7,2,15,'Nitrogen','nonmetal',14.01,'[He] 2s² 2p³','78% of atmosphere; key in proteins.'],
+  ['O',8,2,16,'Oxygen','nonmetal',16.00,'[He] 2s² 2p⁴','Essential for combustion and respiration.'],
+  ['F',9,2,17,'Fluorine','halogen',19.00,'[He] 2s² 2p⁵','Most reactive element; used in toothpaste.'],
+  ['Ne',10,2,18,'Neon','noble',20.18,'[He] 2s² 2p⁶','Used in glowing signs.'],
+  ['Na',11,3,1,'Sodium','alkali',22.99,'[Ne] 3s¹','Reactive metal; component of table salt.'],
+  ['Mg',12,3,2,'Magnesium','alkaline',24.31,'[Ne] 3s²','Burns brightly; in chlorophyll.'],
+  ['Al',13,3,13,'Aluminum','posttrans',26.98,'[Ne] 3s² 3p¹','Lightweight metal, used in cans and aircraft.'],
+  ['Si',14,3,14,'Silicon','metalloid',28.09,'[Ne] 3s² 3p²','Backbone of computer chips and glass.'],
+  ['P',15,3,15,'Phosphorus','nonmetal',30.97,'[Ne] 3s² 3p³','Essential for DNA and ATP.'],
+  ['S',16,3,16,'Sulfur','nonmetal',32.06,'[Ne] 3s² 3p⁴','Yellow nonmetal; in sulfuric acid.'],
+  ['Cl',17,3,17,'Chlorine','halogen',35.45,'[Ne] 3s² 3p⁵','Used to disinfect water.'],
+  ['Ar',18,3,18,'Argon','noble',39.95,'[Ne] 3s² 3p⁶','Used in light bulbs.'],
+  ['K',19,4,1,'Potassium','alkali',39.10,'[Ar] 4s¹','Vital for nerve function.'],
+  ['Ca',20,4,2,'Calcium','alkaline',40.08,'[Ar] 4s²','Builds bones and teeth.'],
+  ['Sc',21,4,3,'Scandium','transition',44.96,'[Ar] 3d¹ 4s²','Light transition metal.'],
+  ['Ti',22,4,4,'Titanium','transition',47.87,'[Ar] 3d² 4s²','Strong, light, corrosion-resistant.'],
+  ['V',23,4,5,'Vanadium','transition',50.94,'[Ar] 3d³ 4s²','Strengthens steel.'],
+  ['Cr',24,4,6,'Chromium','transition',52.00,'[Ar] 3d⁵ 4s¹','Shiny coating in plating.'],
+  ['Mn',25,4,7,'Manganese','transition',54.94,'[Ar] 3d⁵ 4s²','Used in steel making.'],
+  ['Fe',26,4,8,'Iron','transition',55.85,'[Ar] 3d⁶ 4s²','Most-used metal; in hemoglobin.'],
+  ['Co',27,4,9,'Cobalt','transition',58.93,'[Ar] 3d⁷ 4s²','Used in magnets and batteries.'],
+  ['Ni',28,4,10,'Nickel','transition',58.69,'[Ar] 3d⁸ 4s²','Used in coins and stainless steel.'],
+  ['Cu',29,4,11,'Copper','transition',63.55,'[Ar] 3d¹⁰ 4s¹','Excellent conductor; in wiring.'],
+  ['Zn',30,4,12,'Zinc','transition',65.38,'[Ar] 3d¹⁰ 4s²','Galvanizes steel; in batteries.'],
+  ['Ga',31,4,13,'Gallium','posttrans',69.72,'[Ar] 3d¹⁰ 4s² 4p¹','Melts in your hand.'],
+  ['Ge',32,4,14,'Germanium','metalloid',72.63,'[Ar] 3d¹⁰ 4s² 4p²','Used in semiconductors.'],
+  ['As',33,4,15,'Arsenic','metalloid',74.92,'[Ar] 3d¹⁰ 4s² 4p³','Famously poisonous.'],
+  ['Se',34,4,16,'Selenium','nonmetal',78.97,'[Ar] 3d¹⁰ 4s² 4p⁴','Used in solar cells.'],
+  ['Br',35,4,17,'Bromine','halogen',79.90,'[Ar] 3d¹⁰ 4s² 4p⁵','Liquid at room temperature.'],
+  ['Kr',36,4,18,'Krypton','noble',83.80,'[Ar] 3d¹⁰ 4s² 4p⁶','Used in some flash lamps.'],
+  ['Rb',37,5,1,'Rubidium','alkali',85.47,'[Kr] 5s¹','Very reactive alkali metal.'],
+  ['Sr',38,5,2,'Strontium','alkaline',87.62,'[Kr] 5s²','Gives red color to fireworks.'],
+  ['Y',39,5,3,'Yttrium','transition',88.91,'[Kr] 4d¹ 5s²','Used in red phosphors.'],
+  ['Zr',40,5,4,'Zirconium','transition',91.22,'[Kr] 4d² 5s²','Used in nuclear reactors.'],
+  ['Nb',41,5,5,'Niobium','transition',92.91,'[Kr] 4d⁴ 5s¹','Used in superconductors.'],
+  ['Mo',42,5,6,'Molybdenum','transition',95.95,'[Kr] 4d⁵ 5s¹','Strengthens steel alloys.'],
+  ['Tc',43,5,7,'Technetium','transition',98,'[Kr] 4d⁵ 5s²','First synthetic element.'],
+  ['Ru',44,5,8,'Ruthenium','transition',101.07,'[Kr] 4d⁷ 5s¹','Used in electronics.'],
+  ['Rh',45,5,9,'Rhodium','transition',102.91,'[Kr] 4d⁸ 5s¹','Catalytic converters.'],
+  ['Pd',46,5,10,'Palladium','transition',106.42,'[Kr] 4d¹⁰','Catalysts and jewelry.'],
+  ['Ag',47,5,11,'Silver','transition',107.87,'[Kr] 4d¹⁰ 5s¹','Best electrical conductor.'],
+  ['Cd',48,5,12,'Cadmium','transition',112.41,'[Kr] 4d¹⁰ 5s²','Toxic; used in batteries.'],
+  ['In',49,5,13,'Indium','posttrans',114.82,'[Kr] 4d¹⁰ 5s² 5p¹','In LCD screens.'],
+  ['Sn',50,5,14,'Tin','posttrans',118.71,'[Kr] 4d¹⁰ 5s² 5p²','Used in solder.'],
+  ['Sb',51,5,15,'Antimony','metalloid',121.76,'[Kr] 4d¹⁰ 5s² 5p³','Flame retardants.'],
+  ['Te',52,5,16,'Tellurium','metalloid',127.60,'[Kr] 4d¹⁰ 5s² 5p⁴','Used in solar panels.'],
+  ['I',53,5,17,'Iodine','halogen',126.90,'[Kr] 4d¹⁰ 5s² 5p⁵','Antiseptic; in thyroid.'],
+  ['Xe',54,5,18,'Xenon','noble',131.29,'[Kr] 4d¹⁰ 5s² 5p⁶','Used in flash photography.'],
+  ['Cs',55,6,1,'Cesium','alkali',132.91,'[Xe] 6s¹','Defines the second.'],
+  ['Ba',56,6,2,'Barium','alkaline',137.33,'[Xe] 6s²','Used in X-ray imaging.'],
+  ['La',57,6,3,'Lanthanum','lanth',138.91,'[Xe] 5d¹ 6s²','Camera lenses.'],
+  ['Hf',72,6,4,'Hafnium','transition',178.49,'[Xe] 4f¹⁴ 5d² 6s²','Reactor control rods.'],
+  ['Ta',73,6,5,'Tantalum','transition',180.95,'[Xe] 4f¹⁴ 5d³ 6s²','Capacitors.'],
+  ['W',74,6,6,'Tungsten','transition',183.84,'[Xe] 4f¹⁴ 5d⁴ 6s²','Highest melting point of metals.'],
+  ['Re',75,6,7,'Rhenium','transition',186.21,'[Xe] 4f¹⁴ 5d⁵ 6s²','Jet engines.'],
+  ['Os',76,6,8,'Osmium','transition',190.23,'[Xe] 4f¹⁴ 5d⁶ 6s²','Densest natural element.'],
+  ['Ir',77,6,9,'Iridium','transition',192.22,'[Xe] 4f¹⁴ 5d⁷ 6s²','Spark plugs.'],
+  ['Pt',78,6,10,'Platinum','transition',195.08,'[Xe] 4f¹⁴ 5d⁹ 6s¹','Catalysts and jewelry.'],
+  ['Au',79,6,11,'Gold','transition',196.97,'[Xe] 4f¹⁴ 5d¹⁰ 6s¹','Inert, malleable, valuable.'],
+  ['Hg',80,6,12,'Mercury','transition',200.59,'[Xe] 4f¹⁴ 5d¹⁰ 6s²','Liquid metal.'],
+  ['Tl',81,6,13,'Thallium','posttrans',204.38,'[Xe] 4f¹⁴ 5d¹⁰ 6s² 6p¹','Toxic.'],
+  ['Pb',82,6,14,'Lead','posttrans',207.2,'[Xe] 4f¹⁴ 5d¹⁰ 6s² 6p²','Heavy, toxic, used in batteries.'],
+  ['Bi',83,6,15,'Bismuth','posttrans',208.98,'[Xe] 4f¹⁴ 5d¹⁰ 6s² 6p³','In Pepto-Bismol.'],
+  ['Po',84,6,16,'Polonium','metalloid',209,'[Xe] 4f¹⁴ 5d¹⁰ 6s² 6p⁴','Highly radioactive.'],
+  ['At',85,6,17,'Astatine','halogen',210,'[Xe] 4f¹⁴ 5d¹⁰ 6s² 6p⁵','Rarest natural element.'],
+  ['Rn',86,6,18,'Radon','noble',222,'[Xe] 4f¹⁴ 5d¹⁰ 6s² 6p⁶','Radioactive gas.'],
+  ['Fr',87,7,1,'Francium','alkali',223,'[Rn] 7s¹','Most reactive metal.'],
+  ['Ra',88,7,2,'Radium','alkaline',226,'[Rn] 7s²','Glows in the dark.'],
+];
+
+const ptable = document.getElementById('ptable');
+const grid = Array.from({length:7}, ()=>Array(18).fill(null));
+elements.forEach(el=>{ grid[el[2]-1][el[3]-1] = el; });
+
+for(let row=0; row<7; row++){
+  for(let col=0; col<18; col++){
+    const el = grid[row][col];
+    if(el){
+      const div = document.createElement('div');
+      div.className = 'el ' + el[5];
+      div.innerHTML = `<div class="num">${el[1]}</div><div class="sym">${el[0]}</div><div class="name">${el[4].slice(0,7)}</div>`;
+      div.onclick = ()=>{
+        document.getElementById('iName').textContent = `${el[1]}. ${el[4]} (${el[0]})`;
+        document.getElementById('iDesc').textContent = el[8];
+        document.getElementById('iProps').innerHTML = `
+          <div class="formula">Atomic mass: ${el[6]}<br>Electron configuration: ${el[7]}<br>Group ${el[3]}, Period ${el[2]}<br>Category: ${el[5]}</div>`;
+      };
+      ptable.appendChild(div);
+    } else {
+      const empty = document.createElement('div');
+      empty.className = 'el empty';
+      ptable.appendChild(empty);
+    }
+  }
+}
+</script>
+</body></html>

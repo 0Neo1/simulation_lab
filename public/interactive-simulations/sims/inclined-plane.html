@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><title>Inclined Plane</title><link rel="stylesheet" href="../styles.css"></head>
+<body>
+<header><a href="../index.html"><h1>Inclined Plane &amp; Friction</h1></a><p>A block on a ramp — see forces and motion.</p></header>
+<main>
+<a class="back-link" href="../index.html">&larr; All simulations</a>
+<div class="sim-container">
+  <div>
+    <div class="canvas-wrap"><canvas id="cv" width="800" height="500"></canvas></div>
+    <div class="info-box">
+      <h3>The Physics</h3>
+      <p>On an incline, gravity has a component <em>mg sin θ</em> down the slope and <em>mg cos θ</em> into the surface. Friction opposes motion: <em>f = μN = μmg cos θ</em>.</p>
+      <div class="formula">a = g(sin θ − μ cos θ)</div>
+      <p>The block stays at rest if tan θ ≤ μ_s.</p>
+    </div>
+  </div>
+  <div class="controls">
+    <h3>Controls</h3>
+    <div class="control-row"><label>Angle <span class="val" id="vA">30°</span></label><input type="range" id="ang" min="0" max="60" value="30"></div>
+    <div class="control-row"><label>Friction μ <span class="val" id="vM">0.20</span></label><input type="range" id="mu" min="0" max="100" value="20"></div>
+    <div class="control-row"><label>Mass <span class="val" id="vMa">5 kg</span></label><input type="range" id="mass" min="1" max="20" value="5"></div>
+    <div class="btn-row"><button id="run">Release</button><button class="secondary" id="reset">Reset</button><button class="secondary" id="vec">Toggle Vectors</button></div>
+    <div class="readouts">
+      <div>a: <span id="rA">0</span></div>
+      <div>v: <span id="rV">0</span></div>
+      <div>x: <span id="rX">0</span></div>
+      <div>f: <span id="rF">0</span></div>
+    </div>
+  </div>
+</div>
+</main>
+<script>
+const cv = document.getElementById('cv'), ctx = cv.getContext('2d');
+let ang = 30, mu = 0.2, mass = 5;
+let s = 0, v = 0, running = false, showVec = true;
+const g = 9.8;
+const ox = 80, oy = 460;
+
+function draw(){
+  ctx.clearRect(0,0,cv.width,cv.height);
+  // sky/ground
+  ctx.fillStyle = '#1a1a1a'; ctx.fillRect(0,0,cv.width,oy);
+  ctx.fillStyle = '#1f1f1f'; ctx.fillRect(0,oy,cv.width,cv.height-oy);
+  // incline
+  const L = 600;
+  const a = ang*Math.PI/180;
+  const tx = ox + L*Math.cos(a), ty = oy - L*Math.sin(a);
+  ctx.fillStyle = '#888';
+  ctx.beginPath(); ctx.moveTo(ox,oy); ctx.lineTo(tx,oy); ctx.lineTo(tx,ty); ctx.closePath(); ctx.fill();
+  ctx.strokeStyle = '#888888'; ctx.lineWidth = 2; ctx.stroke();
+  // angle
+  ctx.fillStyle = '#dddddd'; ctx.font='14px sans-serif';
+  ctx.fillText(ang+'°', tx-50, oy-5);
+  // block
+  const bx = ox + s*Math.cos(a)*5, by = oy - s*Math.sin(a)*5;
+  // limit on ramp
+  const maxS = (L-50)/5;
+  const sx = ox + Math.min(s,maxS)*Math.cos(a)*5;
+  const sy = oy - Math.min(s,maxS)*Math.sin(a)*5;
+  ctx.save();
+  ctx.translate(sx, sy);
+  ctx.rotate(-a);
+  const w = 50, h = 35;
+  ctx.fillStyle = '#888888';
+  ctx.fillRect(0, -h, w, h);
+  ctx.strokeStyle = '#dddddd'; ctx.strokeRect(0,-h,w,h);
+  ctx.fillStyle = '#fff'; ctx.font = 'bold 14px sans-serif';
+  ctx.fillText(mass+'kg', 8, -10);
+  ctx.restore();
+  // vectors
+  if(showVec){
+    const cx = sx + Math.cos(-a)*25 - Math.sin(-a)*-17;
+    const cy = sy + Math.sin(-a)*25 + Math.cos(-a)*-17;
+    // gravity
+    drawArrow(cx, cy, cx, cy + 60, '#ffffff', 'mg');
+    // normal
+    drawArrow(cx, cy, cx + Math.sin(a)*40, cy - Math.cos(a)*40, '#aaaaaa', 'N');
+    // friction
+    const fLen = mu*mass*g*Math.cos(a);
+    const fdir = v>0||(v===0&&Math.tan(a)<=mu) ? -1 : 1;
+    drawArrow(cx, cy, cx + Math.cos(a)*fdir*Math.min(fLen,40), cy + Math.sin(a)*fdir*Math.min(fLen,40), '#777777', 'f');
+  }
+}
+
+function drawArrow(x1,y1,x2,y2,color,label){
+  ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = 3;
+  ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(x2,y2); ctx.stroke();
+  const ang_ = Math.atan2(y2-y1,x2-x1);
+  ctx.beginPath();
+  ctx.moveTo(x2,y2);
+  ctx.lineTo(x2-10*Math.cos(ang_-0.4), y2-10*Math.sin(ang_-0.4));
+  ctx.lineTo(x2-10*Math.cos(ang_+0.4), y2-10*Math.sin(ang_+0.4));
+  ctx.closePath(); ctx.fill();
+  ctx.font = 'bold 14px sans-serif'; ctx.fillText(label, x2+5, y2);
+}
+
+function step(){
+  if(!running) return;
+  const a = ang*Math.PI/180;
+  const sinT = Math.sin(a), cosT = Math.cos(a);
+  let acc;
+  if (v === 0 && Math.tan(a) <= mu) { acc = 0; } // static
+  else { acc = g*(sinT - mu*cosT*Math.sign(v||1)); }
+  v += acc*0.05;
+  if(v<0) v=0;
+  s += v*0.05;
+  document.getElementById('rA').textContent = acc.toFixed(2)+' m/s²';
+  document.getElementById('rV').textContent = v.toFixed(2)+' m/s';
+  document.getElementById('rX').textContent = s.toFixed(2)+' m';
+  document.getElementById('rF').textContent = (mu*mass*g*cosT).toFixed(2)+' N';
+  draw();
+  const maxS = (600-50)/5;
+  if(s < maxS) requestAnimationFrame(step); else running = false;
+}
+
+document.getElementById('ang').oninput = e=>{ang=+e.target.value; document.getElementById('vA').textContent=ang+'°'; if(!running) draw();};
+document.getElementById('mu').oninput = e=>{mu=+e.target.value/100; document.getElementById('vM').textContent=mu.toFixed(2);};
+document.getElementById('mass').oninput = e=>{mass=+e.target.value; document.getElementById('vMa').textContent=mass+' kg'; if(!running) draw();};
+document.getElementById('run').onclick = ()=>{ if(!running){running=true; step();}};
+document.getElementById('reset').onclick = ()=>{ running=false; s=0; v=0; draw(); };
+document.getElementById('vec').onclick = ()=>{ showVec = !showVec; draw(); };
+draw();
+</script>
+</body></html>

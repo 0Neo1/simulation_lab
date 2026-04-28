@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><title>Ionic Bonding</title><link rel="stylesheet" href="../styles.css"></head>
+<body>
+<header><a href="../index.html"><h1>Ionic Bonding — NaCl Formation</h1></a><p>Watch sodium give up an electron to chlorine.</p></header>
+<main>
+<a class="back-link" href="../index.html">&larr; All simulations</a>
+<div class="sim-container">
+  <div>
+    <div class="canvas-wrap"><canvas id="cv" width="800" height="500"></canvas></div>
+    <div class="info-box">
+      <h3>The Chemistry</h3>
+      <p>Sodium (Na) has 1 valence electron; chlorine (Cl) needs 1 to complete its octet. Na transfers its electron to Cl, forming Na⁺ and Cl⁻ which attract electrostatically.</p>
+      <div class="formula">Na → Na⁺ + e⁻ &nbsp;&nbsp; Cl + e⁻ → Cl⁻ &nbsp;&nbsp; Na⁺ + Cl⁻ → NaCl</div>
+    </div>
+  </div>
+  <div class="controls">
+    <h3>Controls</h3>
+    <div class="btn-row"><button id="approach">Bring atoms close</button><button id="transfer">Transfer electron</button><button id="reset">Reset</button></div>
+    <div class="readouts" style="grid-template-columns:1fr;">
+      <div>Status: <span id="rS">Neutral atoms</span></div>
+    </div>
+  </div>
+</div>
+</main>
+<script>
+const cv=document.getElementById('cv'), ctx=cv.getContext('2d');
+const cy = 250;
+let naX = 200, clX = 600;
+let phase = 'separate'; // separate, approached, transferred
+let transferringE = null;
+
+function draw(){
+  ctx.clearRect(0,0,cv.width,cv.height);
+  ctx.fillStyle='#000000'; ctx.fillRect(0,0,cv.width,cv.height);
+  // sodium
+  drawAtom(naX, cy, 'Na', '#cccccc', phase==='transferred' ? 0 : 1, phase==='transferred' ? '+1' : '');
+  // chlorine
+  drawAtom(clX, cy, 'Cl', '#999999', phase==='transferred' ? 8 : 7, phase==='transferred' ? '−1' : '');
+  // bond/attraction line
+  if(phase==='transferred'){
+    ctx.strokeStyle='rgba(255,255,255,0.5)'; ctx.lineWidth=2; ctx.setLineDash([5,5]);
+    ctx.beginPath(); ctx.moveTo(naX+50, cy); ctx.lineTo(clX-50, cy); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle='#fff'; ctx.font='14px sans-serif'; ctx.textAlign='center';
+    ctx.fillText('Electrostatic attraction', (naX+clX)/2, cy-90);
+    ctx.fillText('NaCl ionic compound', (naX+clX)/2, cy+90);
+    ctx.textAlign='left';
+  }
+  // transferring electron
+  if(transferringE !== null){
+    transferringE.x += (transferringE.tx - transferringE.x)*0.05;
+    if(Math.abs(transferringE.x - transferringE.tx) < 1){ transferringE = null; phase='transferred'; document.getElementById('rS').textContent = 'Na⁺ and Cl⁻ formed'; }
+    else { ctx.fillStyle='#dddddd'; ctx.beginPath(); ctx.arc(transferringE.x, transferringE.y, 5, 0, 2*Math.PI); ctx.fill(); }
+  }
+}
+
+function drawAtom(cx, cy, sym, color, valence, charge){
+  // nucleus
+  ctx.fillStyle = color; ctx.beginPath(); ctx.arc(cx,cy,25,0,2*Math.PI); ctx.fill();
+  ctx.strokeStyle='#fff'; ctx.stroke();
+  ctx.fillStyle='#dddddd'; ctx.font='bold 18px sans-serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.fillText(sym, cx, cy);
+  ctx.textAlign='left'; ctx.textBaseline='alphabetic';
+  // shell 1 (always 2)
+  ctx.strokeStyle='rgba(255,255,255,0.3)';
+  ctx.beginPath(); ctx.arc(cx,cy,40,0,2*Math.PI); ctx.stroke();
+  for(let i=0;i<2;i++){
+    const a = i*Math.PI;
+    ctx.fillStyle='#dddddd'; ctx.beginPath(); ctx.arc(cx+40*Math.cos(a), cy+40*Math.sin(a), 4, 0, 2*Math.PI); ctx.fill();
+  }
+  // shell 2 (8 if Cl/Na with full)
+  ctx.beginPath(); ctx.arc(cx,cy,60,0,2*Math.PI); ctx.stroke();
+  const shell2 = sym==='Na' ? 8 : 7;
+  for(let i=0;i<shell2;i++){
+    const a = i*Math.PI*2/8;
+    ctx.fillStyle='#dddddd'; ctx.beginPath(); ctx.arc(cx+60*Math.cos(a), cy+60*Math.sin(a), 4, 0, 2*Math.PI); ctx.fill();
+  }
+  // shell 3 (valence)
+  if(sym==='Na' || (sym==='Cl' && valence===8)){
+    ctx.beginPath(); ctx.arc(cx,cy,80,0,2*Math.PI); ctx.stroke();
+  }
+  if(sym==='Na' && valence>0){
+    ctx.fillStyle='#cccccc'; ctx.beginPath(); ctx.arc(cx+80, cy, 6, 0, 2*Math.PI); ctx.fill();
+  }
+  if(sym==='Cl' && valence===8){
+    ctx.fillStyle='#cccccc'; ctx.beginPath(); ctx.arc(cx+80, cy, 6, 0, 2*Math.PI); ctx.fill();
+  }
+  // charge
+  if(charge){
+    ctx.fillStyle = charge.includes('+') ? '#cccccc' : '#bbbbbb';
+    ctx.font='bold 18px sans-serif';
+    ctx.fillText(charge, cx-15, cy-35);
+  }
+  ctx.fillStyle='#fff'; ctx.font='12px sans-serif';
+  ctx.fillText(sym + (charge?charge:'') , cx-15, cy+105);
+}
+
+document.getElementById('approach').onclick=()=>{
+  const id = setInterval(()=>{
+    if(naX < 320) naX += 4;
+    if(clX > 480) clX -= 4;
+    draw();
+    if(naX >= 320 && clX <= 480){ clearInterval(id); phase='approached'; document.getElementById('rS').textContent = 'Atoms close — ready for transfer';}
+  }, 30);
+};
+document.getElementById('transfer').onclick=()=>{
+  if(phase==='approached'){
+    transferringE = {x: naX+80, y: cy, tx: clX-80, ty: cy};
+    document.getElementById('rS').textContent = 'Transferring electron...';
+    const animate = ()=>{ draw(); if(transferringE) requestAnimationFrame(animate); };
+    animate();
+  }
+};
+document.getElementById('reset').onclick=()=>{
+  naX = 200; clX = 600; phase='separate'; transferringE = null;
+  document.getElementById('rS').textContent='Neutral atoms';
+  draw();
+};
+draw();
+</script>
+</body></html>

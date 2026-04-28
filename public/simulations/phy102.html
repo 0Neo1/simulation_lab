@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Screw Gauge — Wire Diameter</title>
+<link rel="stylesheet" href="/simulations/_shared.css" />
+</head>
+<body>
+<div class="app">
+  <header>
+    <h1>Screw Gauge — Cross-Sectional Area of a Wire</h1>
+    <span class="pill">Class 10 · Physics</span>
+  </header>
+  <div class="grid">
+    <div class="card">
+      <h2>Screw Gauge</h2>
+      <div class="viz"><canvas id="cv" width="780" height="380"></canvas></div>
+      <p class="note">Rotate the thimble to grip the wire. Reading = pitch scale + (head scale × LC). LC = 0.01 mm.</p>
+    </div>
+    <div class="card controls">
+      <h2>Controls</h2>
+      <label>Wire (true diameter)
+        <select id="wire">
+          <option value="0.42" selected>Copper wire (0.42 mm)</option>
+          <option value="0.85">Iron wire (0.85 mm)</option>
+          <option value="1.20">Aluminium wire (1.20 mm)</option>
+        </select>
+      </label>
+      <label>Rotation (mm) — <span id="rv">0.42</span></label>
+      <input id="rot" type="range" min="0" max="3" step="0.005" value="0.42" />
+      <button class="btn" id="auto">Auto Grip Wire</button>
+      <button class="btn secondary" id="reset">Reset</button>
+      <div class="values">
+        <div class="value"><div class="label">Pitch scale</div><div class="v" id="ps">0 mm</div></div>
+        <div class="value"><div class="label">Head scale × LC</div><div class="v" id="hs">0.42 mm</div></div>
+        <div class="value"><div class="label">Diameter d</div><div class="v" id="d">0.42 mm</div></div>
+        <div class="value"><div class="label">Area A</div><div class="v" id="A">— mm²</div></div>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+const cv = document.getElementById('cv'); const ctx = cv.getContext('2d');
+const wire = document.getElementById('wire');
+const rot = document.getElementById('rot');
+const rv = document.getElementById('rv');
+function update() {
+  const trueDia = parseFloat(wire.value);
+  const r = parseFloat(rot.value);
+  rv.textContent = r.toFixed(3);
+  const ps = Math.floor(r);
+  const hs = (r - ps);
+  const dia = r;
+  document.getElementById('ps').textContent = ps + ' mm';
+  document.getElementById('hs').textContent = hs.toFixed(2) + ' mm';
+  document.getElementById('d').textContent = dia.toFixed(3) + ' mm';
+  document.getElementById('A').textContent = (Math.PI * dia * dia / 4).toFixed(4) + ' mm²';
+  draw(r, trueDia);
+}
+function draw(r, trueDia) {
+  const W = cv.width, H = cv.height;
+  ctx.fillStyle = '#0b1220'; ctx.fillRect(0, 0, W, H);
+  const cy = 200;
+  // U-frame
+  ctx.fillStyle = '#475569';
+  ctx.fillRect(60, cy - 40, 30, 80);
+  ctx.fillRect(60, cy - 100, 540, 30);
+  // anvil (fixed left)
+  ctx.fillStyle = '#7c3aed'; ctx.fillRect(90, cy - 20, 20, 40);
+  // spindle (moves)
+  const gap = trueDia; // ideal
+  const spX = 110 + Math.max(0, (3 - r)) * 60;
+  ctx.fillStyle = '#06b6d4'; ctx.fillRect(spX, cy - 16, 100, 32);
+  // pitch scale
+  ctx.fillStyle = '#1e293b'; ctx.fillRect(spX + 100, cy - 30, 180, 60);
+  ctx.fillStyle = '#fef3c7';
+  for (let i = 0; i <= 9; i++) {
+    const px = spX + 100 + i * 18;
+    ctx.fillRect(px, cy - 18, 1, 8);
+    if (i % 2 === 0) { ctx.font = '10px Arial'; ctx.fillStyle = '#cbd5e1'; ctx.fillText(i + '', px - 3, cy - 22); ctx.fillStyle = '#fef3c7'; }
+  }
+  // thimble with rotation
+  ctx.fillStyle = '#fbbf24';
+  ctx.beginPath(); ctx.arc(spX + 290, cy, 60, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = '#0b1220'; ctx.lineWidth = 1;
+  for (let i = 0; i < 50; i++) {
+    const a = (i / 50) * Math.PI * 2 + r * 30;
+    const x1 = spX + 290 + Math.cos(a) * 50;
+    const y1 = cy + Math.sin(a) * 50;
+    const x2 = spX + 290 + Math.cos(a) * 60;
+    const y2 = cy + Math.sin(a) * 60;
+    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+  }
+  // wire
+  const wirePx = Math.max(2, trueDia * 16);
+  ctx.fillStyle = '#10b981'; ctx.fillRect(115, cy - wirePx / 2, 12, wirePx);
+  ctx.fillStyle = '#cbd5e1'; ctx.font = '11px Arial';
+  ctx.fillText('wire', 110, cy + 50);
+  // reading window arrow
+  ctx.fillStyle = '#f87171'; ctx.fillRect(spX + 100, cy + 10, 180, 2);
+  ctx.fillStyle = '#cbd5e1'; ctx.font = '12px Arial';
+  ctx.fillText('Pitch scale', spX + 130, cy + 26);
+  ctx.fillText('Reading: ' + r.toFixed(3) + ' mm', 30, 30);
+  ctx.fillText('Target: ' + trueDia.toFixed(2) + ' mm', 600, 30);
+}
+['change', 'input'].forEach(ev => {
+  wire.addEventListener(ev, update);
+  rot.addEventListener(ev, update);
+});
+document.getElementById('auto').addEventListener('click', () => {
+  const target = parseFloat(wire.value);
+  let cur = parseFloat(rot.value);
+  const step = () => {
+    cur += (target - cur) * 0.18;
+    rot.value = cur.toFixed(3);
+    update();
+    if (Math.abs(target - cur) > 0.005) requestAnimationFrame(step);
+  };
+  step();
+});
+document.getElementById('reset').addEventListener('click', () => {
+  wire.value = '0.42'; rot.value = '0.42'; update();
+});
+update();
+</script>
+</body>
+</html>

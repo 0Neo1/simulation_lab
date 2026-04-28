@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Spherometer — Radius of Curvature</title>
+<link rel="stylesheet" href="/simulations/_shared.css" />
+</head>
+<body>
+<div class="app">
+  <header>
+    <h1>Spherometer — Radius of Curvature</h1>
+    <span class="pill">Class 11 · Physics</span>
+  </header>
+  <div class="grid">
+    <div class="card">
+      <h2>Side View</h2>
+      <div class="viz"><canvas id="cv" width="780" height="380"></canvas></div>
+      <p class="note">Adjust the central screw until it just touches the surface. The sagitta h and leg distance l together give R.</p>
+    </div>
+    <div class="card controls">
+      <h2>Controls</h2>
+      <label>Surface Type
+        <select id="type">
+          <option value="convex" selected>Convex Surface</option>
+          <option value="concave">Concave Surface</option>
+        </select>
+      </label>
+      <label>Sagitta h (mm) — <span id="hv">0.60</span></label>
+      <input id="h" type="range" min="0.05" max="3" step="0.01" value="0.60" />
+      <label>Leg distance l (mm)
+        <input id="l" type="number" value="24" min="10" max="60" step="0.1" />
+      </label>
+      <button class="btn secondary" id="reset">Reset</button>
+      <div class="values">
+        <div class="value"><div class="label">Sagitta h</div><div class="v" id="hd">0.60 mm</div></div>
+        <div class="value"><div class="label">Leg distance l</div><div class="v" id="ld">24.0 mm</div></div>
+        <div class="value"><div class="label">Radius R</div><div class="v" id="R">— mm</div></div>
+        <div class="value"><div class="label">Surface</div><div class="v" id="t">Convex</div></div>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+const cv = document.getElementById('cv'); const ctx = cv.getContext('2d');
+const type = document.getElementById('type');
+const h = document.getElementById('h');
+const l = document.getElementById('l');
+function update() {
+  const H = parseFloat(h.value);
+  const L = parseFloat(l.value);
+  const R = (L * L) / (6 * H) + H / 2;
+  document.getElementById('hv').textContent = H.toFixed(2);
+  document.getElementById('hd').textContent = H.toFixed(2) + ' mm';
+  document.getElementById('ld').textContent = L.toFixed(1) + ' mm';
+  document.getElementById('R').textContent = R.toFixed(2) + ' mm';
+  document.getElementById('t').textContent = type.value === 'convex' ? 'Convex' : 'Concave';
+  draw(H, L, type.value);
+}
+function draw(H, L, t) {
+  const W = cv.width, Hc = cv.height;
+  ctx.fillStyle = '#0b1220'; ctx.fillRect(0, 0, W, Hc);
+  const cx = W / 2, cy = 280;
+  const scale = 12; // mm to px
+  const R = (L * L) / (6 * H) + H / 2;
+  // surface curve
+  ctx.strokeStyle = '#06b6d4'; ctx.lineWidth = 3;
+  ctx.beginPath();
+  if (t === 'convex') {
+    for (let x = -300; x <= 300; x += 4) {
+      const xx = x;
+      const dx = xx / scale;
+      const radius = R;
+      const yy = -Math.sqrt(Math.max(0, radius * radius - dx * dx)) + radius;
+      const py = cy - (radius - yy) * 0.05 * scale;
+      // simplified visualization
+    }
+    // simple curve drawing
+    ctx.beginPath();
+    const arcWidth = 240;
+    ctx.arc(cx, cy + R * 0.6, R * 0.6, Math.PI + 0.4, 2 * Math.PI - 0.4);
+    ctx.stroke();
+  } else {
+    ctx.beginPath();
+    ctx.arc(cx, cy - R * 0.6 + H * scale, R * 0.6, 0.4, Math.PI - 0.4);
+    ctx.stroke();
+  }
+  // base plane
+  ctx.strokeStyle = '#475569';
+  ctx.setLineDash([4, 4]);
+  ctx.beginPath(); ctx.moveTo(cx - 200, cy); ctx.lineTo(cx + 200, cy); ctx.stroke();
+  ctx.setLineDash([]);
+  // legs
+  const legX = (L / 2) * scale;
+  ctx.fillStyle = '#fbbf24';
+  for (let s of [-1, 1]) {
+    const x = cx + s * legX;
+    ctx.fillRect(x - 3, cy - 40, 6, 40);
+    ctx.beginPath(); ctx.arc(x, cy, 5, 0, Math.PI * 2); ctx.fill();
+  }
+  // central screw
+  const screwX = cx;
+  const screwY = cy - H * scale * (t === 'convex' ? 1 : -1);
+  ctx.fillStyle = '#94a3b8'; ctx.fillRect(screwX - 3, screwY - 80, 6, 80);
+  ctx.fillStyle = '#06b6d4'; ctx.beginPath(); ctx.arc(screwX, screwY, 4, 0, Math.PI * 2); ctx.fill();
+  // disc
+  ctx.fillStyle = '#7c3aed';
+  ctx.beginPath(); ctx.arc(cx, cy - 90, 30, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = '#fff'; ctx.font = '11px Arial'; ctx.fillText('disc', cx - 12, cy - 88);
+  // labels
+  ctx.fillStyle = '#cbd5e1'; ctx.font = '11px Arial';
+  ctx.fillText('h', screwX + 8, screwY + (t === 'convex' ? 8 : -2));
+  ctx.fillText('l', cx - 4, cy + 18);
+  ctx.strokeStyle = '#34d399'; ctx.setLineDash([3, 3]); ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(cx - legX, cy + 10); ctx.lineTo(cx + legX, cy + 10); ctx.stroke();
+  ctx.setLineDash([]);
+}
+['change', 'input'].forEach(ev => {
+  type.addEventListener(ev, update);
+  h.addEventListener(ev, update);
+  l.addEventListener(ev, update);
+});
+document.getElementById('reset').addEventListener('click', () => {
+  type.value = 'convex'; h.value = '0.60'; l.value = '24'; update();
+});
+update();
+</script>
+</body>
+</html>

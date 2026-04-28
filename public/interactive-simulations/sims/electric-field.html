@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><title>Electric Field</title><link rel="stylesheet" href="../styles.css"></head>
+<body>
+<header><a href="../index.html"><h1>Electric Field Lines</h1></a><p>Place charges and visualize the field.</p></header>
+<main>
+<a class="back-link" href="../index.html">&larr; All simulations</a>
+<div class="sim-container">
+  <div>
+    <div class="canvas-wrap"><canvas id="cv" width="800" height="500"></canvas></div>
+    <div class="info-box">
+      <h3>The Physics</h3>
+      <p>The electric field at a point is the force per unit positive test charge. Field lines start on positive charges and end on negative ones.</p>
+      <div class="formula">E⃗ = Σ k q_i (r⃗ − r⃗_i) / |r − r_i|³</div>
+    </div>
+  </div>
+  <div class="controls">
+    <h3>Controls</h3>
+    <p style="font-size:13px; color:#888888;">Click to place positive charge.<br>Shift+click for negative.<br>Right-click to remove.</p>
+    <div class="control-row"><label>Show: <select id="mode"><option value="arrows">Field arrows</option><option value="lines">Field lines</option></select></label></div>
+    <div class="btn-row"><button id="clear">Clear</button><button class="secondary" id="dipole">Dipole</button></div>
+  </div>
+</div>
+</main>
+<script>
+const cv=document.getElementById('cv'), ctx=cv.getContext('2d');
+let charges = [{x:300,y:250,q:1},{x:500,y:250,q:-1}];
+
+function E(x,y){
+  let ex=0, ey=0;
+  for(const c of charges){
+    const dx=x-c.x, dy=y-c.y, r2=dx*dx+dy*dy+25;
+    const r3 = Math.pow(r2, 1.5);
+    ex += c.q*dx/r3*5e3;
+    ey += c.q*dy/r3*5e3;
+  }
+  return [ex,ey];
+}
+
+function draw(){
+  ctx.clearRect(0,0,cv.width,cv.height);
+  ctx.fillStyle='#0a0a0a'; ctx.fillRect(0,0,cv.width,cv.height);
+  const mode = document.getElementById('mode').value;
+  if(mode==='arrows'){
+    for(let y=20;y<cv.height;y+=30){
+      for(let x=20;x<cv.width;x+=30){
+        const [ex,ey] = E(x,y);
+        const m = Math.hypot(ex,ey);
+        const len = Math.min(15, Math.log(1+m)*4);
+        const ang = Math.atan2(ey,ex);
+        const c = Math.min(255, m*20);
+        ctx.strokeStyle=`rgb(${c},${c},${c})`;
+        ctx.lineWidth=1.5;
+        ctx.beginPath();
+        ctx.moveTo(x-len*Math.cos(ang)/2, y-len*Math.sin(ang)/2);
+        ctx.lineTo(x+len*Math.cos(ang)/2, y+len*Math.sin(ang)/2);
+        ctx.stroke();
+        ctx.fillStyle=`rgb(${c},${c},${c})`;
+        ctx.beginPath();
+        const ax=x+len*Math.cos(ang)/2, ay=y+len*Math.sin(ang)/2;
+        ctx.moveTo(ax,ay);
+        ctx.lineTo(ax-5*Math.cos(ang-0.4),ay-5*Math.sin(ang-0.4));
+        ctx.lineTo(ax-5*Math.cos(ang+0.4),ay-5*Math.sin(ang+0.4));
+        ctx.closePath(); ctx.fill();
+      }
+    }
+  } else {
+    // field lines from positive charges
+    ctx.strokeStyle='#ffffff'; ctx.lineWidth=1.5;
+    for(const c of charges){
+      if(c.q<=0) continue;
+      const N = 12;
+      for(let i=0;i<N;i++){
+        const a = (i/N)*2*Math.PI;
+        let px = c.x + 22*Math.cos(a), py = c.y + 22*Math.sin(a);
+        ctx.beginPath(); ctx.moveTo(px,py);
+        for(let s=0;s<400;s++){
+          const [ex,ey] = E(px,py);
+          const m = Math.hypot(ex,ey);
+          if(m<0.01) break;
+          px += ex/m*3; py += ey/m*3;
+          if(px<0||px>cv.width||py<0||py>cv.height) break;
+          // stop near a charge
+          let near = false;
+          for(const c2 of charges){
+            if(Math.hypot(px-c2.x,py-c2.y) < 22 && c2 !== c) { near = true; break; }
+          }
+          ctx.lineTo(px,py);
+          if(near) break;
+        }
+        ctx.stroke();
+      }
+    }
+  }
+  // charges
+  for(const c of charges){
+    ctx.fillStyle = c.q>0?'#888888':'#ffffff';
+    ctx.beginPath(); ctx.arc(c.x,c.y,16,0,2*Math.PI); ctx.fill();
+    ctx.strokeStyle='#dddddd'; ctx.lineWidth=2; ctx.stroke();
+    ctx.fillStyle='#fff'; ctx.font='bold 16px sans-serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillText(c.q>0?'+':'−', c.x, c.y);
+    ctx.textAlign='left'; ctx.textBaseline='alphabetic';
+  }
+}
+
+cv.oncontextmenu = e=>{
+  e.preventDefault();
+  const r=cv.getBoundingClientRect(),s=cv.width/r.width;
+  const mx=(e.clientX-r.left)*s, my=(e.clientY-r.top)*s;
+  charges = charges.filter(c=>Math.hypot(c.x-mx,c.y-my)>20);
+  draw();
+};
+cv.onclick = e=>{
+  const r=cv.getBoundingClientRect(),s=cv.width/r.width;
+  const mx=(e.clientX-r.left)*s, my=(e.clientY-r.top)*s;
+  const q = e.shiftKey ? -1 : 1;
+  charges.push({x:mx,y:my,q});
+  draw();
+};
+document.getElementById('mode').onchange=draw;
+document.getElementById('clear').onclick=()=>{charges=[]; draw();};
+document.getElementById('dipole').onclick=()=>{charges=[{x:300,y:250,q:1},{x:500,y:250,q:-1}]; draw();};
+draw();
+</script>
+</body></html>

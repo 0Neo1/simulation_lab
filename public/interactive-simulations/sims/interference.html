@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><title>Two-Source Interference</title><link rel="stylesheet" href="../styles.css"></head>
+<body>
+<header><a href="../index.html"><h1>Two-Source Interference</h1></a><p>Watch waves combine in 2D.</p></header>
+<main>
+<a class="back-link" href="../index.html">&larr; All simulations</a>
+<div class="sim-container">
+  <div>
+    <div class="canvas-wrap"><canvas id="cv" width="800" height="500"></canvas></div>
+    <div class="info-box">
+      <h3>The Physics</h3>
+      <p>Two coherent sources produce alternating regions of constructive (bright) and destructive (dark) interference.</p>
+      <div class="formula">Constructive: Δr = nλ<br>Destructive: Δr = (n+½)λ</div>
+    </div>
+  </div>
+  <div class="controls">
+    <h3>Controls</h3>
+    <div class="control-row"><label>Wavelength λ <span class="val" id="vL">40</span></label><input type="range" id="L" min="20" max="100" value="40"></div>
+    <div class="control-row"><label>Source separation <span class="val" id="vD">120</span></label><input type="range" id="D" min="40" max="300" value="120"></div>
+    <div class="btn-row"><button id="run">Start</button><button class="secondary" id="pause">Pause</button></div>
+  </div>
+</div>
+</main>
+<script>
+const cv=document.getElementById('cv'), ctx=cv.getContext('2d');
+let L=40, D=120, t=0, running=false;
+const W=cv.width, H=cv.height;
+const img = ctx.createImageData(W, H);
+
+function draw(){
+  const w = 2*Math.PI/L;
+  const s1x = W/2, s1y = H/2 - D/2;
+  const s2x = W/2, s2y = H/2 + D/2;
+  const data = img.data;
+  for(let y=0; y<H; y+=2){
+    for(let x=0; x<W; x+=2){
+      const r1 = Math.hypot(x-s1x, y-s1y);
+      const r2 = Math.hypot(x-s2x, y-s2y);
+      const v = Math.sin(w*r1 - 5*t) + Math.sin(w*r2 - 5*t);
+      // map v ∈ [-2, 2] to greyscale 0–255
+      const g = Math.floor(((v + 2) / 4) * 255);
+      for(let dy=0;dy<2;dy++) for(let dx=0;dx<2;dx++){
+        const idx = ((y+dy)*W + (x+dx))*4;
+        data[idx]   = g;
+        data[idx+1] = g;
+        data[idx+2] = g;
+        data[idx+3] = 255;
+      }
+    }
+  }
+  ctx.putImageData(img,0,0);
+  // sources
+  ctx.fillStyle='#fff'; ctx.strokeStyle='#000'; ctx.lineWidth=2;
+  ctx.beginPath(); ctx.arc(s1x,s1y,7,0,2*Math.PI); ctx.fill(); ctx.stroke();
+  ctx.beginPath(); ctx.arc(s2x,s2y,7,0,2*Math.PI); ctx.fill(); ctx.stroke();
+}
+function step(){ if(!running) return; t+=0.05; draw(); requestAnimationFrame(step); }
+document.getElementById('L').oninput=e=>{L=+e.target.value; document.getElementById('vL').textContent=L; if(!running)draw();};
+document.getElementById('D').oninput=e=>{D=+e.target.value; document.getElementById('vD').textContent=D; if(!running)draw();};
+document.getElementById('run').onclick=()=>{if(!running){running=true; step();}};
+document.getElementById('pause').onclick=()=>running=false;
+draw();
+</script>
+</body></html>

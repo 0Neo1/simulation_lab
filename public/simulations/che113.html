@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Acid-Base Nature of Oxides</title>
+<link rel="stylesheet" href="/simulations/_shared.css" />
+</head>
+<body>
+<div class="app">
+  <header>
+    <h1>Acid-Base Nature of Oxides</h1>
+    <span class="pill">Class 11 · Chemistry</span>
+  </header>
+  <div class="grid">
+    <div class="card">
+      <h2>Beaker &amp; pH meter</h2>
+      <div class="viz"><canvas id="cv" width="780" height="380"></canvas></div>
+      <p class="note">Drop an oxide into water and observe the pH and litmus colour change.</p>
+    </div>
+    <div class="card controls">
+      <h2>Oxides</h2>
+      <div class="row" id="ox"></div>
+      <button class="btn warn" id="empty">Empty Beaker</button>
+      <button class="btn secondary" id="reset">Reset</button>
+      <div class="values">
+        <div class="value"><div class="label">Oxide</div><div class="v" id="ox-d">—</div></div>
+        <div class="value"><div class="label">pH</div><div class="v" id="pH">7</div></div>
+        <div class="value"><div class="label">Litmus</div><div class="v" id="lit" style="font-size:12px">No change</div></div>
+        <div class="value"><div class="label">Nature</div><div class="v" id="nat" style="font-size:13px">Neutral</div></div>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+const cv = document.getElementById('cv'); const ctx = cv.getContext('2d');
+const oxides = [
+  { name: 'Na₂O', pH: 13, nature: 'Strongly basic', litmus: 'Red → Blue' },
+  { name: 'CaO', pH: 12, nature: 'Basic', litmus: 'Red → Blue' },
+  { name: 'MgO', pH: 10, nature: 'Basic', litmus: 'Red → Blue' },
+  { name: 'CO₂', pH: 5, nature: 'Acidic', litmus: 'Blue → Red' },
+  { name: 'SO₂', pH: 3, nature: 'Acidic', litmus: 'Blue → Red' },
+  { name: 'P₂O₅', pH: 2, nature: 'Strongly acidic', litmus: 'Blue → Red' },
+  { name: 'Al₂O₃', pH: 7, nature: 'Amphoteric', litmus: 'No change' },
+];
+let active = null;
+const cont = document.getElementById('ox');
+oxides.forEach((o, i) => {
+  const b = document.createElement('button');
+  b.className = 'btn'; b.textContent = o.name;
+  b.addEventListener('click', () => { active = i; updateVals(); });
+  cont.appendChild(b);
+});
+function updateVals() {
+  if (active === null) return;
+  const o = oxides[active];
+  document.getElementById('ox-d').textContent = o.name;
+  document.getElementById('pH').textContent = o.pH;
+  document.getElementById('lit').textContent = o.litmus;
+  document.getElementById('nat').textContent = o.nature;
+}
+function pHcolour(pH) {
+  if (pH <= 3) return [220, 38, 38];
+  if (pH <= 5) return [251, 146, 60];
+  if (pH <= 7) return [254, 240, 138];
+  if (pH <= 9) return [134, 239, 172];
+  if (pH <= 11) return [56, 189, 248];
+  return [99, 102, 241];
+}
+function draw() {
+  const W = cv.width, H = cv.height;
+  ctx.fillStyle = '#0b1220'; ctx.fillRect(0, 0, W, H);
+  // beaker
+  ctx.strokeStyle = '#cbd5e1'; ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.moveTo(W / 2 - 90, 100);
+  ctx.lineTo(W / 2 - 90, 320);
+  ctx.lineTo(W / 2 + 90, 320);
+  ctx.lineTo(W / 2 + 90, 100);
+  ctx.stroke();
+  // liquid
+  const c = active !== null ? pHcolour(oxides[active].pH) : [56, 189, 248];
+  ctx.fillStyle = `rgba(${c[0]},${c[1]},${c[2]},0.55)`;
+  ctx.fillRect(W / 2 - 88, 160, 176, 158);
+  // pH meter probe
+  ctx.fillStyle = '#475569'; ctx.fillRect(W / 2 + 100, 80, 14, 240);
+  ctx.fillStyle = '#fbbf24'; ctx.fillRect(W / 2 + 96, 320, 22, 8);
+  // pH digital display
+  ctx.fillStyle = '#0f172a'; ctx.fillRect(W / 2 + 80, 30, 80, 50);
+  ctx.strokeStyle = '#06b6d4'; ctx.strokeRect(W / 2 + 80, 30, 80, 50);
+  ctx.fillStyle = '#06b6d4'; ctx.font = 'bold 28px monospace';
+  ctx.fillText(active !== null ? oxides[active].pH.toFixed(1) : '7.0', W / 2 + 96, 65);
+  ctx.fillStyle = '#cbd5e1'; ctx.font = '11px Arial';
+  ctx.fillText('pH meter', W / 2 + 88, 24);
+  if (active !== null) {
+    ctx.fillStyle = '#cbd5e1'; ctx.font = 'bold 14px Arial';
+    ctx.fillText(oxides[active].name + ' in water', 30, 30);
+  }
+}
+document.getElementById('empty').addEventListener('click', () => { active = null;
+  ['ox-d', 'lit', 'nat'].forEach(id => document.getElementById(id).textContent = '—');
+  document.getElementById('pH').textContent = '7';
+  draw();
+});
+document.getElementById('reset').addEventListener('click', () => { active = null;
+  ['ox-d', 'lit', 'nat'].forEach(id => document.getElementById(id).textContent = '—');
+  document.getElementById('pH').textContent = '7';
+  draw();
+});
+setInterval(draw, 60); draw();
+</script>
+</body>
+</html>

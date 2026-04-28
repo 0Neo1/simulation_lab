@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Convex Lens — Focal Length & Power</title>
+<link rel="stylesheet" href="/simulations/_shared.css" />
+</head>
+<body>
+<div class="app">
+  <header>
+    <h1>Convex Lens — Focal Length & Power</h1>
+    <span class="pill">Class 12 · Physics</span>
+  </header>
+  <div class="grid">
+    <div class="card">
+      <h2>Optical Bench</h2>
+      <div class="viz"><canvas id="cv" width="780" height="380"></canvas></div>
+      <p class="note">Move the object and screen until the image becomes sharp. The lens formula gives focal length f.</p>
+    </div>
+    <div class="card controls">
+      <h2>Controls</h2>
+      <label>Lens focal length f (cm)
+        <input id="f" type="number" value="20" min="5" max="60" />
+      </label>
+      <label>Object distance u (cm) — <span id="uv">30</span></label>
+      <input id="u" type="range" min="6" max="120" step="0.5" value="30" />
+      <label>Screen position v (cm) — <span id="vv">60</span></label>
+      <input id="vs" type="range" min="6" max="240" step="0.5" value="60" />
+      <button class="btn" id="auto">Find Sharp Image</button>
+      <button class="btn secondary" id="reset">Reset</button>
+      <div class="values">
+        <div class="value"><div class="label">Computed v</div><div class="v" id="vc">—</div></div>
+        <div class="value"><div class="label">Magnification</div><div class="v" id="mag">—</div></div>
+        <div class="value"><div class="label">Focal length f</div><div class="v" id="fv">—</div></div>
+        <div class="value"><div class="label">Power P</div><div class="v" id="P">—</div></div>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+const cv = document.getElementById('cv');
+const ctx = cv.getContext('2d');
+const fInput = document.getElementById('f');
+const uInput = document.getElementById('u');
+const vInput = document.getElementById('vs');
+const uv = document.getElementById('uv');
+const vv = document.getElementById('vv');
+
+function update() {
+  const f = parseFloat(fInput.value);
+  const u = parseFloat(uInput.value);
+  const v = parseFloat(vInput.value);
+  uv.textContent = u.toFixed(1);
+  vv.textContent = v.toFixed(1);
+  const vIdeal = u <= f ? Infinity : (u * f) / (u - f);
+  const sharp = isFinite(vIdeal) && Math.abs(v - vIdeal) < 1.0;
+  document.getElementById('vc').textContent = isFinite(vIdeal) ? vIdeal.toFixed(2) + ' cm' : 'Virtual';
+  document.getElementById('mag').textContent = isFinite(vIdeal) ? (-vIdeal / u).toFixed(2) : '—';
+  if (sharp) {
+    const fComputed = (u * v) / (u + v);
+    document.getElementById('fv').textContent = fComputed.toFixed(2) + ' cm';
+    document.getElementById('P').textContent = (100 / fComputed).toFixed(2) + ' D';
+  } else {
+    document.getElementById('fv').textContent = '— cm';
+    document.getElementById('P').textContent = '— D';
+  }
+  draw(f, u, v, sharp, vIdeal);
+}
+function draw(f, u, v, sharp, vIdeal) {
+  const W = cv.width, H = cv.height;
+  ctx.fillStyle = '#0b1220'; ctx.fillRect(0, 0, W, H);
+  const cx = W / 2, cy = H / 2;
+  const scale = 2.4;
+  // optical axis
+  ctx.strokeStyle = '#475569'; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(20, cy); ctx.lineTo(W - 20, cy); ctx.stroke();
+  // bench scale
+  ctx.fillStyle = '#94a3b8'; ctx.font = '10px Arial';
+  for (let i = -120; i <= 120; i += 20) {
+    const x = cx + i * scale;
+    if (x > 30 && x < W - 20) {
+      ctx.fillRect(x, cy + 8, 1, 5);
+      ctx.fillText(Math.abs(i) + '', x - 6, cy + 28);
+    }
+  }
+  // lens
+  const grad = ctx.createLinearGradient(cx - 20, cy - 90, cx + 20, cy + 90);
+  grad.addColorStop(0, 'rgba(103,232,249,0.1)'); grad.addColorStop(0.5, 'rgba(103,232,249,0.45)'); grad.addColorStop(1, 'rgba(103,232,249,0.1)');
+  ctx.fillStyle = grad;
+  ctx.beginPath();
+  ctx.ellipse(cx, cy, 16, 100, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = '#67e8f9'; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.ellipse(cx, cy, 16, 100, 0, 0, Math.PI * 2); ctx.stroke();
+  // focal points
+  ctx.fillStyle = '#f59e0b';
+  ctx.beginPath(); ctx.arc(cx - f * scale, cy, 4, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.arc(cx + f * scale, cy, 4, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = '#fbbf24'; ctx.font = '11px Arial';
+  ctx.fillText('F', cx - f * scale - 5, cy - 8);
+  ctx.fillText('F', cx + f * scale - 5, cy - 8);
+  // object (upright arrow on left)
+  const objX = cx - u * scale;
+  const objH = 60;
+  ctx.strokeStyle = '#f87171'; ctx.lineWidth = 3;
+  ctx.beginPath(); ctx.moveTo(objX, cy); ctx.lineTo(objX, cy - objH); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(objX, cy - objH); ctx.lineTo(objX - 6, cy - objH + 8); ctx.lineTo(objX + 6, cy - objH + 8); ctx.closePath(); ctx.fillStyle = '#f87171'; ctx.fill();
+  // screen
+  const scrX = cx + v * scale;
+  ctx.fillStyle = sharp ? 'rgba(52,211,153,0.25)' : 'rgba(248,113,113,0.18)';
+  ctx.fillRect(scrX - 2, cy - 110, 4, 220);
+  ctx.strokeStyle = sharp ? '#34d399' : '#f87171'; ctx.lineWidth = 2;
+  ctx.strokeRect(scrX - 6, cy - 110, 12, 220);
+  // image at vIdeal
+  if (isFinite(vIdeal)) {
+    const imgX = cx + vIdeal * scale;
+    const imgH = (vIdeal / u) * objH;
+    ctx.strokeStyle = sharp ? '#34d399' : '#94a3b8';
+    ctx.setLineDash(sharp ? [] : [4, 4]);
+    ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(imgX, cy); ctx.lineTo(imgX, cy + imgH); ctx.stroke();
+    ctx.setLineDash([]);
+    // rays
+    ctx.strokeStyle = 'rgba(251,191,36,0.7)'; ctx.lineWidth = 1.2;
+    ctx.beginPath(); ctx.moveTo(objX, cy - objH); ctx.lineTo(cx, cy - objH); ctx.lineTo(imgX, cy + imgH); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(objX, cy - objH); ctx.lineTo(cx, cy); ctx.lineTo(imgX, cy + imgH); ctx.stroke();
+  }
+  ctx.fillStyle = '#cbd5e1'; ctx.font = '11px Arial';
+  ctx.fillText('Object', objX - 16, cy - objH - 5);
+  ctx.fillText('Screen', scrX - 18, cy - 116);
+  if (sharp) { ctx.fillStyle = '#34d399'; ctx.font = '13px Arial'; ctx.fillText('Sharp Image!', scrX - 30, cy + 130); }
+}
+['change', 'input'].forEach(ev => {
+  fInput.addEventListener(ev, update);
+  uInput.addEventListener(ev, update);
+  vInput.addEventListener(ev, update);
+});
+document.getElementById('auto').addEventListener('click', () => {
+  const f = parseFloat(fInput.value);
+  const u = parseFloat(uInput.value);
+  if (u <= f) return;
+  const target = (u * f) / (u - f);
+  let cur = parseFloat(vInput.value);
+  const step = () => {
+    cur += (target - cur) * 0.2;
+    vInput.value = cur.toFixed(1);
+    update();
+    if (Math.abs(target - cur) > 0.2) requestAnimationFrame(step);
+  };
+  step();
+});
+document.getElementById('reset').addEventListener('click', () => {
+  fInput.value = '20'; uInput.value = '30'; vInput.value = '60'; update();
+});
+update();
+</script>
+</body>
+</html>

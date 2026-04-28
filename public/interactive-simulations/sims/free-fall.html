@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><title>Free Fall</title><link rel="stylesheet" href="../styles.css"></head>
+<body>
+<header><a href="../index.html"><h1>Free Fall — With and Without Air</h1></a><p>Drop a feather and a ball side by side.</p></header>
+<main>
+<a class="back-link" href="../index.html">&larr; All simulations</a>
+<div class="sim-container">
+  <div>
+    <div class="canvas-wrap"><canvas id="cv" width="800" height="500"></canvas></div>
+    <div class="info-box">
+      <h3>The Physics</h3>
+      <p>In a vacuum, all objects fall at the same rate. Air resistance is proportional to v² and depends on cross-sectional area, so light objects with large area (like feathers) reach terminal velocity quickly.</p>
+      <div class="formula">F_drag = ½ ρ C_d A v²<br>m·a = m·g − F_drag</div>
+    </div>
+  </div>
+  <div class="controls">
+    <h3>Controls</h3>
+    <div class="control-row"><label>Air density <span class="val" id="vR">1.2</span></label><input type="range" id="rho" min="0" max="20" value="12"></div>
+    <div class="control-row"><label>Drop height <span class="val" id="vH">80 m</span></label><input type="range" id="h" min="20" max="200" value="80"></div>
+    <div class="btn-row"><button id="drop">Drop</button><button class="secondary" id="reset">Reset</button></div>
+    <div class="readouts">
+      <div>Ball: <span id="rB">0 m</span></div>
+      <div>Feather: <span id="rF">0 m</span></div>
+      <div>v_ball: <span id="rVB">0</span></div>
+      <div>v_feather: <span id="rVF">0</span></div>
+    </div>
+  </div>
+</div>
+</main>
+<script>
+const cv = document.getElementById('cv'), ctx = cv.getContext('2d');
+let rho = 1.2, H = 80, t = 0, running = false;
+let ball = {y:0,v:0, m:1, A:0.01, Cd:0.47}, feather = {y:0,v:0, m:0.005, A:0.05, Cd:1.2};
+const g = 9.8, scale = 4;
+
+function reset(){ t=0; ball.y=0; ball.v=0; feather.y=0; feather.v=0; }
+
+function step(){
+  if(!running) return;
+  const dt = 0.02; t += dt;
+  [ball, feather].forEach(o=>{
+    const Fd = 0.5*rho*o.Cd*o.A*o.v*o.v;
+    const a = g - Fd/o.m;
+    o.v += a*dt;
+    o.y += o.v*dt;
+    if(o.y >= H){ o.y = H; o.v = 0; }
+  });
+  document.getElementById('rB').textContent = ball.y.toFixed(2)+' m';
+  document.getElementById('rF').textContent = feather.y.toFixed(2)+' m';
+  document.getElementById('rVB').textContent = ball.v.toFixed(2)+' m/s';
+  document.getElementById('rVF').textContent = feather.v.toFixed(2)+' m/s';
+  draw();
+  if(ball.y < H || feather.y < H) requestAnimationFrame(step); else running = false;
+}
+
+function draw(){
+  ctx.clearRect(0,0,cv.width,cv.height);
+  ctx.fillStyle = '#1a1a1a'; ctx.fillRect(0,0,cv.width,cv.height-30);
+  ctx.fillStyle = '#1f1f1f'; ctx.fillRect(0,cv.height-30,cv.width,30);
+  // markers
+  const groundY = cv.height - 30;
+  for(let i=0;i<=H;i+=10){
+    const y = groundY - (H-i)*scale;
+    ctx.strokeStyle = 'rgba(255,255,255,0.1)';
+    ctx.beginPath(); ctx.moveTo(50,y); ctx.lineTo(750,y); ctx.stroke();
+    ctx.fillStyle = '#999999'; ctx.font='10px sans-serif';
+    ctx.fillText(i+'m', 5, y);
+  }
+  // ball (left)
+  const by = groundY - (H - ball.y)*scale;
+  ctx.fillStyle = '#888888'; ctx.beginPath(); ctx.arc(250, by, 14, 0, 2*Math.PI); ctx.fill();
+  ctx.strokeStyle='#dddddd'; ctx.stroke();
+  ctx.fillStyle = '#dddddd'; ctx.font='14px sans-serif'; ctx.fillText('Ball', 230, 30);
+  // feather (right)
+  const fy = groundY - (H - feather.y)*scale;
+  ctx.fillStyle = '#fff'; ctx.strokeStyle='#aaaaaa'; ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(550, fy-15); ctx.quadraticCurveTo(560, fy, 555, fy+15);
+  ctx.quadraticCurveTo(545, fy, 550, fy-15);
+  ctx.fill(); ctx.stroke();
+  ctx.fillStyle = '#dddddd'; ctx.fillText('Feather', 525, 30);
+}
+
+document.getElementById('rho').oninput = e=>{rho=+e.target.value/10; document.getElementById('vR').textContent=rho.toFixed(1);};
+document.getElementById('h').oninput = e=>{H=+e.target.value; document.getElementById('vH').textContent=H+' m'; reset(); draw();};
+document.getElementById('drop').onclick = ()=>{ if(!running){ reset(); running=true; step();} };
+document.getElementById('reset').onclick = ()=>{ running=false; reset(); draw(); };
+draw();
+</script>
+</body></html>

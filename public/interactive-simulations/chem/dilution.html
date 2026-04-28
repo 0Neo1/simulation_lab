@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><title>Dilution &amp; Molarity</title><link rel="stylesheet" href="../styles.css"></head>
+<body>
+<header><a href="../index.html"><h1>Dilution &amp; Molarity</h1></a><p>Add water and watch concentration drop.</p></header>
+<main>
+<a class="back-link" href="../index.html">&larr; All simulations</a>
+<div class="sim-container">
+  <div>
+    <div class="canvas-wrap"><canvas id="cv" width="800" height="500"></canvas></div>
+    <div class="info-box">
+      <h3>The Chemistry</h3>
+      <p>Molarity is moles of solute per liter of solution. Dilution doesn't change the amount of solute, only the volume.</p>
+      <div class="formula">M = mol / L &nbsp;&nbsp; M₁V₁ = M₂V₂</div>
+      <p>Color intensity (Beer's law): A = εlc — darker means more concentrated.</p>
+    </div>
+  </div>
+  <div class="controls">
+    <h3>Controls</h3>
+    <div class="control-row"><label>Initial molarity M₁ <span class="val" id="vM">1.0 M</span></label><input type="range" id="m" min="1" max="50" value="10"></div>
+    <div class="control-row"><label>Initial volume V₁ <span class="val" id="vV1">100 mL</span></label><input type="range" id="v1" min="20" max="300" value="100"></div>
+    <div class="btn-row"><button id="add">+ Add 50 mL water</button><button id="reset">Reset</button></div>
+    <div class="readouts">
+      <div>Volume: <span id="rV">100 mL</span></div>
+      <div>Molarity: <span id="rM">1.000 M</span></div>
+      <div>Moles solute: <span id="rN">0.100</span></div>
+      <div>Mass (NaCl): <span id="rMa">5.85 g</span></div>
+    </div>
+  </div>
+</div>
+</main>
+<script>
+const cv=document.getElementById('cv'), ctx=cv.getContext('2d');
+let M0 = 1.0, V0 = 100;
+let V = 100;
+
+function moles(){ return M0*V0/1000; }
+function M(){ return moles()*1000/V; }
+
+function draw(){
+  ctx.clearRect(0,0,cv.width,cv.height);
+  ctx.fillStyle='#0a0a0a'; ctx.fillRect(0,0,cv.width,cv.height);
+  // beaker
+  const bx=200, by=60, bw=250, bh=400;
+  ctx.strokeStyle='#888888'; ctx.lineWidth=3;
+  ctx.beginPath(); ctx.moveTo(bx,by); ctx.lineTo(bx,by+bh); ctx.lineTo(bx+bw, by+bh); ctx.lineTo(bx+bw, by); ctx.stroke();
+  // tick marks
+  for(let v=0; v<=400; v+=50){
+    const y = by+bh - v/400*bh;
+    ctx.strokeStyle='#999999'; ctx.beginPath(); ctx.moveTo(bx-5, y); ctx.lineTo(bx, y); ctx.stroke();
+    ctx.fillStyle='#999999'; ctx.font='11px sans-serif';
+    ctx.fillText(v+' mL', bx-50, y+4);
+  }
+  // liquid
+  const fillH = V/400*bh;
+  const intensity = Math.min(1, M()/1.5);
+  // CuSO4 solution blue
+  ctx.fillStyle = `rgba(${255-intensity*200}, ${100+intensity*50}, ${255-intensity*50}, 0.8)`;
+  ctx.fillRect(bx+2, by+bh-fillH, bw-4, fillH);
+  // surface
+  ctx.strokeStyle='#fff';
+  ctx.beginPath(); ctx.moveTo(bx+2, by+bh-fillH); ctx.lineTo(bx+bw-2, by+bh-fillH); ctx.stroke();
+  // formula
+  ctx.fillStyle='#dddddd'; ctx.font='bold 16px sans-serif';
+  ctx.fillText('M₁V₁ = M₂V₂', 530, 100);
+  ctx.font='14px sans-serif';
+  ctx.fillText(`Initial: ${M0.toFixed(2)} M × ${V0} mL = ${moles().toFixed(3)} mol`, 530, 140);
+  ctx.fillText(`Now: ${M().toFixed(3)} M × ${V} mL = ${moles().toFixed(3)} mol`, 530, 165);
+  ctx.fillText('(moles solute is conserved)', 530, 190);
+  // particles for visual
+  const nDots = Math.floor(M()*30);
+  for(let i=0;i<nDots;i++){
+    const px = bx+10 + Math.random()*(bw-20);
+    const py = by+bh-fillH+10 + Math.random()*(fillH-20);
+    ctx.fillStyle='#bbbbbb'; ctx.beginPath(); ctx.arc(px,py,3,0,2*Math.PI); ctx.fill();
+  }
+
+  document.getElementById('rV').textContent = V+' mL';
+  document.getElementById('rM').textContent = M().toFixed(3)+' M';
+  document.getElementById('rN').textContent = moles().toFixed(4);
+  document.getElementById('rMa').textContent = (moles()*58.44).toFixed(2)+' g';
+}
+
+document.getElementById('m').oninput=e=>{M0=+e.target.value/10; document.getElementById('vM').textContent=M0.toFixed(1)+' M'; V=V0; draw();};
+document.getElementById('v1').oninput=e=>{V0=+e.target.value; document.getElementById('vV1').textContent=V0+' mL'; V=V0; draw();};
+document.getElementById('add').onclick=()=>{V=Math.min(400, V+50); draw();};
+document.getElementById('reset').onclick=()=>{V=V0; draw();};
+draw();
+</script>
+</body></html>

@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Spring Balance — Force Measurement</title>
+<link rel="stylesheet" href="/simulations/_shared.css" />
+</head>
+<body>
+<div class="app">
+  <header>
+    <h1>Spring Balance — Measure Force on Objects</h1>
+    <span class="pill">Class 9 · Physics</span>
+  </header>
+  <div class="grid">
+    <div class="card">
+      <h2>Visualization</h2>
+      <div class="viz"><canvas id="cv" width="780" height="380"></canvas></div>
+      <p class="note">Click an object to hang it on the spring balance and read the force in newtons.</p>
+    </div>
+    <div class="card controls">
+      <h2>Objects</h2>
+      <div class="row" id="objs"></div>
+      <button class="btn warn" id="remove">Remove Object</button>
+      <button class="btn secondary" id="reset">Reset</button>
+      <div class="values">
+        <div class="value"><div class="label">Object</div><div class="v" id="name">—</div></div>
+        <div class="value"><div class="label">Mass</div><div class="v" id="mass">— kg</div></div>
+        <div class="value"><div class="label">Force F = mg</div><div class="v" id="F">— N</div></div>
+        <div class="value"><div class="label">Weight</div><div class="v" id="w">—</div></div>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+const cv = document.getElementById('cv'); const ctx = cv.getContext('2d');
+const objects = [
+  { name: 'Stone', mass: 0.30, color: '#94a3b8' },
+  { name: 'Apple', mass: 0.15, color: '#f87171' },
+  { name: 'Book', mass: 0.50, color: '#7c3aed' },
+  { name: 'Brick', mass: 1.20, color: '#fbbf24' },
+  { name: 'Bottle', mass: 0.80, color: '#06b6d4' },
+];
+let active = null;
+const cont = document.getElementById('objs');
+objects.forEach((o, i) => {
+  const b = document.createElement('button');
+  b.className = 'btn'; b.textContent = o.name; b.style.background = o.color;
+  b.addEventListener('click', () => { active = i; updateValues(); draw(); });
+  cont.appendChild(b);
+});
+function updateValues() {
+  if (active === null) return;
+  const o = objects[active];
+  const F = o.mass * 9.8;
+  document.getElementById('name').textContent = o.name;
+  document.getElementById('mass').textContent = o.mass.toFixed(2) + ' kg';
+  document.getElementById('F').textContent = F.toFixed(2) + ' N';
+  document.getElementById('w').textContent = F.toFixed(2) + ' N';
+}
+function draw() {
+  const W = cv.width, H = cv.height;
+  ctx.fillStyle = '#0b1220'; ctx.fillRect(0, 0, W, H);
+  // hook bar
+  ctx.fillStyle = '#475569'; ctx.fillRect(W / 2 - 60, 20, 120, 14);
+  // spring
+  const F = active !== null ? objects[active].mass * 9.8 : 0;
+  const stretch = Math.min(120, F * 8);
+  ctx.strokeStyle = '#06b6d4'; ctx.lineWidth = 2;
+  ctx.beginPath();
+  for (let i = 0; i <= 96; i++) {
+    const t = i / 96;
+    const py = 34 + t * (90 + stretch);
+    const px = W / 2 + Math.sin(i * 0.6) * 18;
+    if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+  }
+  ctx.stroke();
+  // pointer + scale
+  const pointerY = 34 + 90 + stretch + 8;
+  ctx.fillStyle = '#fbbf24'; ctx.fillRect(W / 2 + 22, pointerY - 2, 60, 4);
+  ctx.strokeStyle = '#475569'; ctx.beginPath(); ctx.moveTo(W / 2 + 80, 34); ctx.lineTo(W / 2 + 80, 34 + 240); ctx.stroke();
+  for (let i = 0; i <= 12; i++) {
+    const yy = 34 + i * 20;
+    ctx.fillStyle = '#94a3b8'; ctx.fillRect(W / 2 + 76, yy, 6, 1);
+    ctx.font = '11px Arial'; ctx.fillStyle = '#cbd5e1';
+    if (i % 2 === 0) ctx.fillText((i) + ' N', W / 2 + 90, yy + 4);
+  }
+  // hook & object
+  ctx.strokeStyle = '#cbd5e1'; ctx.beginPath(); ctx.arc(W / 2, pointerY + 14, 6, 0, Math.PI, false); ctx.stroke();
+  if (active !== null) {
+    const o = objects[active];
+    ctx.fillStyle = o.color; ctx.fillRect(W / 2 - 32, pointerY + 24, 64, 50);
+    ctx.fillStyle = '#fff'; ctx.font = '12px Arial';
+    ctx.fillText(o.name, W / 2 - 22, pointerY + 52);
+  }
+}
+document.getElementById('remove').addEventListener('click', () => { active = null;
+  ['name', 'mass', 'F', 'w'].forEach(id => document.getElementById(id).textContent = '—');
+  draw();
+});
+document.getElementById('reset').addEventListener('click', () => { active = null;
+  ['name', 'mass', 'F', 'w'].forEach(id => document.getElementById(id).textContent = '—');
+  draw();
+});
+draw();
+</script>
+</body>
+</html>

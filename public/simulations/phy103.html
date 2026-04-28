@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Convex Lens — Image Formation</title>
+<link rel="stylesheet" href="/simulations/_shared.css" />
+</head>
+<body>
+<div class="app">
+  <header>
+    <h1>Convex Lens — Image Position, Size and Nature</h1>
+    <span class="pill">Class 10 · Physics</span>
+  </header>
+  <div class="grid">
+    <div class="card">
+      <h2>Ray Diagram</h2>
+      <div class="viz"><canvas id="cv" width="780" height="380"></canvas></div>
+      <p class="note">Move the object across F, 2F and beyond. Observe how image type, size and orientation change.</p>
+    </div>
+    <div class="card controls">
+      <h2>Controls</h2>
+      <label>Focal length f (cm)
+        <input id="f" type="number" value="20" min="5" max="50" />
+      </label>
+      <label>Object distance u (cm) — <span id="uv">30</span></label>
+      <input id="u" type="range" min="5" max="100" step="0.5" value="30" />
+      <button class="btn secondary" id="reset">Reset</button>
+      <div class="values">
+        <div class="value"><div class="label">Image distance v</div><div class="v" id="v">—</div></div>
+        <div class="value"><div class="label">Magnification</div><div class="v" id="m">—</div></div>
+        <div class="value"><div class="label">Image nature</div><div class="v" id="n">—</div></div>
+        <div class="value"><div class="label">Position</div><div class="v" id="pos">—</div></div>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+const cv = document.getElementById('cv'); const ctx = cv.getContext('2d');
+const fInp = document.getElementById('f');
+const uInp = document.getElementById('u');
+function update() {
+  const f = parseFloat(fInp.value);
+  const u = parseFloat(uInp.value);
+  document.getElementById('uv').textContent = u.toFixed(1);
+  let v, m, nature, pos;
+  if (Math.abs(u - f) < 0.5) { v = Infinity; m = Infinity; nature = 'Image at infinity'; pos = 'Beyond ∞'; }
+  else if (u < f) {
+    v = (u * f) / (u - f);
+    m = -v / u;
+    nature = 'Virtual, erect, magnified';
+    pos = 'Same side, behind object';
+  } else {
+    v = (u * f) / (u - f);
+    m = -v / u;
+    if (u < 2 * f) { nature = 'Real, inverted, magnified'; pos = 'Beyond 2F'; }
+    else if (Math.abs(u - 2 * f) < 0.5) { nature = 'Real, inverted, same size'; pos = 'At 2F'; }
+    else { nature = 'Real, inverted, diminished'; pos = 'Between F and 2F'; }
+  }
+  document.getElementById('v').textContent = isFinite(v) ? v.toFixed(2) + ' cm' : '∞';
+  document.getElementById('m').textContent = isFinite(m) ? m.toFixed(2) : '∞';
+  document.getElementById('n').textContent = nature;
+  document.getElementById('pos').textContent = pos;
+  draw(f, u, isFinite(v) ? v : 1000, m);
+}
+function draw(f, u, v, m) {
+  const W = cv.width, H = cv.height;
+  ctx.fillStyle = '#0b1220'; ctx.fillRect(0, 0, W, H);
+  const cx = W / 2, cy = H / 2;
+  const sc = 2.4;
+  ctx.strokeStyle = '#475569'; ctx.beginPath(); ctx.moveTo(20, cy); ctx.lineTo(W - 20, cy); ctx.stroke();
+  // lens
+  ctx.fillStyle = 'rgba(103,232,249,0.35)';
+  ctx.beginPath(); ctx.ellipse(cx, cy, 14, 90, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = '#67e8f9'; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.ellipse(cx, cy, 14, 90, 0, 0, Math.PI * 2); ctx.stroke();
+  // F, 2F
+  ctx.fillStyle = '#fbbf24';
+  for (let s of [-1, 1]) {
+    ctx.beginPath(); ctx.arc(cx + s * f * sc, cy, 3, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(cx + s * 2 * f * sc, cy, 3, 0, Math.PI * 2); ctx.fill();
+  }
+  ctx.font = '11px Arial'; ctx.fillStyle = '#cbd5e1';
+  ctx.fillText('F', cx - f * sc - 4, cy + 16); ctx.fillText('2F', cx - 2 * f * sc - 6, cy + 16);
+  ctx.fillText('F', cx + f * sc - 4, cy + 16); ctx.fillText('2F', cx + 2 * f * sc - 6, cy + 16);
+  // object (red arrow at u to left of cx)
+  const objX = cx - u * sc;
+  const objH = 60;
+  ctx.strokeStyle = '#f87171'; ctx.lineWidth = 3;
+  ctx.beginPath(); ctx.moveTo(objX, cy); ctx.lineTo(objX, cy - objH); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(objX, cy - objH); ctx.lineTo(objX - 6, cy - objH + 8); ctx.lineTo(objX + 6, cy - objH + 8); ctx.closePath(); ctx.fillStyle = '#f87171'; ctx.fill();
+  // rays
+  if (isFinite(v) && v < 800) {
+    const sign = v >= 0 ? 1 : -1;
+    const imgX = cx + v * sc;
+    const imgH = m * objH;
+    const drawV = isFinite(imgH) ? imgH : 0;
+    ctx.strokeStyle = '#34d399'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(imgX, cy); ctx.lineTo(imgX, cy - drawV); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(imgX, cy - drawV); ctx.lineTo(imgX - 6, cy - drawV - 8 * Math.sign(-drawV)); ctx.lineTo(imgX + 6, cy - drawV - 8 * Math.sign(-drawV)); ctx.closePath(); ctx.fillStyle = '#34d399'; ctx.fill();
+    // ray 1: parallel then through F
+    ctx.strokeStyle = 'rgba(251,191,36,0.7)'; ctx.lineWidth = 1.2;
+    ctx.beginPath(); ctx.moveTo(objX, cy - objH); ctx.lineTo(cx, cy - objH); ctx.lineTo(imgX, cy - drawV); ctx.stroke();
+    // ray 2: through center
+    ctx.beginPath(); ctx.moveTo(objX, cy - objH); ctx.lineTo(imgX, cy - drawV); ctx.stroke();
+  }
+}
+['change', 'input'].forEach(ev => { fInp.addEventListener(ev, update); uInp.addEventListener(ev, update); });
+document.getElementById('reset').addEventListener('click', () => { fInp.value = '20'; uInp.value = '30'; update(); });
+update();
+</script>
+</body>
+</html>

@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><title>Simple Harmonic Motion</title><link rel="stylesheet" href="../styles.css"></head>
+<body>
+<header><a href="../index.html"><h1>Simple Harmonic Motion</h1></a><p>Mass-spring oscillator with phase circle.</p></header>
+<main>
+<a class="back-link" href="../index.html">&larr; All simulations</a>
+<div class="sim-container">
+  <div>
+    <div class="canvas-wrap"><canvas id="cv" width="800" height="500"></canvas></div>
+    <div class="info-box">
+      <h3>The Physics</h3>
+      <p>SHM arises whenever the restoring force is proportional to displacement. The motion is the projection of uniform circular motion onto a diameter.</p>
+      <div class="formula">x(t) = A cos(ωt + φ) &nbsp;&nbsp; ω = √(k/m) &nbsp;&nbsp; T = 2π/ω</div>
+    </div>
+  </div>
+  <div class="controls">
+    <h3>Controls</h3>
+    <div class="control-row"><label>Amplitude <span class="val" id="vA">80</span></label><input type="range" id="A" min="20" max="150" value="80"></div>
+    <div class="control-row"><label>Angular frequency ω <span class="val" id="vW">2.0</span></label><input type="range" id="w" min="5" max="50" value="20"></div>
+    <div class="btn-row"><button id="run">Start</button><button class="secondary" id="pause">Pause</button></div>
+  </div>
+</div>
+</main>
+<script>
+const cv=document.getElementById('cv'), ctx=cv.getContext('2d');
+let A=80, w=2.0, t=0, running=false;
+let history = [];
+
+function draw(){
+  ctx.clearRect(0,0,cv.width,cv.height);
+  ctx.fillStyle='#0a0a0a'; ctx.fillRect(0,0,cv.width,cv.height);
+  // phase circle
+  const cxC = 150, cyC = 250;
+  ctx.strokeStyle='#bbbbbb'; ctx.lineWidth=1.5;
+  ctx.beginPath(); ctx.arc(cxC,cyC,A,0,2*Math.PI); ctx.stroke();
+  // axes
+  ctx.beginPath(); ctx.moveTo(cxC-A-10,cyC); ctx.lineTo(cxC+A+10,cyC); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(cxC,cyC-A-10); ctx.lineTo(cxC,cyC+A+10); ctx.stroke();
+  // rotating point
+  const px = cxC + A*Math.cos(w*t);
+  const py = cyC - A*Math.sin(w*t);
+  ctx.strokeStyle='#ffffff'; ctx.lineWidth=2;
+  ctx.beginPath(); ctx.moveTo(cxC,cyC); ctx.lineTo(px,py); ctx.stroke();
+  ctx.fillStyle='#888888'; ctx.beginPath(); ctx.arc(px,py,8,0,2*Math.PI); ctx.fill();
+  // projection on x-axis
+  ctx.strokeStyle='#aaaaaa'; ctx.setLineDash([3,3]);
+  ctx.beginPath(); ctx.moveTo(px,py); ctx.lineTo(px,cyC); ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle='#aaaaaa'; ctx.beginPath(); ctx.arc(px,cyC,7,0,2*Math.PI); ctx.fill();
+  // graph
+  history.push({t, x: A*Math.cos(w*t)});
+  if(history.length>500) history.shift();
+  const gX=350, gY=100, gW=420, gH=300;
+  ctx.fillStyle='#fff'; ctx.fillRect(gX,gY,gW,gH);
+  ctx.strokeStyle='#999999'; ctx.strokeRect(gX,gY,gW,gH);
+  ctx.strokeStyle='#cccccc';
+  ctx.beginPath(); ctx.moveTo(gX,gY+gH/2); ctx.lineTo(gX+gW,gY+gH/2); ctx.stroke();
+  // plot
+  ctx.strokeStyle='#ffffff'; ctx.lineWidth=2;
+  ctx.beginPath();
+  history.forEach((h,i)=>{
+    const xx = gX + (h.t-(t-history.length*0.02))/(history.length*0.02)*gW;
+    const yy = gY+gH/2 - h.x;
+    if(i===0) ctx.moveTo(xx,yy); else ctx.lineTo(xx,yy);
+  });
+  ctx.stroke();
+  // current point on graph
+  ctx.fillStyle='#888888'; ctx.beginPath(); ctx.arc(gX+gW, gY+gH/2 - A*Math.cos(w*t), 6, 0, 2*Math.PI); ctx.fill();
+  ctx.fillStyle='#dddddd'; ctx.font='14px sans-serif';
+  ctx.fillText('Phase Circle', 100, 120);
+  ctx.fillText('x(t)', 540, 90);
+}
+
+function step(){
+  if(!running) return;
+  t += 0.02;
+  draw();
+  requestAnimationFrame(step);
+}
+
+document.getElementById('A').oninput=e=>{A=+e.target.value; document.getElementById('vA').textContent=A; if(!running)draw();};
+document.getElementById('w').oninput=e=>{w=+e.target.value/10; document.getElementById('vW').textContent=w.toFixed(1);};
+document.getElementById('run').onclick=()=>{if(!running){running=true; step();}};
+document.getElementById('pause').onclick=()=>running=false;
+draw();
+</script>
+</body></html>

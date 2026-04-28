@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><title>Newton's Cradle</title><link rel="stylesheet" href="../styles.css"></head>
+<body>
+<header><a href="../index.html"><h1>Newton's Cradle</h1></a><p>Conservation of momentum and energy.</p></header>
+<main>
+<a class="back-link" href="../index.html">&larr; All simulations</a>
+<div class="sim-container">
+  <div>
+    <div class="canvas-wrap"><canvas id="cv" width="800" height="500"></canvas></div>
+    <div class="info-box">
+      <h3>The Physics</h3>
+      <p>In a sequence of perfectly elastic collisions between equal masses, momentum and energy pass through the line. Pulling N balls back swings out N balls on the other side.</p>
+      <div class="formula">m₁v₁ = m₂v₂ &nbsp;&nbsp; ½m₁v₁² = ½m₂v₂²</div>
+    </div>
+  </div>
+  <div class="controls">
+    <h3>Controls</h3>
+    <div class="control-row"><label>Number of balls <span class="val" id="vN">5</span></label><input type="range" id="n" min="3" max="7" value="5"></div>
+    <div class="control-row"><label>Pull-back balls <span class="val" id="vP">1</span></label><input type="range" id="p" min="1" max="3" value="1"></div>
+    <div class="btn-row"><button id="release">Release</button><button class="secondary" id="reset">Reset</button></div>
+  </div>
+</div>
+</main>
+<script>
+const cv=document.getElementById('cv'), ctx=cv.getContext('2d');
+const py=80, L=180, gap=40, R=20;
+let N=5, P=1;
+let balls = [];
+
+function reset(){
+  N = +document.getElementById('n').value;
+  P = Math.min(+document.getElementById('p').value, N-1);
+  balls = [];
+  const startX = 400 - (N-1)*gap/2;
+  for(let i=0;i<N;i++){
+    balls.push({x0: startX + i*gap, theta: 0, omega: 0, swing: false});
+  }
+}
+
+function release(){
+  for(let i=0;i<P;i++){
+    balls[i].theta = -0.6;
+  }
+  swinging = true;
+}
+
+let swinging = false, lastT = performance.now();
+
+function step(now){
+  const dt = Math.min((now-lastT)/1000, 0.05); lastT = now;
+  if(swinging){
+    // simulate left-side swinging balls
+    balls.forEach(b=>{
+      const a = -(9.8/(L/100))*Math.sin(b.theta);
+      b.omega += a*dt;
+      b.theta += b.omega*dt;
+    });
+    // detect when leftmost group reaches bottom and transfer momentum
+    // Simple approach: when all in leftmost group have theta>=0 and moving right, pulse right side
+    // For visual fidelity we use a state machine
+  }
+  draw();
+  requestAnimationFrame(step);
+}
+
+let state = 'idle'; // idle, leftSwing, rightSwing
+function tick(){
+  // simpler choreographed animation
+}
+
+function draw(){
+  ctx.clearRect(0,0,cv.width,cv.height);
+  ctx.fillStyle='#0a0a0a'; ctx.fillRect(0,0,cv.width,cv.height);
+  // frame
+  ctx.fillStyle='#444'; ctx.fillRect(80, py-15, cv.width-160, 8);
+  ctx.fillRect(80, py-15, 8, 380); ctx.fillRect(cv.width-88, py-15, 8, 380);
+  balls.forEach((b,i)=>{
+    const px = b.x0 + L*Math.sin(b.theta);
+    const ppy = py + L*Math.cos(b.theta);
+    ctx.strokeStyle='#999999'; ctx.lineWidth=1.5;
+    ctx.beginPath(); ctx.moveTo(b.x0, py); ctx.lineTo(px, ppy); ctx.stroke();
+    const grd = ctx.createRadialGradient(px-5,ppy-5,2,px,ppy,R);
+    grd.addColorStop(0,'#dddddd'); grd.addColorStop(1,'#aaaaaa');
+    ctx.fillStyle=grd; ctx.beginPath(); ctx.arc(px,ppy,R,0,2*Math.PI); ctx.fill();
+    ctx.strokeStyle='#dddddd'; ctx.stroke();
+  });
+}
+
+// State-machine approach for visual elastic-collision Newton's cradle
+let phase = 'idle'; let phaseT = 0;
+function animate(now){
+  const dt = 0.016;
+  if(phase==='leftSwing'){
+    phaseT += dt;
+    // first P balls swing from -0.6 to 0
+    const t = Math.min(phaseT/0.6, 1);
+    const angle = -0.6*Math.cos(t*Math.PI/2);
+    for(let i=0;i<P;i++) balls[i].theta = angle;
+    if(t>=1){ phase='rightSwing'; phaseT=0; for(let i=0;i<P;i++) balls[i].theta=0; }
+  } else if (phase==='rightSwing'){
+    phaseT += dt;
+    const t = Math.min(phaseT/0.6, 1);
+    const angle = 0.6*Math.sin(t*Math.PI/2);
+    for(let i=N-P;i<N;i++) balls[i].theta = angle;
+    if(t>=1){ phase='rightFall'; phaseT=0; }
+  } else if (phase==='rightFall'){
+    phaseT += dt;
+    const t = Math.min(phaseT/0.6, 1);
+    const angle = 0.6*Math.cos(t*Math.PI/2);
+    for(let i=N-P;i<N;i++) balls[i].theta = angle;
+    if(t>=1){ phase='leftSwing2'; phaseT=0; for(let i=N-P;i<N;i++) balls[i].theta=0; }
+  } else if (phase==='leftSwing2'){
+    phaseT += dt;
+    const t = Math.min(phaseT/0.6, 1);
+    const angle = -0.6*Math.sin(t*Math.PI/2);
+    for(let i=0;i<P;i++) balls[i].theta = angle;
+    if(t>=1){ phase='leftSwing'; phaseT=0; }
+  }
+  draw();
+  requestAnimationFrame(animate);
+}
+
+document.getElementById('n').oninput=e=>{document.getElementById('vN').textContent=e.target.value; reset(); draw();};
+document.getElementById('p').oninput=e=>{document.getElementById('vP').textContent=e.target.value; reset(); draw();};
+document.getElementById('release').onclick=()=>{ phase='leftSwing'; phaseT=0; };
+document.getElementById('reset').onclick=()=>{ phase='idle'; reset(); draw(); };
+reset();
+draw();
+animate();
+</script>
+</body></html>

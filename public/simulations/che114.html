@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Crystallisation</title>
+<link rel="stylesheet" href="/simulations/_shared.css" />
+</head>
+<body>
+<div class="app">
+  <header>
+    <h1>Recrystallisation — Purify a Salt Sample</h1>
+    <span class="pill">Class 11 · Chemistry</span>
+  </header>
+  <div class="grid">
+    <div class="card">
+      <h2>Beaker</h2>
+      <div class="viz"><canvas id="cv" width="780" height="380"></canvas></div>
+      <p class="note">Heat to dissolve, filter, then cool slowly to grow crystals. Compute % yield.</p>
+    </div>
+    <div class="card controls">
+      <h2>Controls</h2>
+      <label>Temperature (°C) — <span id="tv">25</span></label>
+      <input id="t" type="range" min="20" max="100" step="1" value="25" />
+      <label>Mass of impure salt (g)
+        <input id="mi" type="number" value="5.0" step="0.1" />
+      </label>
+      <button class="btn" id="filter">Hot Filter</button>
+      <button class="btn" id="cool">Cool Slowly</button>
+      <button class="btn warn" id="weigh">Weigh Crystals</button>
+      <button class="btn secondary" id="reset">Reset</button>
+      <div class="values">
+        <div class="value"><div class="label">Phase</div><div class="v" id="phase" style="font-size:13px">Initial</div></div>
+        <div class="value"><div class="label">Crystals (g)</div><div class="v" id="mp">—</div></div>
+        <div class="value"><div class="label">Mother liquor</div><div class="v" id="ml" style="font-size:13px">—</div></div>
+        <div class="value"><div class="label">Yield %</div><div class="v" id="yld">—</div></div>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+const cv = document.getElementById('cv'); const ctx = cv.getContext('2d');
+const t = document.getElementById('t');
+const mi = document.getElementById('mi');
+let phase = 'initial'; // initial, dissolved, filtered, cooling, crystals
+let crystals = [];
+function update() {
+  document.getElementById('tv').textContent = t.value;
+  document.getElementById('phase').textContent = phase;
+  if (phase === 'crystals') {
+    const m = parseFloat(mi.value) * 0.68;
+    document.getElementById('mp').textContent = m.toFixed(2) + ' g';
+    document.getElementById('yld').textContent = ((m / parseFloat(mi.value)) * 100).toFixed(1) + ' %';
+  }
+}
+function draw() {
+  const W = cv.width, H = cv.height;
+  ctx.fillStyle = '#0b1220'; ctx.fillRect(0, 0, W, H);
+  // beaker
+  ctx.strokeStyle = '#cbd5e1'; ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.moveTo(W / 2 - 110, 80); ctx.lineTo(W / 2 - 110, 320);
+  ctx.lineTo(W / 2 + 110, 320); ctx.lineTo(W / 2 + 110, 80);
+  ctx.stroke();
+  // burner if heating
+  const T = parseFloat(t.value);
+  if (T > 50) {
+    ctx.fillStyle = 'rgba(251,191,36,0.6)';
+    for (let i = 0; i < 8; i++) {
+      const phase = Date.now() / 200 + i * 0.6;
+      ctx.beginPath();
+      ctx.ellipse(W / 2 - 60 + i * 18, 350 - Math.sin(phase) * 4, 8, 16 + Math.sin(phase) * 4, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+  // liquid
+  const liquidH = phase === 'crystals' ? 60 : 200;
+  let r = 254, g = 243, b = 199;
+  if (T > 60) { r = 255; g = 235 - (T - 60) * 1.2; b = 130; }
+  if (phase === 'filtered') { r = 230; g = 244; b = 255; }
+  ctx.fillStyle = `rgba(${r},${g},${b},0.55)`;
+  ctx.fillRect(W / 2 - 108, 320 - liquidH, 216, liquidH);
+  // suspended particles when not dissolved
+  if (phase === 'initial' && T < 60) {
+    for (let i = 0; i < 30; i++) {
+      ctx.fillStyle = '#94a3b8';
+      ctx.beginPath();
+      const px = W / 2 - 100 + Math.random() * 200;
+      const py = 130 + Math.random() * 180;
+      ctx.arc(px, py, 1.5, 0, Math.PI * 2); ctx.fill();
+    }
+  }
+  // crystals
+  if (phase === 'cooling' || phase === 'crystals') {
+    if (crystals.length === 0) {
+      for (let i = 0; i < 80; i++) {
+        crystals.push({ x: W / 2 - 100 + Math.random() * 200, y: 280 + Math.random() * 38, s: 2 + Math.random() * 4 });
+      }
+    }
+    crystals.forEach(c => {
+      ctx.fillStyle = '#06b6d4';
+      ctx.beginPath();
+      ctx.moveTo(c.x, c.y - c.s); ctx.lineTo(c.x + c.s, c.y); ctx.lineTo(c.x, c.y + c.s); ctx.lineTo(c.x - c.s, c.y);
+      ctx.closePath(); ctx.fill();
+    });
+  }
+  ctx.fillStyle = '#cbd5e1'; ctx.font = '12px Arial';
+  ctx.fillText('Beaker · phase: ' + phase, 30, 30);
+  ctx.fillText('Temp: ' + T + ' °C', 30, 50);
+  setTimeout(draw, 60);
+}
+['change', 'input'].forEach(ev => { t.addEventListener(ev, () => { update(); if (parseFloat(t.value) > 60 && phase === 'initial') phase = 'dissolved'; }); });
+document.getElementById('filter').addEventListener('click', () => { if (phase === 'dissolved') { phase = 'filtered'; update(); } });
+document.getElementById('cool').addEventListener('click', () => { if (phase === 'filtered') { phase = 'cooling'; t.value = 25; update(); } });
+document.getElementById('weigh').addEventListener('click', () => { if (phase === 'cooling') { phase = 'crystals'; update(); } });
+document.getElementById('reset').addEventListener('click', () => {
+  phase = 'initial'; crystals = []; t.value = '25'; mi.value = '5.0';
+  ['mp', 'yld', 'ml'].forEach(id => document.getElementById(id).textContent = '—');
+  update();
+});
+update(); draw();
+</script>
+</body>
+</html>

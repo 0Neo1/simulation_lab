@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><title>Covalent Bonding</title><link rel="stylesheet" href="../styles.css"></head>
+<body>
+<header><a href="../index.html"><h1>Covalent Bonding — Lennard-Jones Potential</h1></a><p>Two atoms find their happy distance.</p></header>
+<main>
+<a class="back-link" href="../index.html">&larr; All simulations</a>
+<div class="sim-container">
+  <div>
+    <div class="canvas-wrap"><canvas id="cv" width="800" height="500"></canvas></div>
+    <div class="info-box">
+      <h3>The Chemistry</h3>
+      <p>In a covalent bond, atoms share electrons. Energy is minimum at the bond length: too close → strong repulsion; too far → no attraction.</p>
+      <div class="formula">U(r) = 4ε[(σ/r)¹² − (σ/r)⁶]</div>
+      <p>The Lennard-Jones potential captures this trade-off.</p>
+    </div>
+  </div>
+  <div class="controls">
+    <h3>Controls</h3>
+    <div class="control-row"><label>Distance r <span class="val" id="vR">100</span></label><input type="range" id="r" min="40" max="250" value="100"></div>
+    <div class="readouts" style="grid-template-columns:1fr;">
+      <div>U(r): <span id="rU">0</span></div>
+      <div>Force: <span id="rF">0</span></div>
+      <div>State: <span id="rS">—</span></div>
+    </div>
+    <div class="btn-row"><button id="run">Auto-find bond length</button></div>
+  </div>
+</div>
+</main>
+<script>
+const cv=document.getElementById('cv'), ctx=cv.getContext('2d');
+let r = 100;
+const sigma = 80, eps = 100;
+const cy = 200;
+
+function U(r){
+  const x = sigma/r;
+  return 4*eps*(Math.pow(x,12) - Math.pow(x,6));
+}
+function F(r){
+  // -dU/dr
+  const x = sigma/r;
+  return 24*eps/r*(2*Math.pow(x,12) - Math.pow(x,6));
+}
+
+function draw(){
+  ctx.clearRect(0,0,cv.width,cv.height);
+  ctx.fillStyle='#0a0a0a'; ctx.fillRect(0,0,cv.width,cv.height);
+  // top: two atoms
+  ctx.strokeStyle='#999999';
+  // axis line
+  ctx.beginPath(); ctx.moveTo(0,cy); ctx.lineTo(cv.width,cy); ctx.stroke();
+  // atom 1
+  ctx.fillStyle='#ffffff'; ctx.beginPath(); ctx.arc(400-r/2, cy, 25, 0, 2*Math.PI); ctx.fill();
+  ctx.strokeStyle='#dddddd'; ctx.stroke();
+  ctx.fillStyle='#fff'; ctx.font='bold 14px sans-serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.fillText('H', 400-r/2, cy);
+  // atom 2
+  ctx.fillStyle='#888888'; ctx.beginPath(); ctx.arc(400+r/2, cy, 25, 0, 2*Math.PI); ctx.fill();
+  ctx.strokeStyle='#dddddd'; ctx.stroke();
+  ctx.fillStyle='#fff'; ctx.fillText('H', 400+r/2, cy);
+  ctx.textAlign='left'; ctx.textBaseline='alphabetic';
+  // bond electrons if close enough
+  if(r < 130){
+    const nE = Math.min(2, Math.floor((130-r)/15));
+    for(let i=0;i<nE;i++){
+      ctx.fillStyle='#dddddd';
+      ctx.beginPath(); ctx.arc(400 + (i-0.5)*8, cy, 4, 0, 2*Math.PI); ctx.fill();
+    }
+  }
+  // distance label
+  ctx.strokeStyle='#888'; ctx.setLineDash([3,3]);
+  ctx.beginPath(); ctx.moveTo(400-r/2, cy+40); ctx.lineTo(400+r/2, cy+40); ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle='#dddddd'; ctx.font='14px sans-serif';
+  ctx.fillText('r = '+r.toFixed(0), 400-30, cy+60);
+  // graph U vs r
+  const gX=80, gY=290, gW=640, gH=180;
+  ctx.fillStyle='#f5f5f5'; ctx.fillRect(gX,gY,gW,gH);
+  ctx.strokeStyle='#999999'; ctx.strokeRect(gX,gY,gW,gH);
+  ctx.fillStyle='#dddddd'; ctx.font='14px sans-serif';
+  ctx.fillText('Potential Energy U(r)', gX+220, gY-5);
+  // zero line
+  ctx.strokeStyle='#cccccc';
+  const zeroY = gY+gH*0.4;
+  ctx.beginPath(); ctx.moveTo(gX, zeroY); ctx.lineTo(gX+gW, zeroY); ctx.stroke();
+  // curve
+  ctx.strokeStyle='#ffffff'; ctx.lineWidth=2;
+  ctx.beginPath();
+  for(let rr=40;rr<=300;rr+=2){
+    const u = U(rr);
+    const px = gX + (rr-40)/260 * gW;
+    const py = zeroY - u*0.4;
+    if(py < gY) continue;
+    if(py > gY+gH) continue;
+    if(rr===40) ctx.moveTo(px,py); else ctx.lineTo(px,py);
+  }
+  ctx.stroke();
+  // current point
+  const u = U(r);
+  const px = gX + (r-40)/260*gW;
+  const py = Math.max(gY, Math.min(gY+gH, zeroY - u*0.4));
+  ctx.fillStyle='#888888'; ctx.beginPath(); ctx.arc(px,py,7,0,2*Math.PI); ctx.fill();
+  // labels
+  ctx.fillStyle='#dddddd'; ctx.font='12px sans-serif';
+  ctx.fillText('r (closer →)', gX+gW-80, gY+gH+15);
+  // info
+  document.getElementById('rU').textContent = u.toFixed(2);
+  document.getElementById('rF').textContent = F(r).toFixed(2);
+  let state;
+  if(r<70) state='Strong repulsion';
+  else if(r<90) state='Bond region (covalent)';
+  else if(r<130) state='Attractive force';
+  else state='Too far, weak attraction';
+  document.getElementById('rS').textContent = state;
+}
+
+document.getElementById('r').oninput=e=>{r=+e.target.value; document.getElementById('vR').textContent=r; draw();};
+document.getElementById('run').onclick=()=>{
+  const id = setInterval(()=>{
+    const f = F(r);
+    r += -f*0.5;
+    if(r<40) r=40; if(r>250) r=250;
+    document.getElementById('r').value = r;
+    document.getElementById('vR').textContent = r.toFixed(0);
+    draw();
+    if(Math.abs(f)<0.05){ clearInterval(id); }
+  }, 30);
+};
+draw();
+</script>
+</body></html>

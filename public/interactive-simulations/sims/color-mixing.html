@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><title>Light Intensity Mixing</title><link rel="stylesheet" href="../styles.css"></head>
+<body>
+<header><a href="../index.html"><h1>Light Intensity Mixing</h1></a><p>Three light sources combine — additive brightness.</p></header>
+<main>
+<a class="back-link" href="../index.html">&larr; All simulations</a>
+<div class="sim-container">
+  <div>
+    <div class="canvas-wrap"><canvas id="cv" width="800" height="500"></canvas></div>
+    <div class="info-box">
+      <h3>The Physics</h3>
+      <p>Light is additive — overlapping beams sum their intensities. Where all three sources overlap with full intensity, you get pure white. Absence of light is black.</p>
+      <div class="formula">I_total = I₁ + I₂ + I₃</div>
+      <p>Adjust the intensity of each source and watch the overlap regions brighten.</p>
+    </div>
+  </div>
+  <div class="controls">
+    <h3>Controls</h3>
+    <div class="control-row"><label>Source A intensity <span class="val" id="vA">100%</span></label><input type="range" id="a" min="0" max="255" value="255"></div>
+    <div class="control-row"><label>Source B intensity <span class="val" id="vB">100%</span></label><input type="range" id="b" min="0" max="255" value="255"></div>
+    <div class="control-row"><label>Source C intensity <span class="val" id="vC">100%</span></label><input type="range" id="c" min="0" max="255" value="255"></div>
+    <div class="readouts" style="grid-template-columns:1fr;">
+      <div>Center brightness: <span id="rO">100%</span></div>
+    </div>
+  </div>
+</div>
+</main>
+<script>
+const cv=document.getElementById('cv'), ctx=cv.getContext('2d');
+let A=255,B=255,C=255;
+function draw(){
+  ctx.fillStyle='#000'; ctx.fillRect(0,0,cv.width,cv.height);
+  // three overlapping circles using additive (lighter) composite — all white
+  ctx.globalCompositeOperation = 'lighter';
+  const r = 130;
+  ctx.fillStyle = `rgb(${A},${A},${A})`;
+  ctx.beginPath(); ctx.arc(290,210,r,0,2*Math.PI); ctx.fill();
+  ctx.fillStyle = `rgb(${B},${B},${B})`;
+  ctx.beginPath(); ctx.arc(420,210,r,0,2*Math.PI); ctx.fill();
+  ctx.fillStyle = `rgb(${C},${C},${C})`;
+  ctx.beginPath(); ctx.arc(355,330,r,0,2*Math.PI); ctx.fill();
+  ctx.globalCompositeOperation = 'source-over';
+  // labels
+  ctx.fillStyle='#888'; ctx.font='12px sans-serif';
+  ctx.fillText('A', 220, 145);
+  ctx.fillText('B', 490, 145);
+  ctx.fillText('C', 350, 410);
+  // result swatch
+  const total = Math.min(255, A + B + C);
+  ctx.fillStyle = `rgb(${total},${total},${total})`;
+  ctx.fillRect(620, 90, 130, 130);
+  ctx.strokeStyle='#333'; ctx.lineWidth=1; ctx.strokeRect(620,90,130,130);
+  ctx.fillStyle='#888'; ctx.font='11px sans-serif';
+  ctx.fillText('Mixed brightness', 620, 80);
+  document.getElementById('rO').textContent = Math.floor(total/255*100)+'%';
+}
+['a','b','c'].forEach(id=>document.getElementById(id).oninput=()=>{
+  A=+document.getElementById('a').value; B=+document.getElementById('b').value; C=+document.getElementById('c').value;
+  document.getElementById('vA').textContent=Math.floor(A/255*100)+'%';
+  document.getElementById('vB').textContent=Math.floor(B/255*100)+'%';
+  document.getElementById('vC').textContent=Math.floor(C/255*100)+'%';
+  draw();
+});
+draw();
+</script>
+</body></html>

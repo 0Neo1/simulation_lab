@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><title>VSEPR Geometry</title><link rel="stylesheet" href="../styles.css"></head>
+<body>
+<header><a href="../index.html"><h1>VSEPR Molecular Geometry</h1></a><p>Electron pairs repel — molecules adopt shapes.</p></header>
+<main>
+<a class="back-link" href="../index.html">&larr; All simulations</a>
+<div class="sim-container">
+  <div>
+    <div class="canvas-wrap"><canvas id="cv" width="800" height="500"></canvas></div>
+    <div class="info-box">
+      <h3>The Chemistry</h3>
+      <p>VSEPR theory: electron pairs around a central atom arrange themselves to minimize repulsion. The number of bonded atoms and lone pairs determines the shape.</p>
+      <div class="formula">2 → linear (180°)<br>3 → trigonal planar (120°)<br>4 → tetrahedral (109.5°)<br>5 → trigonal bipyramidal<br>6 → octahedral (90°)</div>
+    </div>
+  </div>
+  <div class="controls">
+    <h3>Controls</h3>
+    <div class="control-row"><label>Geometry: <select id="shape">
+      <option value="linear">Linear (BeCl₂, CO₂)</option>
+      <option value="trigonal" selected>Trigonal planar (BF₃)</option>
+      <option value="tetrahedral">Tetrahedral (CH₄)</option>
+      <option value="bent">Bent (H₂O)</option>
+      <option value="pyramidal">Trigonal pyramidal (NH₃)</option>
+      <option value="bipyramidal">Trigonal bipyramidal (PCl₅)</option>
+      <option value="octahedral">Octahedral (SF₆)</option>
+    </select></label></div>
+    <div class="control-row"><label>Rotate Y <span class="val" id="vRy">0°</span></label><input type="range" id="ry" min="0" max="360" value="20"></div>
+    <div class="control-row"><label>Rotate X <span class="val" id="vRx">0°</span></label><input type="range" id="rx" min="-90" max="90" value="20"></div>
+    <div class="readouts" style="grid-template-columns:1fr;">
+      <div>Bond angle: <span id="rA">—</span></div>
+      <div>Example: <span id="rE">—</span></div>
+    </div>
+  </div>
+</div>
+</main>
+<script>
+const cv=document.getElementById('cv'), ctx=cv.getContext('2d');
+const cx=400, cy=250;
+
+const shapes = {
+  linear: {points:[[1,0,0],[-1,0,0]], color:'#888888', sym:'X', central:'C', angle:'180°', ex:'CO₂, BeCl₂'},
+  trigonal: {points:[[1,0,0],[-0.5,0.866,0],[-0.5,-0.866,0]], color:'#aaaaaa', sym:'F', central:'B', angle:'120°', ex:'BF₃, BCl₃'},
+  tetrahedral: {points:[[1,1,1],[-1,-1,1],[-1,1,-1],[1,-1,-1]], color:'#ffffff', sym:'H', central:'C', angle:'109.5°', ex:'CH₄, CCl₄'},
+  bent: {points:[[1,0.5,0],[-1,0.5,0]], lone:[[0,-0.7,0.7],[0,-0.7,-0.7]], color:'#cccccc', sym:'H', central:'O', angle:'~104.5°', ex:'H₂O'},
+  pyramidal: {points:[[1,-0.4,1],[-1,-0.4,1],[0,-0.4,-1.4]], lone:[[0,1,0]], color:'#ffffff', sym:'H', central:'N', angle:'~107°', ex:'NH₃'},
+  bipyramidal: {points:[[1,0,0],[-0.5,0.866,0],[-0.5,-0.866,0],[0,0,1.2],[0,0,-1.2]], color:'#aaaaaa', sym:'Cl', central:'P', angle:'90/120°', ex:'PCl₅'},
+  octahedral: {points:[[1,0,0],[-1,0,0],[0,1,0],[0,-1,0],[0,0,1],[0,0,-1]], color:'#888888', sym:'F', central:'S', angle:'90°', ex:'SF₆'},
+};
+
+let ry = 20, rx = 20;
+
+function rotate(p){
+  const [x,y,z] = p;
+  // rotate around Y
+  const cosY = Math.cos(ry*Math.PI/180), sinY = Math.sin(ry*Math.PI/180);
+  let x1 = x*cosY + z*sinY;
+  let z1 = -x*sinY + z*cosY;
+  let y1 = y;
+  // rotate around X
+  const cosX = Math.cos(rx*Math.PI/180), sinX = Math.sin(rx*Math.PI/180);
+  let y2 = y1*cosX - z1*sinX;
+  let z2 = y1*sinX + z1*cosX;
+  return [x1, y2, z2];
+}
+
+function draw(){
+  ctx.clearRect(0,0,cv.width,cv.height);
+  ctx.fillStyle='#000000'; ctx.fillRect(0,0,cv.width,cv.height);
+  const shapeKey = document.getElementById('shape').value;
+  const shape = shapes[shapeKey];
+  const scale = 90;
+  // get screen positions sorted by depth
+  const allPoints = shape.points.map(p=>{
+    const r = rotate(p);
+    return {x: cx + r[0]*scale, y: cy - r[1]*scale, z: r[2], type:'bond'};
+  });
+  if(shape.lone){
+    shape.lone.forEach(p=>{
+      const r = rotate(p);
+      allPoints.push({x:cx+r[0]*scale, y:cy-r[1]*scale, z:r[2], type:'lone'});
+    });
+  }
+  // draw bonds (back to front)
+  allPoints.sort((a,b)=>a.z-b.z);
+  // draw bonds first
+  allPoints.forEach(p=>{
+    if(p.type==='bond'){
+      ctx.strokeStyle='#aaaaaa'; ctx.lineWidth=4;
+      ctx.beginPath(); ctx.moveTo(cx,cy); ctx.lineTo(p.x,p.y); ctx.stroke();
+    }
+  });
+  // central atom
+  ctx.fillStyle='#fff'; ctx.beginPath(); ctx.arc(cx,cy,28,0,2*Math.PI); ctx.fill();
+  ctx.strokeStyle='#dddddd'; ctx.lineWidth=2; ctx.stroke();
+  ctx.fillStyle='#dddddd'; ctx.font='bold 18px sans-serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.fillText(shape.central, cx, cy);
+  // outer atoms / lone pairs
+  allPoints.forEach(p=>{
+    if(p.type==='bond'){
+      const sz = 22 + p.z*5;
+      ctx.fillStyle = shape.color;
+      ctx.beginPath(); ctx.arc(p.x, p.y, sz, 0, 2*Math.PI); ctx.fill();
+      ctx.strokeStyle='#dddddd'; ctx.stroke();
+      ctx.fillStyle='#fff'; ctx.font='bold 14px sans-serif';
+      ctx.fillText(shape.sym, p.x, p.y);
+    } else {
+      // lone pair as two dots
+      ctx.fillStyle='#cccccc';
+      ctx.beginPath(); ctx.arc(p.x-6, p.y, 4, 0, 2*Math.PI); ctx.fill();
+      ctx.beginPath(); ctx.arc(p.x+6, p.y, 4, 0, 2*Math.PI); ctx.fill();
+    }
+  });
+  ctx.textAlign='left'; ctx.textBaseline='alphabetic';
+  document.getElementById('rA').textContent = shape.angle;
+  document.getElementById('rE').textContent = shape.ex;
+}
+
+['shape','ry','rx'].forEach(id=>document.getElementById(id).oninput=()=>{
+  ry=+document.getElementById('ry').value; rx=+document.getElementById('rx').value;
+  document.getElementById('vRy').textContent=ry+'°';
+  document.getElementById('vRx').textContent=rx+'°';
+  draw();
+});
+draw();
+</script>
+</body></html>

@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><title>Motion Graphs</title><link rel="stylesheet" href="../styles.css"></head>
+<body>
+<header><a href="../index.html"><h1>Motion Graphs</h1></a><p>Visualize position, velocity, and acceleration in real time.</p></header>
+<main>
+<a class="back-link" href="../index.html">&larr; All simulations</a>
+<div class="sim-container">
+  <div>
+    <div class="canvas-wrap"><canvas id="cv" width="800" height="600"></canvas></div>
+    <div class="info-box">
+      <h3>The Physics</h3>
+      <p>Position, velocity, and acceleration are linked: velocity is the derivative of position; acceleration is the derivative of velocity.</p>
+      <div class="formula">v = dx/dt &nbsp;&nbsp; a = dv/dt</div>
+      <p>For constant acceleration: <em>x = x₀ + v₀t + ½at²</em></p>
+    </div>
+  </div>
+  <div class="controls">
+    <h3>Motion Profile</h3>
+    <div class="control-row"><label>Initial Velocity <span class="val" id="vV">5 m/s</span></label><input type="range" id="v0" min="-20" max="20" value="5"></div>
+    <div class="control-row"><label>Acceleration <span class="val" id="vA">2 m/s²</span></label><input type="range" id="a0" min="-10" max="10" value="2" step="0.5"></div>
+    <div class="btn-row"><button id="run">Start</button><button class="secondary" id="pause">Pause</button><button class="danger" id="reset">Reset</button></div>
+    <div class="readouts">
+      <div>t: <span id="rT">0 s</span></div>
+      <div>x: <span id="rX">0 m</span></div>
+      <div>v: <span id="rV">0 m/s</span></div>
+      <div>a: <span id="rA">0 m/s²</span></div>
+    </div>
+  </div>
+</div>
+</main>
+<script>
+const cv = document.getElementById('cv'), ctx = cv.getContext('2d');
+let v0 = 5, a = 2, t = 0, x = 0, v = 5;
+let running = false;
+let history = [];
+const tMax = 10, panel = 180;
+
+function drawTrack() {
+  // top: animated cart
+  ctx.fillStyle = '#f7f7f7'; ctx.fillRect(0,0,cv.width,60);
+  ctx.fillStyle = '#444'; ctx.fillRect(0,55,cv.width,5);
+  // cart at scaled position
+  const cartX = 50 + (x % 700);
+  const adjX = ((cartX % 700) + 700) % 700;
+  ctx.fillStyle = '#ffffff'; ctx.fillRect(adjX, 25, 40, 25);
+  ctx.fillStyle = '#888888';
+  ctx.beginPath(); ctx.arc(adjX+8, 52, 5, 0, 2*Math.PI); ctx.fill();
+  ctx.beginPath(); ctx.arc(adjX+32, 52, 5, 0, 2*Math.PI); ctx.fill();
+}
+
+function drawGraph(yStart, label, color, vals, scaleY) {
+  ctx.fillStyle = '#fff'; ctx.fillRect(40, yStart, cv.width-50, panel-20);
+  ctx.strokeStyle = '#dddddd'; ctx.strokeRect(40, yStart, cv.width-50, panel-20);
+  // axes
+  const midY = yStart + (panel-20)/2;
+  ctx.strokeStyle = '#bbbbbb'; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(40, midY); ctx.lineTo(cv.width-10, midY); ctx.stroke();
+  // label
+  ctx.fillStyle = '#999999'; ctx.font = 'bold 14px sans-serif';
+  ctx.fillText(label, 8, yStart+12);
+  // plot
+  ctx.strokeStyle = color; ctx.lineWidth = 2;
+  ctx.beginPath();
+  vals.forEach((p,i)=>{
+    const px = 40 + (p.t/tMax)*(cv.width-50);
+    const py = midY - p.val*scaleY;
+    if(i===0) ctx.moveTo(px,py); else ctx.lineTo(px,py);
+  });
+  ctx.stroke();
+}
+
+function draw() {
+  ctx.clearRect(0,0,cv.width,cv.height);
+  drawTrack();
+  drawGraph(75, 'Position (m)', '#ffffff', history.map(h=>({t:h.t,val:h.x})), 1.5);
+  drawGraph(75+panel, 'Velocity (m/s)', '#aaaaaa', history.map(h=>({t:h.t,val:h.v})), 4);
+  drawGraph(75+2*panel, 'Acceleration (m/s²)', '#888888', history.map(h=>({t:h.t,val:h.a})), 8);
+}
+
+function step() {
+  if (!running) return;
+  const dt = 0.05;
+  t += dt; v = v0 + a*t; x = v0*t + 0.5*a*t*t;
+  history.push({t, x, v, a});
+  if (t > tMax) running = false;
+  document.getElementById('rT').textContent = t.toFixed(2)+' s';
+  document.getElementById('rX').textContent = x.toFixed(2)+' m';
+  document.getElementById('rV').textContent = v.toFixed(2)+' m/s';
+  document.getElementById('rA').textContent = a.toFixed(2)+' m/s²';
+  draw();
+  requestAnimationFrame(step);
+}
+
+document.getElementById('v0').oninput = e=>{v0=+e.target.value; document.getElementById('vV').textContent=v0+' m/s';};
+document.getElementById('a0').oninput = e=>{a=+e.target.value; document.getElementById('vA').textContent=a+' m/s²';};
+document.getElementById('run').onclick = ()=>{ if(!running){running=true; step();} };
+document.getElementById('pause').onclick = ()=>{ running=false; };
+document.getElementById('reset').onclick = ()=>{ running=false; t=0; x=0; v=v0; history=[]; draw(); };
+draw();
+</script>
+</body></html>

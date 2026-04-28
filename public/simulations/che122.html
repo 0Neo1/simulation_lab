@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>HCl vs Na₂CO₃ Titration</title>
+<link rel="stylesheet" href="/simulations/_shared.css" />
+</head>
+<body>
+<div class="app">
+  <header>
+    <h1>HCl vs Na₂CO₃ Titration (Methyl Orange)</h1>
+    <span class="pill">Class 12 · Chemistry</span>
+  </header>
+  <div class="grid">
+    <div class="card">
+      <h2>Burette &amp; Conical Flask</h2>
+      <div class="viz"><canvas id="cv" width="780" height="380"></canvas></div>
+      <p class="note">Add HCl slowly to Na₂CO₃ + methyl orange. End point: yellow → faint pink.</p>
+    </div>
+    <div class="card controls">
+      <h2>Controls</h2>
+      <label>Volume of Na₂CO₃ (mL)
+        <input id="VN" type="number" value="20.0" step="0.1" />
+      </label>
+      <label>Drop rate
+        <input id="rate" type="range" min="0" max="3" step="0.05" value="0" />
+      </label>
+      <button class="btn" id="add">Add 0.5 mL</button>
+      <button class="btn warn" id="record">Record Endpoint</button>
+      <button class="btn secondary" id="reset">Reset</button>
+      <div class="values">
+        <div class="value"><div class="label">Burette</div><div class="v" id="b">0.0 mL</div></div>
+        <div class="value"><div class="label">Endpoint</div><div class="v" id="ep">—</div></div>
+        <div class="value"><div class="label">Molarity HCl</div><div class="v" id="M">—</div></div>
+        <div class="value"><div class="label">Equation</div><div class="v" style="font-size:11px">Na₂CO₃ + 2HCl</div></div>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+const cv = document.getElementById('cv'); const ctx = cv.getContext('2d');
+const VN = document.getElementById('VN');
+const rate = document.getElementById('rate');
+let b = 0, drops = [], endpoint = null;
+const trueEnd = 20.6; // for 0.1 M HCl titration
+function update() {
+  document.getElementById('b').textContent = b.toFixed(2) + ' mL';
+  if (endpoint) {
+    document.getElementById('ep').textContent = endpoint.toFixed(2) + ' mL';
+    const VnV = parseFloat(VN.value);
+    const M = (2 * 0.1 * VnV) / endpoint;
+    document.getElementById('M').textContent = M.toFixed(3) + ' M';
+  }
+}
+function draw() {
+  const W = cv.width, H = cv.height;
+  ctx.fillStyle = '#0b1220'; ctx.fillRect(0, 0, W, H);
+  const bX = W / 2 - 8;
+  ctx.fillStyle = '#1e293b'; ctx.fillRect(bX - 5, 30, 26, 200);
+  ctx.strokeStyle = '#cbd5e1'; ctx.strokeRect(bX - 5, 30, 26, 200);
+  const fillH = Math.max(0, 180 - b * 4);
+  ctx.fillStyle = 'rgba(248,113,113,0.4)'; // pale red HCl
+  ctx.fillRect(bX - 4, 40 + (180 - fillH), 24, fillH);
+  // ticks
+  ctx.fillStyle = '#cbd5e1'; ctx.font = '10px Arial';
+  for (let i = 0; i <= 45; i++) {
+    const yy = 40 + i * 4;
+    if (i % 5 === 0) { ctx.fillRect(bX + 22, yy, 6, 1); ctx.fillText(i + '', bX + 30, yy + 3); }
+    else ctx.fillRect(bX + 22, yy, 3, 1);
+  }
+  ctx.fillStyle = '#fbbf24'; ctx.fillRect(bX - 8, 230, 30, 8);
+  drops = drops.filter(d => d.y < 320);
+  drops.forEach(d => { d.y += 4; ctx.fillStyle = 'rgba(248,113,113,0.85)'; ctx.beginPath(); ctx.arc(d.x, d.y, 3, 0, Math.PI * 2); ctx.fill(); });
+  // flask
+  ctx.beginPath(); ctx.moveTo(W / 2 - 80, 320); ctx.lineTo(W / 2 + 80, 320); ctx.lineTo(W / 2 + 18, 250); ctx.lineTo(W / 2 - 18, 250); ctx.closePath();
+  ctx.strokeStyle = '#cbd5e1'; ctx.lineWidth = 2; ctx.stroke();
+  // colour: yellow -> pink
+  const k = Math.min(1, Math.max(0, (b - trueEnd + 0.5) / 1.0));
+  const r = 254, g = 243 - k * 100, bl = 199 - k * 60, alpha = 0.55 + k * 0.25;
+  ctx.fillStyle = `rgba(${r},${g},${bl},${alpha})`;
+  ctx.beginPath(); ctx.moveTo(W / 2 - 78, 318); ctx.lineTo(W / 2 + 78, 318); ctx.lineTo(W / 2 + 28, 270); ctx.lineTo(W / 2 - 28, 270); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = '#cbd5e1'; ctx.font = '12px Arial';
+  ctx.fillText('Burette: HCl (titrant)', bX - 30, 24);
+  ctx.fillText('Conical: Na₂CO₃ + methyl orange', W / 2 - 80, 348);
+  if (Math.abs(b - trueEnd) < 0.3) { ctx.fillStyle = '#34d399'; ctx.font = 'bold 14px Arial'; ctx.fillText('End point near!', W / 2 - 50, 240); }
+}
+function loop() {
+  draw();
+  const r = parseFloat(rate.value);
+  if (r > 0) {
+    b += r * 0.02;
+    if (Math.random() < r * 0.5) drops.push({ x: cv.width / 2 + 6, y: 240 });
+    update();
+  }
+  requestAnimationFrame(loop);
+}
+document.getElementById('add').addEventListener('click', () => { b += 0.5; drops.push({ x: cv.width / 2 + 6, y: 240 }); update(); });
+document.getElementById('record').addEventListener('click', () => { endpoint = b; update(); });
+document.getElementById('reset').addEventListener('click', () => { b = 0; endpoint = null; drops = []; rate.value = '0';
+  document.getElementById('ep').textContent = '—'; document.getElementById('M').textContent = '—'; update(); });
+VN.addEventListener('input', update);
+update(); loop();
+</script>
+</body>
+</html>

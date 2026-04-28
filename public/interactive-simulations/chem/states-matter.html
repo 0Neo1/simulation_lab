@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><title>States of Matter</title><link rel="stylesheet" href="../styles.css"></head>
+<body>
+<header><a href="../index.html"><h1>States of Matter</h1></a><p>Heat or cool — solid, liquid, gas.</p></header>
+<main>
+<a class="back-link" href="../index.html">&larr; All simulations</a>
+<div class="sim-container">
+  <div>
+    <div class="canvas-wrap"><canvas id="cv" width="800" height="500"></canvas></div>
+    <div class="info-box">
+      <h3>The Chemistry</h3>
+      <p>Particles in a solid vibrate around fixed positions. In a liquid they move freely while staying in contact. In a gas they fly independently.</p>
+      <div class="formula">KE_avg = (3/2) k_B T</div>
+      <p>Higher temperature → more kinetic energy → particles overcome attractive forces.</p>
+    </div>
+  </div>
+  <div class="controls">
+    <h3>Controls</h3>
+    <div class="control-row"><label>Temperature <span class="val" id="vT">300 K</span></label><input type="range" id="t" min="50" max="800" value="300"></div>
+    <div class="readouts" style="grid-template-columns:1fr;">
+      <div>State: <span id="rS">—</span></div>
+      <div>Avg KE: <span id="rK">—</span></div>
+    </div>
+  </div>
+</div>
+</main>
+<script>
+const cv=document.getElementById('cv'), ctx=cv.getContext('2d');
+let T = 300;
+const N = 80;
+let particles = [];
+const r = 12;
+const W = cv.width, H = cv.height;
+
+for(let i=0;i<N;i++){
+  particles.push({
+    x: 100 + (i%10)*60, y: 100 + Math.floor(i/10)*45,
+    vx: 0, vy: 0
+  });
+}
+
+function step(){
+  // determine kinetic state
+  let speedScale;
+  if(T < 200) speedScale = 0.3; // solid - vibrate around lattice point
+  else if(T < 450) speedScale = 1.5; // liquid
+  else speedScale = 4; // gas
+
+  particles.forEach((p,i)=>{
+    if(T < 200){
+      // solid: oscillate around lattice
+      const ax = 100 + (i%10)*60;
+      const ay = 150 + Math.floor(i/10)*45;
+      const dx = p.x - ax, dy = p.y - ay;
+      p.vx += -0.1*dx + (Math.random()-0.5)*speedScale;
+      p.vy += -0.1*dy + (Math.random()-0.5)*speedScale;
+      p.vx *= 0.85; p.vy *= 0.85;
+    } else if(T < 450){
+      // liquid: limited cohesion + gravity
+      p.vx += (Math.random()-0.5)*speedScale*0.5;
+      p.vy += 0.05; // weak gravity
+      // keep in lower half
+      const targetY = H - 150;
+      if(p.y < targetY-100){ p.vy += 0.3; }
+      p.vx *= 0.97; p.vy *= 0.97;
+    } else {
+      // gas: free random motion
+      p.vx += (Math.random()-0.5)*speedScale*0.3;
+      p.vy += (Math.random()-0.5)*speedScale*0.3;
+      p.vx = Math.max(-6, Math.min(6, p.vx));
+      p.vy = Math.max(-6, Math.min(6, p.vy));
+    }
+    p.x += p.vx; p.y += p.vy;
+    // walls (bounce)
+    if(p.x < r){p.x=r; p.vx*=-1;}
+    if(p.x > W-r){p.x=W-r; p.vx*=-1;}
+    if(p.y < r){p.y=r; p.vy*=-1;}
+    if(p.y > H-r){p.y=H-r; p.vy*=-1;}
+  });
+  // simple particle-particle collision (in liquid)
+  if(T<450){
+    for(let i=0;i<N;i++){
+      for(let j=i+1;j<N;j++){
+        const a=particles[i], b=particles[j];
+        const dx=b.x-a.x, dy=b.y-a.y, d=Math.hypot(dx,dy);
+        if(d < 2*r){
+          const overlap = (2*r-d)/2;
+          const ux=dx/d, uy=dy/d;
+          a.x -= ux*overlap; a.y -= uy*overlap;
+          b.x += ux*overlap; b.y += uy*overlap;
+          // exchange normal velocities
+          const va = a.vx*ux+a.vy*uy;
+          const vb = b.vx*ux+b.vy*uy;
+          a.vx += (vb-va)*ux; a.vy += (vb-va)*uy;
+          b.vx += (va-vb)*ux; b.vy += (va-vb)*uy;
+        }
+      }
+    }
+  }
+  draw();
+  requestAnimationFrame(step);
+}
+
+function draw(){
+  ctx.fillStyle='#000000'; ctx.fillRect(0,0,cv.width,cv.height);
+  // container
+  ctx.strokeStyle='#aaaaaa'; ctx.lineWidth=3;
+  ctx.strokeRect(2,2,cv.width-4,cv.height-4);
+  // particles
+  let color;
+  if(T<200) color='#bbbbbb'; else if(T<450) color='#999999'; else color='#aaaaaa';
+  particles.forEach(p=>{
+    const grd = ctx.createRadialGradient(p.x-3,p.y-3,1,p.x,p.y,r);
+    grd.addColorStop(0,'#fff'); grd.addColorStop(1,color);
+    ctx.fillStyle = grd;
+    ctx.beginPath(); ctx.arc(p.x,p.y,r,0,2*Math.PI); ctx.fill();
+  });
+  // labels
+  let state = T<200?'Solid':T<450?'Liquid':'Gas';
+  ctx.fillStyle='#fff'; ctx.font='bold 24px sans-serif';
+  ctx.fillText(state, 30, 40);
+  ctx.font='14px sans-serif';
+  ctx.fillText(T+' K', 30, 65);
+  document.getElementById('rS').textContent = state;
+  document.getElementById('rK').textContent = (1.5*1.38e-23*T).toExponential(2)+' J';
+}
+
+document.getElementById('t').oninput = e=>{T=+e.target.value; document.getElementById('vT').textContent=T+' K';};
+step();
+</script>
+</body></html>

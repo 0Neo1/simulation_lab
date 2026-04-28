@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><title>Le Chatelier's Principle</title><link rel="stylesheet" href="../styles.css"></head>
+<body>
+<header><a href="../index.html"><h1>Le Chatelier's Principle</h1></a><p>Disturb an equilibrium and watch it shift back.</p></header>
+<main>
+<a class="back-link" href="../index.html">&larr; All simulations</a>
+<div class="sim-container">
+  <div>
+    <div class="canvas-wrap"><canvas id="cv" width="800" height="500"></canvas></div>
+    <div class="info-box">
+      <h3>The Chemistry</h3>
+      <p>For the reversible reaction <em>A + B ⇌ C + D</em>, equilibrium is reached when forward and reverse rates are equal. If you disturb the system (add reactant, remove product, change T), it shifts to counteract the change.</p>
+      <div class="formula">K_eq = [C][D] / [A][B]</div>
+    </div>
+  </div>
+  <div class="controls">
+    <h3>Controls</h3>
+    <div class="control-row"><label>Forward rate constant k_f <span class="val" id="vKf">0.05</span></label><input type="range" id="kf" min="1" max="20" value="5"></div>
+    <div class="control-row"><label>Reverse rate constant k_r <span class="val" id="vKr">0.02</span></label><input type="range" id="kr" min="1" max="20" value="2"></div>
+    <div class="btn-row"><button id="addA">+ Add A</button><button id="addB">+ Add B</button><button id="addC">+ Add C</button><button id="reset">Reset</button></div>
+    <div class="readouts">
+      <div>[A]: <span id="rA">0</span></div>
+      <div>[B]: <span id="rB">0</span></div>
+      <div>[C]: <span id="rC">0</span></div>
+      <div>K observed: <span id="rK">0</span></div>
+    </div>
+  </div>
+</div>
+</main>
+<script>
+const cv=document.getElementById('cv'), ctx=cv.getContext('2d');
+let kf=0.05, kr=0.02;
+let A=50, B=50, C=0, D=0;
+let history = [];
+
+function step(){
+  // mass action
+  const fwd = kf*A*B;
+  const rev = kr*C*D;
+  const dt = 0.1;
+  A -= (fwd-rev)*dt; B -= (fwd-rev)*dt; C += (fwd-rev)*dt; D += (fwd-rev)*dt;
+  if(A<0)A=0; if(B<0)B=0; if(C<0)C=0; if(D<0)D=0;
+  history.push({A,B,C,D});
+  if(history.length > 800) history.shift();
+  draw();
+  document.getElementById('rA').textContent = A.toFixed(1);
+  document.getElementById('rB').textContent = B.toFixed(1);
+  document.getElementById('rC').textContent = C.toFixed(1);
+  const Kobs = (C*D)/(A*B+0.001);
+  document.getElementById('rK').textContent = Kobs.toFixed(3);
+  requestAnimationFrame(step);
+}
+
+function draw(){
+  ctx.clearRect(0,0,cv.width,cv.height);
+  ctx.fillStyle='#0a0a0a'; ctx.fillRect(0,0,cv.width,cv.height);
+  // bars
+  const bx = 50, by = 30, bh = 200, bw = 60;
+  const max = Math.max(A,B,C,D,100);
+  ['A','B','C','D'].forEach((label,i)=>{
+    const v = [A,B,C,D][i];
+    const colors = ['#888888','#ffffff','#aaaaaa','#888888'];
+    ctx.fillStyle = '#222222'; ctx.fillRect(bx+i*100, by, bw, bh);
+    ctx.fillStyle = colors[i]; ctx.fillRect(bx+i*100, by+bh-v/max*bh, bw, v/max*bh);
+    ctx.strokeStyle='#dddddd'; ctx.strokeRect(bx+i*100, by, bw, bh);
+    ctx.fillStyle='#dddddd'; ctx.font='14px sans-serif'; ctx.textAlign='center';
+    ctx.fillText('['+label+'] = '+v.toFixed(0), bx+i*100+bw/2, by+bh+18);
+  });
+  ctx.textAlign='left';
+  // graph history
+  const gX=50, gY=270, gW=700, gH=200;
+  ctx.fillStyle='#f5f5f5'; ctx.fillRect(gX,gY,gW,gH);
+  ctx.strokeStyle='#999999'; ctx.strokeRect(gX,gY,gW,gH);
+  ['A','B','C','D'].forEach((label,i)=>{
+    const colors = ['#888888','#ffffff','#aaaaaa','#888888'];
+    ctx.strokeStyle=colors[i]; ctx.lineWidth=2;
+    ctx.beginPath();
+    history.forEach((h,j)=>{
+      const px = gX + (j/history.length)*gW;
+      const py = gY+gH - h[label]/max*gH;
+      if(j===0) ctx.moveTo(px,py); else ctx.lineTo(px,py);
+    });
+    ctx.stroke();
+    // legend
+    ctx.fillStyle = colors[i]; ctx.fillRect(gX+gW-100, gY+10+i*16, 12, 12);
+    ctx.fillStyle = '#dddddd'; ctx.font='12px sans-serif';
+    ctx.fillText(label, gX+gW-82, gY+20+i*16);
+  });
+  ctx.fillStyle='#dddddd'; ctx.fillText('A + B ⇌ C + D', 350, 260);
+  ctx.fillText('Concentrations vs. time', 50, 260);
+}
+
+document.getElementById('kf').oninput=e=>{kf=+e.target.value/100; document.getElementById('vKf').textContent=kf.toFixed(3);};
+document.getElementById('kr').oninput=e=>{kr=+e.target.value/100; document.getElementById('vKr').textContent=kr.toFixed(3);};
+document.getElementById('addA').onclick=()=>{A+=30;};
+document.getElementById('addB').onclick=()=>{B+=30;};
+document.getElementById('addC').onclick=()=>{C+=30;};
+document.getElementById('reset').onclick=()=>{A=50; B=50; C=0; D=0; history=[];};
+step();
+</script>
+</body></html>

@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><title>Ideal Gas Law</title><link rel="stylesheet" href="../styles.css"></head>
+<body>
+<header><a href="../index.html"><h1>Ideal Gas Law — PV = nRT</h1></a><p>See pressure, volume, temperature, and moles in action.</p></header>
+<main>
+<a class="back-link" href="../index.html">&larr; All simulations</a>
+<div class="sim-container">
+  <div>
+    <div class="canvas-wrap"><canvas id="cv" width="800" height="500"></canvas></div>
+    <div class="info-box">
+      <h3>The Chemistry</h3>
+      <p>An ideal gas obeys PV = nRT. Pressure comes from particles striking the walls. Boyle (P↑ V↓), Charles (V↑ T↑), and Avogadro (V↑ n↑) are special cases.</p>
+      <div class="formula">P V = n R T</div>
+    </div>
+  </div>
+  <div class="controls">
+    <h3>Controls</h3>
+    <div class="control-row"><label>Volume (piston) <span class="val" id="vV">400</span></label><input type="range" id="v" min="150" max="600" value="400"></div>
+    <div class="control-row"><label>Temperature <span class="val" id="vT">300 K</span></label><input type="range" id="t" min="100" max="800" value="300"></div>
+    <div class="control-row"><label>Particles n <span class="val" id="vN">50</span></label><input type="range" id="n" min="10" max="150" value="50"></div>
+    <div class="readouts" style="grid-template-columns:1fr;">
+      <div>P (relative): <span id="rP">0</span></div>
+      <div>Wall hits/s: <span id="rH">0</span></div>
+    </div>
+  </div>
+</div>
+</main>
+<script>
+const cv=document.getElementById('cv'), ctx=cv.getContext('2d');
+let V = 400, T = 300, N = 50;
+let particles = [];
+const r = 4;
+const containerY = 80, containerH = 320;
+const containerX = 80;
+let hits = 0, lastHitTime = 0;
+
+function init(){
+  particles = [];
+  for(let i=0;i<N;i++){
+    const speed = Math.sqrt(T)/2;
+    const ang = Math.random()*2*Math.PI;
+    particles.push({
+      x: containerX + 20 + Math.random()*(V-40),
+      y: containerY + 20 + Math.random()*(containerH-40),
+      vx: speed*Math.cos(ang), vy: speed*Math.sin(ang)
+    });
+  }
+}
+
+function step(){
+  // adjust counts
+  if(particles.length < N){
+    for(let i=particles.length;i<N;i++){
+      const speed = Math.sqrt(T)/2;
+      const ang = Math.random()*2*Math.PI;
+      particles.push({x:containerX+50, y:containerY+containerH/2, vx:speed*Math.cos(ang), vy:speed*Math.sin(ang)});
+    }
+  } else if(particles.length > N){ particles.length = N; }
+
+  // adjust velocities to match temperature
+  particles.forEach(p=>{
+    const targetSpeed = Math.sqrt(T)/2;
+    const cs = Math.hypot(p.vx,p.vy);
+    if(cs>0){
+      p.vx = p.vx/cs*targetSpeed;
+      p.vy = p.vy/cs*targetSpeed;
+    }
+    p.x += p.vx; p.y += p.vy;
+    if(p.x < containerX+r){p.x=containerX+r; p.vx*=-1; hits++;}
+    if(p.x > containerX+V-r){p.x=containerX+V-r; p.vx*=-1; hits++;}
+    if(p.y < containerY+r){p.y=containerY+r; p.vy*=-1; hits++;}
+    if(p.y > containerY+containerH-r){p.y=containerY+containerH-r; p.vy*=-1; hits++;}
+  });
+  draw();
+  requestAnimationFrame(step);
+}
+
+function draw(){
+  ctx.clearRect(0,0,cv.width,cv.height);
+  ctx.fillStyle='#0a0a0a'; ctx.fillRect(0,0,cv.width,cv.height);
+  // container
+  ctx.fillStyle='#888'; ctx.fillRect(containerX-15, containerY-10, 15, containerH+20);
+  ctx.fillRect(containerX-15, containerY-10, V+30, 10);
+  ctx.fillRect(containerX-15, containerY+containerH, V+30, 10);
+  // piston
+  ctx.fillStyle='#444'; ctx.fillRect(containerX+V, containerY-20, 25, containerH+40);
+  ctx.fillStyle='#888888'; ctx.fillRect(containerX+V+25, containerY+containerH/2-5, 80, 10);
+  // gas region
+  ctx.fillStyle = `rgba(200,200,200,${0.3+0.3*N/150})`;
+  ctx.fillRect(containerX, containerY, V, containerH);
+  // particles
+  particles.forEach(p=>{
+    const speed = Math.hypot(p.vx,p.vy);
+    const hue = Math.min(60, 240 - speed*30);
+    ctx.fillStyle = `hsl(${hue},80%,55%)`;
+    ctx.beginPath(); ctx.arc(p.x,p.y,r,0,2*Math.PI); ctx.fill();
+  });
+  // pressure gauge
+  const P = (N*T)/V;
+  const Pnorm = P/100;
+  ctx.fillStyle='#dddddd'; ctx.font='14px sans-serif';
+  ctx.fillText('P (relative): '+P.toFixed(1), 600, 50);
+  ctx.fillText('V: '+V, 600, 70);
+  ctx.fillText('T: '+T+' K', 600, 90);
+  ctx.fillText('n: '+N, 600, 110);
+  // gauge
+  ctx.strokeStyle='#dddddd'; ctx.strokeRect(600, 130, 150, 25);
+  ctx.fillStyle='#888888'; ctx.fillRect(601, 131, Math.min(148, Pnorm*30), 23);
+  document.getElementById('rP').textContent = P.toFixed(1);
+  if(performance.now() - lastHitTime > 1000){
+    document.getElementById('rH').textContent = hits;
+    hits = 0;
+    lastHitTime = performance.now();
+  }
+}
+
+document.getElementById('v').oninput=e=>{V=+e.target.value; document.getElementById('vV').textContent=V;};
+document.getElementById('t').oninput=e=>{T=+e.target.value; document.getElementById('vT').textContent=T+' K';};
+document.getElementById('n').oninput=e=>{N=+e.target.value; document.getElementById('vN').textContent=N;};
+init(); step();
+</script>
+</body></html>

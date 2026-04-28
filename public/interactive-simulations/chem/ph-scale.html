@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><title>pH Scale</title><link rel="stylesheet" href="../styles.css"></head>
+<body>
+<header><a href="../index.html"><h1>pH Scale Explorer</h1></a><p>Measure acidity of common substances.</p></header>
+<main>
+<a class="back-link" href="../index.html">&larr; All simulations</a>
+<div class="sim-container">
+  <div>
+    <div class="canvas-wrap"><canvas id="cv" width="800" height="500"></canvas></div>
+    <div class="info-box">
+      <h3>The Chemistry</h3>
+      <p>pH measures hydrogen ion concentration. Lower pH = more acidic, higher pH = more basic. Pure water is neutral (pH 7).</p>
+      <div class="formula">pH = −log₁₀[H⁺]<br>pH + pOH = 14</div>
+      <p>Each pH unit is a 10× change in [H⁺].</p>
+    </div>
+  </div>
+  <div class="controls">
+    <h3>Controls</h3>
+    <div class="control-row"><label>Substance: <select id="sub">
+      <option data-ph="0">Battery acid (0)</option>
+      <option data-ph="1">Stomach acid (1.5)</option>
+      <option data-ph="2.4">Lemon juice (2.4)</option>
+      <option data-ph="3">Vinegar (3)</option>
+      <option data-ph="3.5">Soda (3.5)</option>
+      <option data-ph="4">Tomato juice (4)</option>
+      <option data-ph="5.5">Coffee (5.5)</option>
+      <option data-ph="6.5">Milk (6.5)</option>
+      <option data-ph="7" selected>Pure water (7)</option>
+      <option data-ph="7.4">Blood (7.4)</option>
+      <option data-ph="8">Sea water (8)</option>
+      <option data-ph="9">Baking soda (9)</option>
+      <option data-ph="10">Toothpaste (10)</option>
+      <option data-ph="11">Ammonia (11)</option>
+      <option data-ph="12.5">Bleach (12.5)</option>
+      <option data-ph="14">Drain cleaner (14)</option>
+    </select></label></div>
+    <div class="control-row"><label>Or set pH manually <span class="val" id="vP">7.0</span></label><input type="range" id="ph" min="0" max="140" value="70"></div>
+    <div class="readouts">
+      <div>pH: <span id="rP">7.0</span></div>
+      <div>pOH: <span id="rO">7.0</span></div>
+      <div>[H⁺]: <span id="rH">10⁻⁷</span></div>
+      <div>Type: <span id="rT">Neutral</span></div>
+    </div>
+  </div>
+</div>
+</main>
+<script>
+const cv=document.getElementById('cv'), ctx=cv.getContext('2d');
+let pH = 7;
+
+function colorFor(p){
+  // universal indicator
+  if(p<3) return '#888888';
+  if(p<5) return '#aaaaaa';
+  if(p<6.5) return '#cccccc';
+  if(p<7.5) return '#888888';
+  if(p<9) return '#999999';
+  if(p<11) return '#bbbbbb';
+  return '#888';
+}
+
+function draw(){
+  ctx.clearRect(0,0,cv.width,cv.height);
+  ctx.fillStyle='#0a0a0a'; ctx.fillRect(0,0,cv.width,cv.height);
+  // pH scale gradient
+  const gradX = 80, gradY = 60, gradW = 640, gradH = 50;
+  for(let i=0;i<gradW;i++){
+    const p = i/gradW*14;
+    ctx.fillStyle = colorFor(p);
+    ctx.fillRect(gradX+i, gradY, 1, gradH);
+  }
+  // tick marks
+  ctx.fillStyle='#dddddd'; ctx.font='12px sans-serif'; ctx.textAlign='center';
+  for(let i=0;i<=14;i++){
+    const x = gradX + i/14*gradW;
+    ctx.fillRect(x, gradY+gradH, 1, 5);
+    ctx.fillText(i, x, gradY+gradH+18);
+  }
+  // labels
+  ctx.font='14px sans-serif';
+  ctx.fillText('Acidic', gradX+50, gradY-10);
+  ctx.fillText('Neutral', gradX+gradW/2, gradY-10);
+  ctx.fillText('Basic', gradX+gradW-50, gradY-10);
+  // marker
+  const mX = gradX + pH/14*gradW;
+  ctx.fillStyle='#dddddd';
+  ctx.beginPath(); ctx.moveTo(mX, gradY-5); ctx.lineTo(mX-7, gradY-15); ctx.lineTo(mX+7, gradY-15); ctx.closePath(); ctx.fill();
+  // beaker
+  ctx.strokeStyle='#888888'; ctx.lineWidth=3;
+  ctx.beginPath();
+  ctx.moveTo(280, 200); ctx.lineTo(280, 440); ctx.lineTo(520, 440); ctx.lineTo(520, 200);
+  ctx.stroke();
+  // liquid
+  ctx.fillStyle = colorFor(pH);
+  ctx.fillRect(283, 230, 234, 207);
+  // pH meter
+  ctx.fillStyle='#888888'; ctx.fillRect(550, 200, 90, 200);
+  ctx.fillStyle='#ffffff'; ctx.font='bold 36px monospace'; ctx.textAlign='center';
+  ctx.fillText('pH', 595, 240);
+  ctx.fillText(pH.toFixed(1), 595, 290);
+  // probe
+  ctx.fillStyle='#888'; ctx.fillRect(490, 200, 6, 100);
+  ctx.fillStyle='#dddddd'; ctx.fillRect(488, 295, 10, 30);
+  // info
+  ctx.textAlign='left';
+  document.getElementById('rP').textContent = pH.toFixed(2);
+  document.getElementById('rO').textContent = (14-pH).toFixed(2);
+  document.getElementById('rH').textContent = '10^'+(-pH).toFixed(1)+' M';
+  document.getElementById('rT').textContent = pH<6.9 ? 'Acidic' : pH>7.1 ? 'Basic' : 'Neutral';
+}
+
+document.getElementById('sub').onchange=e=>{
+  const opt = e.target.options[e.target.selectedIndex];
+  pH = parseFloat(opt.dataset.ph);
+  document.getElementById('ph').value = pH*10;
+  document.getElementById('vP').textContent = pH.toFixed(1);
+  draw();
+};
+document.getElementById('ph').oninput=e=>{
+  pH = +e.target.value/10;
+  document.getElementById('vP').textContent = pH.toFixed(1);
+  draw();
+};
+draw();
+</script>
+</body></html>

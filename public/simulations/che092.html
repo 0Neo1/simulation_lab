@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Lime Water Test for CO₂</title>
+<link rel="stylesheet" href="/simulations/_shared.css" />
+</head>
+<body>
+<div class="app">
+  <header>
+    <h1>CaCO₃ + HCl → CO₂ — Lime Water Test</h1>
+    <span class="pill">Class 9 · Chemistry</span>
+  </header>
+  <div class="grid">
+    <div class="card">
+      <h2>Apparatus</h2>
+      <div class="viz"><canvas id="cv" width="780" height="380"></canvas></div>
+      <p class="note">Add HCl to CaCO₃; CO₂ travels through the delivery tube and turns lime water milky.</p>
+    </div>
+    <div class="card controls">
+      <h2>Controls</h2>
+      <button class="btn" id="add">Add dilute HCl</button>
+      <button class="btn warn" id="stop">Stop</button>
+      <button class="btn secondary" id="reset">Reset</button>
+      <div class="values" style="grid-template-columns:1fr">
+        <div class="value"><div class="label">Reaction</div><div class="v" style="font-size:13px">CaCO₃ + 2HCl → CaCl₂ + H₂O + CO₂↑</div></div>
+        <div class="value"><div class="label">Lime water</div><div class="v" id="lw" style="font-size:13px">Clear</div></div>
+        <div class="value"><div class="label">Inference</div><div class="v" id="inf" style="font-size:13px">—</div></div>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+const cv = document.getElementById('cv'); const ctx = cv.getContext('2d');
+let active = false, milkiness = 0;
+function draw() {
+  const W = cv.width, H = cv.height;
+  ctx.fillStyle = '#0b1220'; ctx.fillRect(0, 0, W, H);
+  // left flask (CaCO3 + HCl)
+  ctx.strokeStyle = '#cbd5e1'; ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(120, 320); ctx.lineTo(120, 200); ctx.lineTo(160, 160); ctx.lineTo(160, 130);
+  ctx.lineTo(180, 130); ctx.lineTo(180, 160); ctx.lineTo(220, 200); ctx.lineTo(220, 320);
+  ctx.lineTo(120, 320);
+  ctx.stroke();
+  // liquid + chips
+  ctx.fillStyle = active ? 'rgba(251,191,36,0.5)' : 'rgba(254,243,199,0.4)';
+  ctx.fillRect(122, 240, 96, 78);
+  if (active) for (let i = 0; i < 25; i++) {
+    ctx.fillStyle = 'rgba(255,255,255,0.6)';
+    ctx.beginPath(); ctx.arc(125 + Math.random() * 90, 260 + Math.random() * 50 - milkiness * 5, 2 + Math.random() * 2, 0, Math.PI * 2); ctx.fill();
+  }
+  // chips
+  ctx.fillStyle = '#cbd5e1';
+  for (let i = 0; i < 5; i++) ctx.fillRect(132 + i * 16, 308, 8, 6);
+  // delivery tube
+  ctx.strokeStyle = '#94a3b8'; ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.moveTo(170, 130); ctx.lineTo(170, 100); ctx.lineTo(560, 100); ctx.lineTo(560, 230);
+  ctx.stroke();
+  // right test tube (lime water)
+  ctx.beginPath();
+  ctx.moveTo(540, 220); ctx.lineTo(540, 320); ctx.quadraticCurveTo(560, 350, 580, 320); ctx.lineTo(580, 220);
+  ctx.stroke();
+  // lime water - clear initially, milky after
+  const m = milkiness;
+  const r = 240 - m * 90, g = 248 - m * 40, b = 255 - m * 40;
+  ctx.fillStyle = `rgba(${r},${g},${b},${0.4 + m * 0.4})`;
+  ctx.beginPath();
+  ctx.moveTo(542, 240); ctx.lineTo(542, 320); ctx.quadraticCurveTo(560, 348, 578, 320); ctx.lineTo(578, 240);
+  ctx.closePath(); ctx.fill();
+  ctx.fillStyle = '#cbd5e1'; ctx.font = '12px Arial';
+  ctx.fillText('CaCO₃ + HCl', 130, 350);
+  ctx.fillText('Lime water Ca(OH)₂', 530, 218);
+  // bubbles in tube
+  if (active) {
+    for (let i = 0; i < 6; i++) {
+      const t = (Date.now() / 60 + i * 60) % 380;
+      let xx, yy;
+      if (t < 30) { xx = 170; yy = 130 - t; }
+      else if (t < 30 + 390) { xx = 170 + (t - 30); yy = 100; }
+      else { xx = 560; yy = 100 + (t - 420); }
+      if (xx <= 560) {
+        ctx.fillStyle = 'rgba(255,255,255,0.6)';
+        ctx.beginPath(); ctx.arc(xx, yy, 2.5, 0, Math.PI * 2); ctx.fill();
+      }
+    }
+    milkiness = Math.min(1, milkiness + 0.005);
+  }
+  if (milkiness > 0.4) {
+    document.getElementById('lw').textContent = 'Turns milky';
+    document.getElementById('inf').textContent = 'Gas evolved is CO₂';
+  } else if (active) {
+    document.getElementById('lw').textContent = 'Slight cloudiness';
+  }
+  requestAnimationFrame(draw);
+}
+document.getElementById('add').addEventListener('click', () => active = true);
+document.getElementById('stop').addEventListener('click', () => active = false);
+document.getElementById('reset').addEventListener('click', () => { active = false; milkiness = 0;
+  document.getElementById('lw').textContent = 'Clear';
+  document.getElementById('inf').textContent = '—'; });
+draw();
+</script>
+</body>
+</html>

@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Potentiometer — Compare EMFs</title>
+<link rel="stylesheet" href="/simulations/_shared.css" />
+</head>
+<body>
+<div class="app">
+  <header>
+    <h1>Potentiometer — Compare EMFs of Two Cells</h1>
+    <span class="pill">Class 12 · Physics</span>
+  </header>
+  <div class="grid">
+    <div class="card">
+      <h2>Visualization</h2>
+      <div class="viz"><canvas id="cv" width="780" height="380"></canvas></div>
+      <p class="note">Switch between Cell 1 and Cell 2 and slide the jockey to find the null point. The ratio of balancing lengths equals the EMF ratio.</p>
+    </div>
+    <div class="card controls">
+      <h2>Controls</h2>
+      <label>Active Cell
+        <select id="cell">
+          <option value="1" selected>Cell 1 (E₁ = 1.50 V)</option>
+          <option value="2">Cell 2 (E₂ = 1.08 V)</option>
+        </select>
+      </label>
+      <label>Jockey Position (cm) — <span id="lv">200</span></label>
+      <input id="l" type="range" min="10" max="1000" step="2" value="200" />
+      <button class="btn" id="auto">Auto Find Null</button>
+      <button class="btn secondary" id="reset">Reset</button>
+      <div class="values">
+        <div class="value"><div class="label">Galvanometer</div><div class="v" id="gal">+0.0</div></div>
+        <div class="value"><div class="label">l₁ (Cell 1)</div><div class="v" id="l1">— cm</div></div>
+        <div class="value"><div class="label">l₂ (Cell 2)</div><div class="v" id="l2">— cm</div></div>
+        <div class="value"><div class="label">E₁ / E₂</div><div class="v" id="ratio">—</div></div>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+const cv = document.getElementById('cv');
+const ctx = cv.getContext('2d');
+const cellSel = document.getElementById('cell');
+const lInput = document.getElementById('l');
+const lv = document.getElementById('lv');
+const cellEMF = { 1: 1.50, 2: 1.08 };
+const totalK = 1000;
+const driverV = 2.0;
+let l1 = null, l2 = null;
+function update() {
+  const cell = cellSel.value;
+  const lp = parseFloat(lInput.value);
+  lv.textContent = lp.toFixed(0);
+  const driverPotPerCm = driverV / totalK;
+  const potAtJockey = lp * driverPotPerCm;
+  const E = cellEMF[cell];
+  const balanceLen = E / driverPotPerCm;
+  const diff = potAtJockey - E;
+  const galDeflect = Math.max(-30, Math.min(30, diff * 60));
+  const galEl = document.getElementById('gal');
+  galEl.textContent = (galDeflect >= 0 ? '+' : '') + galDeflect.toFixed(1);
+  galEl.style.color = Math.abs(galDeflect) < 1 ? '#34d399' : (galDeflect > 0 ? '#f59e0b' : '#60a5fa');
+  if (Math.abs(galDeflect) < 1.0) {
+    if (cell === '1') l1 = balanceLen; else l2 = balanceLen;
+  }
+  document.getElementById('l1').textContent = l1 ? l1.toFixed(1) + ' cm' : '— cm';
+  document.getElementById('l2').textContent = l2 ? l2.toFixed(1) + ' cm' : '— cm';
+  document.getElementById('ratio').textContent = (l1 && l2) ? (l1 / l2).toFixed(3) : '—';
+  draw(lp, galDeflect, cell);
+}
+function draw(lp, gal, cell) {
+  const W = cv.width, H = cv.height;
+  ctx.fillStyle = '#0b1220'; ctx.fillRect(0, 0, W, H);
+  // potentiometer wire (10 segments)
+  ctx.strokeStyle = '#fbbf24'; ctx.lineWidth = 4;
+  const yStart = 80;
+  for (let row = 0; row < 5; row++) {
+    const y = yStart + row * 40;
+    ctx.beginPath();
+    ctx.moveTo(60, y);
+    ctx.lineTo(W - 60, y);
+    ctx.stroke();
+    if (row < 4) {
+      const isLeft = row % 2 === 0;
+      ctx.beginPath();
+      if (isLeft) { ctx.moveTo(W - 60, y); ctx.lineTo(W - 60, y + 40); }
+      else { ctx.moveTo(60, y); ctx.lineTo(60, y + 40); }
+      ctx.stroke();
+    }
+  }
+  // jockey position marker on first row only (visualize fraction of total wire)
+  const totalLen = 1000; // simulate 10 m wire
+  const fraction = lp / totalLen;
+  const xJ = 60 + fraction * (W - 120);
+  ctx.fillStyle = '#06b6d4';
+  ctx.beginPath(); ctx.moveTo(xJ, yStart - 10); ctx.lineTo(xJ - 6, yStart - 25); ctx.lineTo(xJ + 6, yStart - 25); ctx.fill();
+  ctx.fillStyle = '#cbd5e1'; ctx.font = '10px Arial';
+  ctx.fillText(lp.toFixed(0) + ' cm', xJ - 14, yStart - 30);
+  // galvanometer
+  ctx.strokeStyle = '#94a3b8'; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.arc(W / 2, 320, 36, 0, Math.PI * 2); ctx.stroke();
+  ctx.fillStyle = '#1e293b'; ctx.beginPath(); ctx.arc(W / 2, 320, 34, 0, Math.PI * 2); ctx.fill();
+  const ang = -Math.PI / 2 + (gal / 30) * (Math.PI / 3);
+  ctx.strokeStyle = Math.abs(gal) < 1 ? '#34d399' : '#f87171';
+  ctx.lineWidth = 3;
+  ctx.beginPath(); ctx.moveTo(W / 2, 320); ctx.lineTo(W / 2 + Math.cos(ang) * 28, 320 + Math.sin(ang) * 28); ctx.stroke();
+  ctx.fillStyle = '#cbd5e1'; ctx.font = '11px Arial';
+  ctx.fillText('Galvanometer', W / 2 - 35, 370);
+  // cell box
+  ctx.fillStyle = cell === '1' ? '#10b981' : '#a855f7';
+  ctx.fillRect(80, 290, 80, 50);
+  ctx.fillStyle = '#fff'; ctx.font = '12px Arial';
+  ctx.fillText('Cell ' + cell, 100, 320);
+  // driver cell
+  ctx.fillStyle = '#fbbf24';
+  ctx.fillRect(W - 160, 290, 80, 50);
+  ctx.fillStyle = '#0b1220'; ctx.fillText('Driver', W - 145, 320);
+}
+['change', 'input'].forEach(ev => {
+  cellSel.addEventListener(ev, update);
+  lInput.addEventListener(ev, update);
+});
+document.getElementById('auto').addEventListener('click', () => {
+  const E = cellEMF[cellSel.value];
+  const target = E / (driverV / totalK);
+  let cur = parseFloat(lInput.value);
+  const step = () => {
+    cur += (target - cur) * 0.18;
+    lInput.value = cur.toFixed(1);
+    update();
+    if (Math.abs(target - cur) > 0.5) requestAnimationFrame(step);
+  };
+  step();
+});
+document.getElementById('reset').addEventListener('click', () => {
+  cellSel.value = '1'; lInput.value = '200'; l1 = null; l2 = null; update();
+});
+update();
+</script>
+</body>
+</html>

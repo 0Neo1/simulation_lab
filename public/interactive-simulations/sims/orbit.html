@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><title>Orbital Motion</title><link rel="stylesheet" href="../styles.css"></head>
+<body>
+<header><a href="../index.html"><h1>Orbital Motion</h1></a><p>Set initial speed; watch a planet orbit.</p></header>
+<main>
+<a class="back-link" href="../index.html">&larr; All simulations</a>
+<div class="sim-container">
+  <div>
+    <div class="canvas-wrap"><canvas id="cv" width="800" height="600"></canvas></div>
+    <div class="info-box">
+      <h3>The Physics</h3>
+      <p>Newton's law of gravitation creates an inverse-square attractive force. Orbits can be circular, elliptical, parabolic, or hyperbolic depending on energy.</p>
+      <div class="formula">F = G M m / r²</div>
+      <p>Circular orbit speed at radius r: <em>v = √(GM/r)</em>. Escape speed: <em>v_esc = √(2GM/r)</em>.</p>
+    </div>
+  </div>
+  <div class="controls">
+    <h3>Controls</h3>
+    <div class="control-row"><label>Initial speed (×v_circ) <span class="val" id="vS">1.00</span></label><input type="range" id="speed" min="20" max="180" value="100"></div>
+    <div class="control-row"><label>Initial radius <span class="val" id="vR">200</span></label><input type="range" id="rad" min="100" max="280" value="200"></div>
+    <div class="control-row"><label>Sun mass <span class="val" id="vM">1.0</span></label><input type="range" id="M" min="5" max="30" value="10"></div>
+    <div class="btn-row"><button id="run">Launch</button><button class="secondary" id="reset">Reset</button><button class="secondary" id="trail">Clear trail</button></div>
+    <div class="readouts">
+      <div>r: <span id="rR">0</span></div>
+      <div>v: <span id="rV">0</span></div>
+      <div>KE: <span id="rK">0</span></div>
+      <div>PE: <span id="rP">0</span></div>
+    </div>
+  </div>
+</div>
+</main>
+<script>
+const cv = document.getElementById('cv'), ctx = cv.getContext('2d');
+const cx = cv.width/2, cy = cv.height/2;
+let G = 4000, M = 1.0, m = 1;
+let rad = 200, vMul = 1.0;
+let p = {x: rad, y: 0, vx: 0, vy: Math.sqrt(G*M/rad)};
+let running = false, trail = [];
+
+function reset(){
+  rad = +document.getElementById('rad').value;
+  vMul = +document.getElementById('speed').value/100;
+  M = +document.getElementById('M').value/10;
+  const v = vMul*Math.sqrt(G*M/rad);
+  p = {x: rad, y: 0, vx: 0, vy: v};
+  trail = [];
+}
+
+function step(){
+  if(!running) return;
+  for(let k=0;k<3;k++){
+    const r2 = p.x*p.x + p.y*p.y, r = Math.sqrt(r2);
+    if(r < 30){ running=false; return;}
+    if(r > 4000){ running=false; return;}
+    const a = G*M/r2;
+    const ax = -a*p.x/r, ay = -a*p.y/r;
+    const dt = 0.05;
+    p.vx += ax*dt; p.vy += ay*dt;
+    p.x += p.vx*dt; p.y += p.vy*dt;
+  }
+  trail.push({x:p.x, y:p.y});
+  if(trail.length > 800) trail.shift();
+  draw();
+  const r = Math.hypot(p.x,p.y), v = Math.hypot(p.vx,p.vy);
+  document.getElementById('rR').textContent = r.toFixed(0);
+  document.getElementById('rV').textContent = v.toFixed(2);
+  document.getElementById('rK').textContent = (0.5*m*v*v).toFixed(1);
+  document.getElementById('rP').textContent = (-G*M*m/r).toFixed(1);
+  requestAnimationFrame(step);
+}
+
+function draw(){
+  ctx.fillStyle = '#000000'; ctx.fillRect(0,0,cv.width,cv.height);
+  // stars
+  ctx.fillStyle = '#fff';
+  for(let i=0;i<60;i++){
+    const sx = (i*97)%cv.width, sy = (i*61)%cv.height;
+    ctx.fillRect(sx, sy, 1, 1);
+  }
+  // trail
+  ctx.strokeStyle = 'rgba(220,220,220,0.6)'; ctx.lineWidth = 2;
+  ctx.beginPath();
+  trail.forEach((t,i)=>{ if(i===0) ctx.moveTo(cx+t.x, cy+t.y); else ctx.lineTo(cx+t.x, cy+t.y);});
+  ctx.stroke();
+  // sun
+  const grd = ctx.createRadialGradient(cx,cy,5,cx,cy,30);
+  grd.addColorStop(0,'#eeeeee'); grd.addColorStop(1,'#bbbbbb');
+  ctx.fillStyle = grd; ctx.beginPath(); ctx.arc(cx,cy,25,0,2*Math.PI); ctx.fill();
+  // planet
+  ctx.fillStyle = '#bbbbbb'; ctx.beginPath(); ctx.arc(cx+p.x, cy+p.y, 8, 0, 2*Math.PI); ctx.fill();
+  ctx.strokeStyle = '#fff'; ctx.lineWidth = 1; ctx.stroke();
+  // velocity vector
+  ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(cx+p.x, cy+p.y); ctx.lineTo(cx+p.x+p.vx*5, cy+p.y+p.vy*5); ctx.stroke();
+}
+
+['speed','rad','M'].forEach(id=>document.getElementById(id).oninput = ()=>{
+  document.getElementById('vS').textContent = (+document.getElementById('speed').value/100).toFixed(2);
+  document.getElementById('vR').textContent = document.getElementById('rad').value;
+  document.getElementById('vM').textContent = (+document.getElementById('M').value/10).toFixed(1);
+  if(!running){ reset(); draw(); }
+});
+document.getElementById('run').onclick = ()=>{ if(!running){running=true; step();}};
+document.getElementById('reset').onclick = ()=>{ running=false; reset(); draw(); };
+document.getElementById('trail').onclick = ()=>{ trail = []; draw(); };
+reset(); draw();
+</script>
+</body></html>

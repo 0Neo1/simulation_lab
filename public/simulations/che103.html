@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>NaOH + Salt Solution</title>
+<link rel="stylesheet" href="/simulations/_shared.css" />
+</head>
+<body>
+<div class="app">
+  <header>
+    <h1>NaOH + Salt Solutions — Identify Metal Ions</h1>
+    <span class="pill">Class 10 · Chemistry</span>
+  </header>
+  <div class="grid">
+    <div class="card">
+      <h2>Test Tubes</h2>
+      <div class="viz"><canvas id="cv" width="780" height="380"></canvas></div>
+      <p class="note">Pick a salt solution and add NaOH dropwise. Coloured precipitate identifies the metal ion.</p>
+    </div>
+    <div class="card controls">
+      <h2>Controls</h2>
+      <label>Salt solution
+        <select id="salt">
+          <option value="FeSO4">FeSO₄</option>
+          <option value="CuSO4">CuSO₄</option>
+          <option value="FeCl3">FeCl₃</option>
+          <option value="ZnSO4">ZnSO₄</option>
+        </select>
+      </label>
+      <button class="btn" id="add">Add NaOH</button>
+      <button class="btn warn" id="empty">Empty</button>
+      <button class="btn secondary" id="reset">Reset</button>
+      <div class="values" style="grid-template-columns:1fr">
+        <div class="value"><div class="label">Salt</div><div class="v" id="s">—</div></div>
+        <div class="value"><div class="label">Observation</div><div class="v" id="obs" style="font-size:13px">—</div></div>
+        <div class="value"><div class="label">Inference</div><div class="v" id="inf" style="font-size:13px">—</div></div>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+const cv = document.getElementById('cv'); const ctx = cv.getContext('2d');
+const salt = document.getElementById('salt');
+let added = false;
+const data = {
+  FeSO4: { obs: 'Dirty green precipitate', inf: 'Fe²⁺ ion (Fe(OH)₂)', col: [134, 239, 172], pptCol: [22, 101, 52] },
+  CuSO4: { obs: 'Blue gelatinous precipitate', inf: 'Cu²⁺ ion (Cu(OH)₂)', col: [56, 189, 248], pptCol: [37, 99, 235] },
+  FeCl3: { obs: 'Reddish-brown precipitate', inf: 'Fe³⁺ ion (Fe(OH)₃)', col: [253, 186, 116], pptCol: [180, 83, 9] },
+  ZnSO4: { obs: 'White precipitate (soluble in excess)', inf: 'Zn²⁺ ion (Zn(OH)₂)', col: [241, 245, 249], pptCol: [226, 232, 240] },
+};
+function update() {
+  document.getElementById('s').textContent = salt.value;
+  if (added) {
+    document.getElementById('obs').textContent = data[salt.value].obs;
+    document.getElementById('inf').textContent = data[salt.value].inf;
+  }
+}
+function draw() {
+  const W = cv.width, H = cv.height;
+  ctx.fillStyle = '#0b1220'; ctx.fillRect(0, 0, W, H);
+  // rack
+  ctx.fillStyle = '#475569'; ctx.fillRect(140, 290, 500, 50);
+  // 4 test tubes
+  const labels = ['FeSO₄', 'CuSO₄', 'FeCl₃', 'ZnSO₄'];
+  const keys = ['FeSO4', 'CuSO4', 'FeCl3', 'ZnSO4'];
+  for (let i = 0; i < 4; i++) {
+    const x = 200 + i * 130;
+    ctx.strokeStyle = '#cbd5e1'; ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(x - 24, 70);
+    ctx.lineTo(x - 24, 280);
+    ctx.quadraticCurveTo(x, 320, x + 24, 280);
+    ctx.lineTo(x + 24, 70);
+    ctx.stroke();
+    // base solution colour
+    const base = data[keys[i]].col;
+    ctx.fillStyle = `rgba(${base.join(',')},0.45)`;
+    ctx.beginPath();
+    ctx.moveTo(x - 22, 150);
+    ctx.lineTo(x - 22, 280);
+    ctx.quadraticCurveTo(x, 318, x + 22, 280);
+    ctx.lineTo(x + 22, 150);
+    ctx.closePath(); ctx.fill();
+    // precipitate if active and added
+    if (added && salt.value === keys[i]) {
+      const ppt = data[keys[i]].pptCol;
+      ctx.fillStyle = `rgba(${ppt.join(',')},0.85)`;
+      for (let j = 0; j < 60; j++) {
+        ctx.beginPath();
+        const px = x - 18 + Math.random() * 36;
+        const py = 200 + Math.random() * 100;
+        ctx.arc(px, py, 1.6 + Math.random() * 1.6, 0, Math.PI * 2); ctx.fill();
+      }
+    }
+    // active highlight
+    if (salt.value === keys[i]) {
+      ctx.strokeStyle = '#06b6d4'; ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(x - 28, 66); ctx.lineTo(x - 28, 282);
+      ctx.quadraticCurveTo(x, 326, x + 28, 282); ctx.lineTo(x + 28, 66);
+      ctx.stroke();
+    }
+    ctx.fillStyle = '#cbd5e1'; ctx.font = '12px Arial';
+    ctx.textAlign = 'center'; ctx.fillText(labels[i], x, 60); ctx.textAlign = 'left';
+  }
+  // dropper
+  if (added) {
+    const idx = keys.indexOf(salt.value);
+    const x = 200 + idx * 130;
+    ctx.fillStyle = '#475569'; ctx.fillRect(x - 4, 30, 8, 30);
+    ctx.fillStyle = '#06b6d4'; ctx.beginPath(); ctx.arc(x, 65, 4, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#cbd5e1'; ctx.font = '11px Arial'; ctx.fillText('NaOH', x - 14, 28);
+  }
+  setTimeout(draw, 80);
+}
+salt.addEventListener('change', () => { update(); });
+document.getElementById('add').addEventListener('click', () => { added = true; update(); });
+document.getElementById('empty').addEventListener('click', () => { added = false;
+  ['obs', 'inf'].forEach(id => document.getElementById(id).textContent = '—'); });
+document.getElementById('reset').addEventListener('click', () => { added = false; salt.value = 'FeSO4';
+  ['obs', 'inf'].forEach(id => document.getElementById(id).textContent = '—'); update(); });
+update(); draw();
+</script>
+</body>
+</html>

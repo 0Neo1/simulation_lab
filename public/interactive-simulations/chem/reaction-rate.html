@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><title>Reaction Rate</title><link rel="stylesheet" href="../styles.css"></head>
+<body>
+<header><a href="../index.html"><h1>Collision Theory &amp; Reaction Rate</h1></a><p>Particles must collide with enough energy to react.</p></header>
+<main>
+<a class="back-link" href="../index.html">&larr; All simulations</a>
+<div class="sim-container">
+  <div>
+    <div class="canvas-wrap"><canvas id="cv" width="800" height="500"></canvas></div>
+    <div class="info-box">
+      <h3>The Chemistry</h3>
+      <p>Reactions occur only when particles collide with sufficient energy (activation energy E_a) and proper orientation. Higher temperature and concentration speed up reactions.</p>
+      <div class="formula">k = A · exp(−E_a / RT)</div>
+      <p>The Arrhenius equation: rate constant rises exponentially with temperature.</p>
+    </div>
+  </div>
+  <div class="controls">
+    <h3>Controls</h3>
+    <div class="control-row"><label>Temperature <span class="val" id="vT">300 K</span></label><input type="range" id="t" min="200" max="900" value="300"></div>
+    <div class="control-row"><label>Concentration A <span class="val" id="vA">20</span></label><input type="range" id="a" min="5" max="50" value="20"></div>
+    <div class="control-row"><label>Concentration B <span class="val" id="vB">20</span></label><input type="range" id="b" min="5" max="50" value="20"></div>
+    <div class="control-row"><label>Activation E_a <span class="val" id="vE">500</span></label><input type="range" id="e" min="100" max="2000" value="500"></div>
+    <div class="btn-row"><button id="reset">Reset reaction</button></div>
+    <div class="readouts">
+      <div>Reactions: <span id="rR">0</span></div>
+      <div>Rate (/s): <span id="rRt">0</span></div>
+      <div>A left: <span id="rAL">0</span></div>
+      <div>B left: <span id="rBL">0</span></div>
+    </div>
+  </div>
+</div>
+</main>
+<script>
+const cv=document.getElementById('cv'), ctx=cv.getContext('2d');
+let T=300, NA=20, NB=20, Ea=500;
+let particles = [], products = [];
+let reactions = 0, lastReactions = 0, lastTime = performance.now();
+
+function init(){
+  particles = [];
+  products = [];
+  reactions = 0;
+  for(let i=0;i<NA;i++) particles.push(makeP('A'));
+  for(let i=0;i<NB;i++) particles.push(makeP('B'));
+}
+
+function makeP(type){
+  const speed = Math.sqrt(T)/8;
+  const ang = Math.random()*2*Math.PI;
+  return {x:50+Math.random()*700, y:50+Math.random()*400, vx:speed*Math.cos(ang), vy:speed*Math.sin(ang), type};
+}
+
+function step(){
+  // adjust counts
+  particles.forEach(p=>{
+    const targetSpeed = Math.sqrt(T)/8;
+    const cs = Math.hypot(p.vx,p.vy);
+    if(cs>0){p.vx=p.vx/cs*targetSpeed; p.vy=p.vy/cs*targetSpeed;}
+    p.x+=p.vx; p.y+=p.vy;
+    if(p.x<5||p.x>cv.width-5) p.vx*=-1;
+    if(p.y<5||p.y>cv.height-5) p.vy*=-1;
+  });
+  // collisions
+  for(let i=0;i<particles.length;i++){
+    for(let j=i+1;j<particles.length;j++){
+      const a=particles[i], b=particles[j];
+      if(a.type !== b.type){
+        const d=Math.hypot(a.x-b.x, a.y-b.y);
+        if(d<14){
+          // collision energy proportional to relative velocity squared
+          const vrel = Math.hypot(a.vx-b.vx, a.vy-b.vy);
+          const Ek = 0.5*vrel*vrel*1000; // arbitrary units
+          if(Ek > Ea){
+            // react: form product
+            products.push({x:(a.x+b.x)/2, y:(a.y+b.y)/2, vx:(a.vx+b.vx)/2, vy:(a.vy+b.vy)/2, life:60});
+            particles.splice(Math.max(i,j),1);
+            particles.splice(Math.min(i,j),1);
+            reactions++;
+            i--;
+            break;
+          }
+        }
+      }
+    }
+  }
+  // products
+  products.forEach(p=>{p.x+=p.vx; p.y+=p.vy; p.life--;});
+  products = products.filter(p=>p.life>0);
+  draw();
+  if(performance.now()-lastTime > 1000){
+    document.getElementById('rRt').textContent = (reactions - lastReactions);
+    lastReactions = reactions;
+    lastTime = performance.now();
+  }
+  document.getElementById('rR').textContent = reactions;
+  document.getElementById('rAL').textContent = particles.filter(p=>p.type==='A').length;
+  document.getElementById('rBL').textContent = particles.filter(p=>p.type==='B').length;
+  requestAnimationFrame(step);
+}
+
+function draw(){
+  ctx.fillStyle='#000000'; ctx.fillRect(0,0,cv.width,cv.height);
+  ctx.strokeStyle='#aaaaaa'; ctx.strokeRect(2,2,cv.width-4,cv.height-4);
+  particles.forEach(p=>{
+    ctx.fillStyle = p.type==='A' ? '#888888' : '#ffffff';
+    ctx.beginPath(); ctx.arc(p.x,p.y,7,0,2*Math.PI); ctx.fill();
+    ctx.fillStyle='#fff'; ctx.font='10px sans-serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillText(p.type, p.x, p.y);
+  });
+  products.forEach(p=>{
+    ctx.fillStyle=`rgba(255,200,0,${p.life/60})`;
+    ctx.beginPath(); ctx.arc(p.x,p.y,10,0,2*Math.PI); ctx.fill();
+    ctx.fillStyle='#dddddd'; ctx.font='9px sans-serif'; ctx.fillText('AB', p.x, p.y);
+  });
+  ctx.textAlign='left'; ctx.textBaseline='alphabetic';
+}
+
+document.getElementById('t').oninput=e=>{T=+e.target.value; document.getElementById('vT').textContent=T+' K';};
+document.getElementById('a').oninput=e=>{NA=+e.target.value; document.getElementById('vA').textContent=NA; init();};
+document.getElementById('b').oninput=e=>{NB=+e.target.value; document.getElementById('vB').textContent=NB; init();};
+document.getElementById('e').oninput=e=>{Ea=+e.target.value; document.getElementById('vE').textContent=Ea;};
+document.getElementById('reset').onclick=init;
+init(); step();
+</script>
+</body></html>

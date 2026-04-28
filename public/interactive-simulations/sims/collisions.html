@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><title>1D Collisions</title><link rel="stylesheet" href="../styles.css"></head>
+<body>
+<header><a href="../index.html"><h1>1D Collisions</h1></a><p>Elastic, inelastic, and perfectly inelastic.</p></header>
+<main>
+<a class="back-link" href="../index.html">&larr; All simulations</a>
+<div class="sim-container">
+  <div>
+    <div class="canvas-wrap"><canvas id="cv" width="800" height="400"></canvas></div>
+    <div class="info-box">
+      <h3>The Physics</h3>
+      <p>Momentum is conserved in all collisions. Kinetic energy is conserved only in elastic collisions.</p>
+      <div class="formula">m₁v₁ + m₂v₂ = m₁v₁' + m₂v₂'<br>e = (v₂' − v₁') / (v₁ − v₂)</div>
+      <p>Coefficient of restitution: <em>e=1</em> (elastic), <em>e=0</em> (perfectly inelastic).</p>
+    </div>
+  </div>
+  <div class="controls">
+    <h3>Controls</h3>
+    <div class="control-row"><label>Mass 1 <span class="val" id="vM1">2 kg</span></label><input type="range" id="m1" min="1" max="10" value="2"></div>
+    <div class="control-row"><label>Mass 2 <span class="val" id="vM2">3 kg</span></label><input type="range" id="m2" min="1" max="10" value="3"></div>
+    <div class="control-row"><label>v₁ initial <span class="val" id="vV1">5</span></label><input type="range" id="v1" min="-10" max="10" value="5"></div>
+    <div class="control-row"><label>v₂ initial <span class="val" id="vV2">-2</span></label><input type="range" id="v2" min="-10" max="10" value="-2"></div>
+    <div class="control-row"><label>Restitution e <span class="val" id="vE">1.0</span></label><input type="range" id="e" min="0" max="100" value="100"></div>
+    <div class="btn-row"><button id="run">Start</button><button class="danger" id="reset">Reset</button></div>
+    <div class="readouts">
+      <div>p_total: <span id="rP">0</span></div>
+      <div>KE_total: <span id="rK">0</span></div>
+      <div>v₁': <span id="rV1">0</span></div>
+      <div>v₂': <span id="rV2">0</span></div>
+    </div>
+  </div>
+</div>
+</main>
+<script>
+const cv=document.getElementById('cv'), ctx=cv.getContext('2d');
+let m1=2, m2=3, v1=5, v2=-2, e=1.0;
+let x1=200, x2=600, running=false;
+const y=250, w=60;
+
+function reset(){
+  m1=+document.getElementById('m1').value;
+  m2=+document.getElementById('m2').value;
+  v1=+document.getElementById('v1').value;
+  v2=+document.getElementById('v2').value;
+  e=+document.getElementById('e').value/100;
+  x1=200; x2=600;
+}
+
+function step(){
+  if(!running) return;
+  const dt = 0.03;
+  x1 += v1*8*dt; x2 += v2*8*dt;
+  // collision
+  if(x2-x1 < w){
+    const u1 = (m1*v1 + m2*v2 + m2*e*(v2-v1))/(m1+m2);
+    const u2 = (m1*v1 + m2*v2 + m1*e*(v1-v2))/(m1+m2);
+    v1 = u1; v2 = u2;
+    // separate
+    const overlap = w - (x2-x1);
+    x1 -= overlap/2; x2 += overlap/2;
+  }
+  // walls
+  if(x1 < w/2){ x1 = w/2; v1 = -v1; }
+  if(x2 > cv.width-w/2){ x2 = cv.width-w/2; v2 = -v2; }
+  draw();
+  document.getElementById('rP').textContent = (m1*v1+m2*v2).toFixed(2);
+  document.getElementById('rK').textContent = (0.5*m1*v1*v1+0.5*m2*v2*v2).toFixed(2);
+  document.getElementById('rV1').textContent = v1.toFixed(2);
+  document.getElementById('rV2').textContent = v2.toFixed(2);
+  requestAnimationFrame(step);
+}
+
+function draw(){
+  ctx.clearRect(0,0,cv.width,cv.height);
+  ctx.fillStyle='#0a0a0a'; ctx.fillRect(0,0,cv.width,cv.height);
+  // track
+  ctx.fillStyle='#444'; ctx.fillRect(0, y+30, cv.width, 5);
+  // walls
+  ctx.fillStyle='#888'; ctx.fillRect(0,150,15,150); ctx.fillRect(cv.width-15,150,15,150);
+  // cart 1
+  drawCart(x1, '#ffffff', m1);
+  drawCart(x2, '#888888', m2);
+}
+function drawCart(cx, color, mass){
+  const ww = 30 + mass*8, hh = 40;
+  ctx.fillStyle = color; ctx.fillRect(cx-ww/2, y-hh/2, ww, hh);
+  ctx.strokeStyle='#dddddd'; ctx.strokeRect(cx-ww/2, y-hh/2, ww, hh);
+  ctx.fillStyle='#888888'; ctx.beginPath(); ctx.arc(cx-ww/3, y+hh/2+5, 6, 0, 2*Math.PI); ctx.fill();
+  ctx.beginPath(); ctx.arc(cx+ww/3, y+hh/2+5, 6, 0, 2*Math.PI); ctx.fill();
+  ctx.fillStyle='#fff'; ctx.font='bold 14px sans-serif'; ctx.fillText(mass+'kg', cx-15, y+5);
+}
+
+['m1','m2','v1','v2','e'].forEach(id=>document.getElementById(id).oninput=()=>{
+  document.getElementById('vM1').textContent=document.getElementById('m1').value+' kg';
+  document.getElementById('vM2').textContent=document.getElementById('m2').value+' kg';
+  document.getElementById('vV1').textContent=document.getElementById('v1').value;
+  document.getElementById('vV2').textContent=document.getElementById('v2').value;
+  document.getElementById('vE').textContent=(+document.getElementById('e').value/100).toFixed(2);
+  if(!running){ reset(); draw(); }
+});
+document.getElementById('run').onclick=()=>{if(!running){running=true; step();}};
+document.getElementById('reset').onclick=()=>{running=false; reset(); draw();};
+reset(); draw();
+</script>
+</body></html>

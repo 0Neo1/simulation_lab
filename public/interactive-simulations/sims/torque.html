@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><title>Torque &amp; Equilibrium</title><link rel="stylesheet" href="../styles.css"></head>
+<body>
+<header><a href="../index.html"><h1>Torque &amp; Equilibrium</h1></a><p>Balance the seesaw.</p></header>
+<main>
+<a class="back-link" href="../index.html">&larr; All simulations</a>
+<div class="sim-container">
+  <div>
+    <div class="canvas-wrap"><canvas id="cv" width="800" height="500"></canvas></div>
+    <div class="info-box">
+      <h3>The Physics</h3>
+      <p>For static equilibrium, both the net force and net torque must be zero. Torque is force × lever arm.</p>
+      <div class="formula">Στ = 0 &nbsp;⇒&nbsp; m₁ x₁ = m₂ x₂</div>
+    </div>
+  </div>
+  <div class="controls">
+    <h3>Controls</h3>
+    <div class="control-row"><label>Mass 1 <span class="val" id="vM1">5 kg</span></label><input type="range" id="m1" min="1" max="20" value="5"></div>
+    <div class="control-row"><label>Position 1 <span class="val" id="vX1">-2 m</span></label><input type="range" id="x1" min="-30" max="-5" value="-20"></div>
+    <div class="control-row"><label>Mass 2 <span class="val" id="vM2">8 kg</span></label><input type="range" id="m2" min="1" max="20" value="8"></div>
+    <div class="control-row"><label>Position 2 <span class="val" id="vX2">1.25 m</span></label><input type="range" id="x2" min="5" max="30" value="13"></div>
+    <div class="readouts">
+      <div>τ₁: <span id="rT1">0</span></div>
+      <div>τ₂: <span id="rT2">0</span></div>
+      <div>Net τ: <span id="rN">0</span></div>
+      <div>State: <span id="rS">—</span></div>
+    </div>
+  </div>
+</div>
+</main>
+<script>
+const cv=document.getElementById('cv'), ctx=cv.getContext('2d');
+let m1=5,x1=-20,m2=8,x2=13;
+let theta=0, omega=0, running=true;
+const cx=400, cy=300, scale=10;
+
+function step(){
+  // tilt based on net torque
+  const t1 = m1*x1/10, t2 = m2*x2/10;
+  const net = t1+t2;
+  // physical seesaw: a = -k*theta - net/I (treat as simple driven oscillator with damping)
+  const I = m1*x1*x1/100 + m2*x2*x2/100 + 5;
+  const a = (-net*9.8 - 5*omega - 30*theta)/I;
+  omega += a*0.02;
+  theta += omega*0.02;
+  draw();
+  requestAnimationFrame(step);
+}
+
+function draw(){
+  ctx.clearRect(0,0,cv.width,cv.height);
+  ctx.fillStyle='#0a0a0a'; ctx.fillRect(0,0,cv.width,cv.height);
+  // ground
+  ctx.fillStyle='#1f1f1f'; ctx.fillRect(0, 380, cv.width, 120);
+  // pivot
+  ctx.fillStyle='#444'; ctx.beginPath(); ctx.moveTo(cx-30, 380); ctx.lineTo(cx, 300); ctx.lineTo(cx+30, 380); ctx.closePath(); ctx.fill();
+  // beam
+  ctx.save(); ctx.translate(cx, 300); ctx.rotate(theta);
+  ctx.fillStyle='#3a3a3a';
+  const beamLen = 600;
+  ctx.fillRect(-beamLen/2, -8, beamLen, 16);
+  ctx.strokeStyle='#dddddd'; ctx.strokeRect(-beamLen/2, -8, beamLen, 16);
+  // tick marks
+  for(let i=-30;i<=30;i+=5){
+    const xx = i*scale;
+    ctx.strokeStyle='#dddddd';
+    ctx.beginPath(); ctx.moveTo(xx, -8); ctx.lineTo(xx, -14); ctx.stroke();
+  }
+  // mass 1
+  const w1 = 20+m1*3;
+  ctx.fillStyle='#888888'; ctx.fillRect(x1*scale-w1/2, -8-w1, w1, w1);
+  ctx.strokeStyle='#dddddd'; ctx.strokeRect(x1*scale-w1/2, -8-w1, w1, w1);
+  ctx.fillStyle='#fff'; ctx.font='bold 12px sans-serif'; ctx.textAlign='center';
+  ctx.fillText(m1+'kg', x1*scale, -8-w1/2);
+  // mass 2
+  const w2 = 20+m2*3;
+  ctx.fillStyle='#ffffff'; ctx.fillRect(x2*scale-w2/2, -8-w2, w2, w2);
+  ctx.strokeRect(x2*scale-w2/2, -8-w2, w2, w2);
+  ctx.fillStyle='#fff'; ctx.fillText(m2+'kg', x2*scale, -8-w2/2);
+  ctx.textAlign='left';
+  ctx.restore();
+  const t1 = m1*Math.abs(x1)/10*9.8;
+  const t2 = m2*Math.abs(x2)/10*9.8;
+  document.getElementById('rT1').textContent = t1.toFixed(1)+' N·m';
+  document.getElementById('rT2').textContent = t2.toFixed(1)+' N·m';
+  const net = m1*x1/10*9.8 + m2*x2/10*9.8;
+  document.getElementById('rN').textContent = net.toFixed(2);
+  document.getElementById('rS').textContent = Math.abs(net) < 0.5 ? 'Balanced ✓' : (net>0 ? 'Tips right' : 'Tips left');
+}
+
+['m1','x1','m2','x2'].forEach(id=>document.getElementById(id).oninput=()=>{
+  m1=+document.getElementById('m1').value;
+  x1=+document.getElementById('x1').value/10;
+  m2=+document.getElementById('m2').value;
+  x2=+document.getElementById('x2').value/10;
+  document.getElementById('vM1').textContent=m1+' kg';
+  document.getElementById('vX1').textContent=x1.toFixed(2)+' m';
+  document.getElementById('vM2').textContent=m2+' kg';
+  document.getElementById('vX2').textContent=x2.toFixed(2)+' m';
+});
+step();
+</script>
+</body></html>
