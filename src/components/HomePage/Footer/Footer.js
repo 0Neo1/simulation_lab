@@ -35,13 +35,8 @@ const Footer = () => {
             {/* Credits */}
             <div className="col-span-4 mt-4 lg:mt-0">
               <span className="text-base font-semibold font-body tracking-wide text-white">
-                Project Credits
               </span>
-              <div className="mt-2">
-                <span className="text-xl font-display font-bold text-white bg-brand-900 bg-opacity-50 px-3 py-1 rounded inline-block">
-                  Made by Neo
-                </span>
-              </div>
+
               <p className="mt-4 font-body text-sm text-indigo-50">
                 ZeroLab is focused on practical and accessible science learning through guided simulations.
               </p>

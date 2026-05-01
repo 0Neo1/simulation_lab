@@ -257,11 +257,9 @@ const Nav = () => {
                             duration={500}
                             className="inline-flex items-center"
                           >
-                            <img
-                              className="h-10"
-                              src="https://i.ibb.co/2Z1XFtY/text-logo.png"
-                              alt="Text Logo"
-                            />
+                            <span className="text-2xl font-display font-black tracking-wider text-brand-900 uppercase">
+                              ZeroLab
+                            </span>
                           </Link>
                         </div>
                         <div>
