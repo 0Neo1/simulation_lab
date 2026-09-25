@@ -11,6 +11,11 @@ HTML lab animations on demand.
 - **Interactive Simulations** — 28+ pre-built, fully offline HTML5 simulations
   (Meter Bridge, Convex Lens, Potentiometer, Ohm's Law, Titrations, Flame Test,
   Paper Chromatography, and more) shipped under `public/simulations/`.
+- **3D Meter Bridge** — `phy121` is a full 3D bench built with Three.js
+  (vendored under `public/simulations/lib/three/`, so it stays offline). The
+  bridge is solved as a real resistor network, including end resistances,
+  galvanometer protection, needle dynamics and Joule heating of the test wire.
+  Source lives in `public/simulations/meter-bridge/`.
 - **Dynamic Lab Pages** — every experiment renders Theory, Procedure,
   Simulator, and Observation tabs from a centralized data file
   (`src/data/experimentContent.js`), with auto-computed metrics, savable

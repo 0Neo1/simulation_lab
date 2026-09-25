@@ -316,6 +316,28 @@ const DynamicObservation = ({ simulation }) => {
     }
   }, [storageKey, initialState]);
 
+  // A simulator running in the iframe can save readings under the same key;
+  // pick them up as soon as it does.
+  useEffect(() => {
+    const onStorage = (event) => {
+      if (event.key !== storageKey || !event.newValue) return;
+      try {
+        const parsed = JSON.parse(event.newValue);
+        if (parsed?.rows?.length === initialState.rows.length) {
+          setRows(parsed.rows);
+        }
+        if (parsed?.metricInputs) {
+          setMetricInputs((prev) => ({ ...prev, ...parsed.metricInputs }));
+        }
+        if (parsed?.savedAt) setSavedAt(parsed.savedAt);
+      } catch (err) {
+        /* ignore corrupt storage */
+      }
+    };
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('storage', onStorage);
+  }, [storageKey, initialState]);
+
   const componentRef = useRef();
   const handlePrint = useReactToPrint({
     content: () => componentRef.current,

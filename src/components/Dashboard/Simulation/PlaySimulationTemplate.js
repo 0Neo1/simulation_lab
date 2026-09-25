@@ -59,7 +59,10 @@ const PlaySimulationTemplate = ({ simulationURL }) => {
         ) : null}
 
         {loadError ? (
-          <div className="flex h-[560px] w-full items-center justify-center bg-gray-900 text-center text-white">
+          <div
+            className="flex w-full items-center justify-center bg-gray-900 text-center text-white"
+            style={{ height: 560 }}
+          >
             <div>
               <p className="font-display text-lg font-bold text-red-300">
                 Could not load this simulation
@@ -74,7 +77,8 @@ const PlaySimulationTemplate = ({ simulationURL }) => {
             ref={iframeRef}
             src={simulationURL}
             title="Interactive Lab Simulation"
-            className="block h-[640px] w-full border-0 bg-gray-900 sm:h-[720px]"
+            className="block w-full border-0 bg-gray-900"
+            style={{ height: 'clamp(560px, 82vh, 820px)' }}
             onLoad={() => setLoaded(true)}
             onError={() => {
               setLoaded(true);
