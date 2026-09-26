@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Meter Bridge — Specific Resistance</title>
+<title>Meter Bridge — Virtual Physics Lab</title>
 <link rel="stylesheet" href="meter-bridge/meter-bridge.css" />
 <script type="importmap">
 {
@@ -20,14 +20,17 @@
     <canvas id="gl"></canvas>
 
     <div class="overlay top-left">
-      <h1>Meter Bridge <span>· Specific resistance of a wire</span></h1>
+      <h1>Physics Lab <span>· Meter bridge — specific resistance of a wire</span></h1>
       <div class="chips">
+        <span class="chip" id="chipPhase">Setting up</span>
         <span class="chip" id="chipKey">Key K: out</span>
         <span class="chip" id="chipHR">HR: in</span>
-        <span class="chip" id="chipJockey">Jockey: lifted</span>
-        <span class="chip" id="chipGap">R in gap 1</span>
+        <span class="chip" id="chipJockey">Jockey: on trolley</span>
+        <span class="chip" id="chipCircuit">Circuit: not wired</span>
       </div>
     </div>
+
+    <div id="stepBanner" class="overlay banner"><b id="bannerPhase"></b><span id="bannerText"></span></div>
 
     <svg id="schematic" class="overlay top-right" viewBox="0 0 220 150" aria-label="Live circuit diagram">
       <g fill="none" stroke="#cbd5e1" stroke-width="1.6">
@@ -58,17 +61,76 @@
     <div class="pip" id="pipGalv"><span>Galvanometer</span></div>
 
     <div id="labels"></div>
+    <div id="tip" class="tip hidden"></div>
     <div id="toasts" aria-live="polite"></div>
-    <div class="overlay hint">
-      <b>Drag</b> the jockey to slide it · <b>hold</b> it, <b>Space</b> or <b>Press</b> to touch the wire ·
-      <b>←/→</b> 1 mm (Shift: 1 cm) · click plugs, key K and the HR knob · orbit with the mouse
+    <div class="overlay hint" id="hint">
+      <b>Left-drag</b> apparatus to carry it · <b>click</b> a terminal, then another, to run a lead ·
+      <b>right-click</b> a lead to remove it · <b>drag</b> the jockey, <b>hold</b> or <b>Space</b> to press ·
+      <b>drag</b> empty space to look around, <b>scroll</b> to zoom
+    </div>
+
+    <div id="startScreen" class="modal">
+      <div class="card">
+        <h2>Welcome to the Physics Lab</h2>
+        <p class="lead">Determine the specific resistance of a wire using a meter bridge. The meter bridge is fixed on your bench;
+          the rest of the apparatus is waiting on the trolley beside it.</p>
+        <div class="choices">
+          <button class="choice" id="startGuided">
+            <b>Start from scratch</b>
+            <span>Set up the apparatus, make every connection and perform the experiment, step by step. Use <i>Show me</i> for a demonstration of any step.</span>
+          </button>
+          <button class="choice alt" id="startQuick">
+            <b>Quick start</b>
+            <span>The bench is already set up and wired. Go straight to finding balance points.</span>
+          </button>
+        </div>
+        <div class="mouse">
+          <div><b>Left-drag</b> on apparatus — pick it up and carry it</div>
+          <div><b>Click</b> terminal → terminal — connect a lead</div>
+          <div><b>Right-click</b> a lead — disconnect it</div>
+          <div><b>Drag</b> empty space — look around · <b>Scroll</b> — zoom</div>
+        </div>
+        <p class="note" id="loadNote">Loading the lab…</p>
+      </div>
     </div>
   </section>
 
   <aside id="panel">
     <details open>
-      <summary>Procedure</summary>
-      <ol id="steps" class="steps"></ol>
+      <summary>Guide</summary>
+      <div class="guide">
+        <div class="phase" id="guidePhase">Phase 1 · Set up the apparatus</div>
+        <div class="progress"><i id="guideBar"></i></div>
+        <p class="instr" id="guideText"></p>
+        <p class="why" id="guideWhy"></p>
+        <div class="row">
+          <button class="btn" id="btnDemo">▶ Show me</button>
+          <button class="btn ghost" id="btnDoPhase">Do this phase for me</button>
+        </div>
+        <ol id="steps" class="steps"></ol>
+      </div>
+    </details>
+
+    <details open>
+      <summary>Bench</summary>
+      <div class="row">
+        <button class="btn ghost" id="btnUndoLead">Undo last lead</button>
+        <button class="btn ghost" id="btnClearLeads">Remove all leads</button>
+      </div>
+      <div class="row small">
+        Lead colour:
+        <span id="leadColors" class="swatches"></span>
+      </div>
+      <div class="row small">
+        Hands:
+        <select id="skin">
+          <option value="light">Light</option>
+          <option value="medium" selected>Medium</option>
+          <option value="tan">Tan</option>
+          <option value="deep">Deep</option>
+        </select>
+        <label class="check inline"><input type="checkbox" id="optHands" checked /> show</label>
+      </div>
     </details>
 
     <details open>
@@ -102,7 +164,7 @@
       <input type="range" id="lSlider" min="0" max="100" step="0.1" value="50" />
       <div class="row">
         <button class="btn press" id="btnPress">Hold to press</button>
-        <button class="btn ghost" id="btnAuto" title="Demonstration: the jockey hunts for the null point by itself">Auto-hunt (demo)</button>
+        <button class="btn ghost" id="btnAuto" title="Demonstration: the hand hunts for the null point">Auto-hunt (demo)</button>
       </div>
       <div class="meters">
         <div class="m"><i>Deflection</i><b id="mDiv">0.0 div</b></div>
@@ -121,7 +183,7 @@
           <tbody></tbody>
         </table>
       </div>
-      <p class="note" id="obsNote">Record at least three balance points with different R, then interchange R and X and repeat to cancel end errors.</p>
+      <p class="note">Record at least three balance points with different R, then interchange R and X and repeat to cancel end errors.</p>
     </details>
 
     <details open>
@@ -174,15 +236,20 @@
       <div class="row"><button class="btn ghost" id="btnNew">New specimen</button></div>
       <label class="lbl">Camera</label>
       <div class="row small">
+        <button class="mini" data-view="room">Room</button>
+        <button class="mini" data-view="setup">Bench + trolley</button>
         <button class="mini" data-view="bench">Bench</button>
         <button class="mini" data-view="scale">Scale</button>
         <button class="mini" data-view="galv">Galvanometer</button>
         <button class="mini" data-view="box">Resistance box</button>
+        <button class="mini" data-view="gauge">Screw gauge</button>
         <button class="mini" data-view="top">Top</button>
       </div>
       <label class="check"><input type="checkbox" id="optFlow" checked /> Show charge flow</label>
       <label class="check"><input type="checkbox" id="optLabels" checked /> Show labels</label>
       <label class="check"><input type="checkbox" id="optPip" checked /> Show close-up insets</label>
+      <label class="check"><input type="checkbox" id="optSound" checked /> Sound effects</label>
+      <label class="check"><input type="checkbox" id="optQuality" checked /> High-quality graphics (shadows, sharp)</label>
     </details>
   </aside>
 </div>

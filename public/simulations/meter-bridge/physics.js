@@ -203,3 +203,59 @@ export function screwGaugeReading(app, position, rand = Math.random) {
   const csd = Math.round((observed - msr) / lc);
   return { msr, csd, lc, raw: msr + csd * lc };
 }
+
+// ---------------------------------------------------------------------------
+// General network solver for student-built circuits
+// ---------------------------------------------------------------------------
+//
+// Every terminal on the bench is a node. Apparatus contribute internal
+// elements (the cell, the resistance box, the galvanometer coil, the copper
+// strips and bridge wire, ...) and every lead the student connects adds a
+// small resistance between two terminals. The whole thing is solved by
+// modified nodal analysis, so a mis-wired circuit behaves as it would on a
+// real bench: no current, a short circuit, a galvanometer that never nulls.
+
+export const LEAD_RESISTANCE = 0.015; // Ω, a typical copper connecting lead
+const G_MIN = 1e-9; // tiny leak to ground so floating islands stay solvable
+
+// elements: [{ a, b, R, tag }] resistors and [{ a, b, emf, r, tag }] sources
+// (source drives current from b to a internally, i.e. a is the + terminal).
+export function solveNetwork(elements, ground) {
+  const names = new Map();
+  const id = (n) => { if (!names.has(n)) names.set(n, names.size); return names.get(n); };
+  id(ground);
+  elements.forEach((e) => { id(e.a); id(e.b); });
+  const n = names.size;
+  const G = Array.from({ length: n }, () => new Float64Array(n));
+  const I = new Float64Array(n);
+  const stamp = (a, b, g) => { G[a][a] += g; G[b][b] += g; G[a][b] -= g; G[b][a] -= g; };
+  for (const e of elements) {
+    const a = id(e.a), b = id(e.b);
+    if (a === b) continue;
+    if (e.emf != null) {
+      const g = 1 / Math.max(e.r, 1e-6);
+      stamp(a, b, g);
+      I[a] += e.emf * g; I[b] -= e.emf * g; // Norton equivalent
+    } else stamp(a, b, 1 / Math.max(e.R, 1e-6));
+  }
+  for (let i = 0; i < n; i++) G[i][i] += G_MIN;
+  // Ground node 0: replace its row with V0 = 0
+  G[0].fill(0); G[0][0] = 1; I[0] = 0;
+  const V = solve(G.map((r) => Array.from(r)), Array.from(I));
+  const volt = (name) => (names.has(name) ? V[names.get(name)] : 0);
+  const current = (e) => {
+    const va = volt(e.a), vb = volt(e.b);
+    if (e.emf != null) return (e.emf - (va - vb)) / Math.max(e.r, 1e-6); // out of + terminal
+    return (va - vb) / Math.max(e.R, 1e-6); // a → b
+  };
+  return { volt, current };
+}
+
+// Union-find over leads and fixed conductors (strips), used to recognise how
+// the student has wired the bench regardless of which exact screw they used.
+export function netClasses(pairs) {
+  const parent = new Map();
+  const find = (x) => { if (!parent.has(x)) parent.set(x, x); let r = x; while (parent.get(r) !== r) r = parent.get(r); parent.set(x, r); return r; };
+  pairs.forEach(([a, b]) => { parent.set(find(a), find(b)); });
+  return find;
+}
