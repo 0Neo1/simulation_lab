@@ -94,6 +94,7 @@ function patchMesh(mesh, bones, { tint = false, glove = false } = {}) {
   const skel = mesh.skeleton.bones.map((b) => b.name.replace('mixamorig', ''));
   const isHand = skel.map((n) => /^(Left|Right)Hand/.test(n));
   const isKeep = skel.map((n) => KEEP_IN_FP.test(n));
+  const isHandB = skel.map((n) => /^(Left|Right)Hand/.test(n));
   const aGlove = new Float32Array(si.count), aHide = new Float32Array(si.count);
   for (let i = 0; i < si.count; i++) {
     for (let k = 0; k < 4; k++) {
@@ -101,13 +102,14 @@ function patchMesh(mesh, bones, { tint = false, glove = false } = {}) {
       if (isHand[b]) aGlove[i] += w;
       if (isKeep[b]) aHide[i] += w;
     }
-    aHide[i] = 1 - aHide[i];
+    aHide[i] = 1 - Math.min(1, aHide[i]);
   }
   geo.setAttribute('aGlove', new THREE.BufferAttribute(aGlove, 1));
   geo.setAttribute('aHide', new THREE.BufferAttribute(aHide, 1));
   // Keep the model's own material (and so its authored skin and cloth look);
   // only a small shader layer is added
   const mat = mesh.material.clone();
+  mat.side = THREE.DoubleSide; // cut edges and sleeve openings show cloth, never see-through gaps
   const u = {
     uTint: { value: new THREE.Color(1, 1, 1) }, uTintMix: { value: 0 }, uTintBase: { value: 0.5 }, uTintGain: { value: 0.8 },
     uGlove: { value: 0 }, uGloveColor: { value: new THREE.Color(0x2c78dc) }, uFP: { value: 0 },
@@ -122,7 +124,8 @@ function patchMesh(mesh, bones, { tint = false, glove = false } = {}) {
 varying float vGlove; varying float vHide;
 uniform vec3 uTint; uniform float uTintMix; uniform float uTintBase; uniform float uTintGain;
 uniform float uGlove; uniform vec3 uGloveColor; uniform float uFP;`)
-      .replace('#include <clipping_planes_fragment>', '#include <clipping_planes_fragment>\nif (uFP > 0.5 && vHide > 0.5) discard;')
+      .replace('#include <clipping_planes_fragment>', `#include <clipping_planes_fragment>
+if (uFP > 0.5 && vHide > 0.5) discard; // cut cleanly at the elbow`)
       .replace('#include <map_fragment>', `#include <map_fragment>
 float lum = dot(diffuseColor.rgb, vec3(0.299, 0.587, 0.114));
 diffuseColor.rgb = mix(diffuseColor.rgb, uTint * clamp(uTintBase + uTintGain * lum, 0.0, 1.2), uTintMix);
@@ -251,9 +254,9 @@ export async function loadAvatar(scene) {
     const h = `${side}Hand`;
     const f0 = W(`${h}Middle1`).sub(W(h)).normalize();
     const lat = W(`${h}Index1`).sub(W(`${h}Pinky1`)).normalize();
-    let n0 = f0.clone().cross(lat).normalize();
-    // The palm normal points toward the body's centre line in the rest pose
-    if (n0.x * -Math.sign(W(h).x) < 0) n0.negate();
+    // Palm normal (out of the palm): for a right hand with fingers f and index-to-pinky
+    // direction lat, the palm faces lat × f; for a left hand, f × lat
+    const n0 = (side === 'Right' ? lat.clone().cross(f0) : f0.clone().cross(lat)).normalize();
     const q0 = B[h].getWorldQuaternion(new THREE.Quaternion());
     const m0 = new THREE.Matrix4().makeBasis(f0, n0, f0.clone().cross(n0)).invert();
     // Curl axes in each finger bone's own frame: rotating the finger toward the palm
@@ -266,12 +269,14 @@ export async function loadAvatar(scene) {
       });
     });
     const t0 = W(`${h}Thumb2`).sub(W(`${h}Thumb1`)).normalize();
-    const tAxisW = t0.clone().cross(n0).normalize();
+    // The thumb flexes across the palm toward the little finger (opposition), not straight out of it
+    const tTarget = n0.clone().multiplyScalar(0.6).addScaledVector(lat, -1).normalize();
+    const tAxisW = t0.clone().cross(tTarget).normalize();
     curl.thumb = [1, 2, 3].map((j) => {
       const b = B[`${h}Thumb${j}`];
       return { b, axis: tAxisW.clone().applyQuaternion(b.getWorldQuaternion(new THREE.Quaternion()).invert()).normalize() };
     });
-    rig[side] = { q0, m0, curl, off: V(0, 0, 0), offKey: '' };
+    rig[side] = { q0, m0, curl, off: V(0, 0, 0), offKey: '', palmDotThumb: W(`${h}Thumb3`).sub(W(h)).dot(n0), n0: n0.clone(), qa: null };
   });
 
   const gear = { coat: false, goggles: false, gloves: false, shoes: false };
@@ -326,6 +331,31 @@ export async function loadAvatar(scene) {
     bone.quaternion.copy(pq.multiply(q));
     bone.updateMatrixWorld(true);
   }
+  // Human wrists: the forearm rolls (pronation/supination, up to ~100°) and the
+  // wrist bends at most ~70°. The model has no twist bones, so an unlimited
+  // twist at the wrist would pinch the skin into a gap; instead the roll goes
+  // into the forearm and the remaining bend is capped.
+  function limitWrist(side, qWant) {
+    const fore = B[`${side}ForeArm`], hand = B[`${side}Hand`];
+    const relRest = rest[`${side}Hand`];
+    const foreW = fore.getWorldQuaternion(new THREE.Quaternion());
+    const delta = foreW.clone().invert().multiply(qWant).multiply(relRest.clone().invert()); // in forearm frame
+    const axis = hand.position.clone().normalize();
+    const d = new THREE.Vector3(delta.x, delta.y, delta.z);
+    const p = axis.clone().multiplyScalar(d.dot(axis));
+    let twist = new THREE.Quaternion(p.x, p.y, p.z, delta.w);
+    if (twist.lengthSq() < 1e-9) twist.identity(); else twist.normalize();
+    const clampQ = (q, maxRad) => {
+      const ang = 2 * Math.acos(THREE.MathUtils.clamp(Math.abs(q.w), 0, 1));
+      return ang > maxRad ? new THREE.Quaternion().slerp(q, maxRad / ang) : q;
+    };
+    const twistC = clampQ(twist, d2r(100));
+    fore.quaternion.multiply(twistC);
+    fore.updateMatrixWorld(true);
+    const swing = clampQ(twistC.clone().invert().multiply(delta), d2r(72));
+    hand.quaternion.copy(swing.multiply(relRest));
+    hand.updateMatrixWorld(true);
+  }
   function contactPoint(side, contact, palmN) {
     const h = `${side}Hand`;
     if (contact === 'pinch') return W(`${h}Index4`).lerp(W(`${h}Thumb4`), 0.5);
@@ -338,20 +368,23 @@ export async function loadAvatar(scene) {
     const q = handQuat(side, hand.yaw, hand.pitch);
     const key = hand.contact;
     if (r.offKey !== key) { r.offKey = key; r.off.set(0, -2, -armLen.hand); }
-    const wrist = hand.pos.clone().sub(r.off.clone().applyQuaternion(q));
+    const wrist = hand.pos.clone().sub(r.off.clone().applyQuaternion(r.qa || q));
     solveArm(side, wrist);
-    setWorldQuat(B[`${side}Hand`], q);
+    limitWrist(side, q);
     const cur = hand.current;
     for (const [k, list] of Object.entries(r.curl)) {
       const ang = cur[k];
       list.forEach(({ b, axis }, j) => {
-        b.quaternion.copy(rest[b.name.replace('mixamorig', '')]).multiply(new THREE.Quaternion().setFromAxisAngle(axis, d2r(ang[j]) * (k === 'thumb' ? 0.6 : 1)));
+        b.quaternion.copy(rest[b.name.replace('mixamorig', '')]).multiply(new THREE.Quaternion().setFromAxisAngle(axis, d2r(ang[j]) * (k === 'thumb' ? 0.9 : 1)));
       });
     }
     B[`${side}Hand`].updateMatrixWorld(true);
     // Remember where the contact point sits relative to the wrist, in the hand's frame, for next frame
-    const cp = contactPoint(side, key, V(0, -1, 0).applyEuler(new THREE.Euler(hand.pitch, hand.yaw, 0, 'YXZ')));
-    r.off.copy(cp.sub(W(`${side}Hand`)).applyQuaternion(q.clone().invert()));
+    const qa = B[`${side}Hand`].getWorldQuaternion(new THREE.Quaternion()); // actual (limited) orientation
+    r.qa = qa;
+    const n = r.n0.clone().applyQuaternion(qa.clone().multiply(r.q0.clone().invert())); // palm normal now
+    const cp = contactPoint(side, key, n);
+    r.off.copy(cp.sub(W(`${side}Hand`)).applyQuaternion(qa.clone().invert()));
     hand.tip = W(`${side}HandIndex4`);
   }
 
@@ -425,5 +458,5 @@ export async function loadAvatar(scene) {
     update(dt) { right.update(dt); left.update(dt); },
   };
 
-  return { root, bones: B, parts, state, gear, armLen, hands, update, shoulderWorld, eyeWorld, setVisible, setHeadVisible, setGear, bodyPoint };
+  return { root, bones: B, parts, rig, state, gear, armLen, hands, update, shoulderWorld, eyeWorld, setVisible, setHeadVisible, setGear, bodyPoint };
 }
