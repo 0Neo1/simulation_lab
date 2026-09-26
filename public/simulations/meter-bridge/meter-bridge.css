@@ -219,3 +219,18 @@ tbody tr:empty { display: none; }
 .choice.mid { background: linear-gradient(135deg, #0f766e, #155e75); }
 .startready { margin: 12px 0 0; color: #cbd5e1; font-size: 13px; }
 @media (max-width: 760px) { .choices.three { grid-template-columns: 1fr; } }
+
+/* Watch-mode controls only in watch mode; manual step buttons hidden there */
+.autobar { display: none; }
+body[data-mode="auto"] .autobar { display: flex; }
+body[data-mode="auto"] #btnDemo, body[data-mode="auto"] #btnDoPhase { display: none; }
+.autobar select { flex: 0 0 auto; }
+
+/* First-person goggles: a subtle tinted frame around the view */
+#gogglesOverlay {
+  position: absolute; inset: 0; pointer-events: none; opacity: 0; transition: opacity .6s;
+  background:
+    radial-gradient(ellipse 78% 74% at 50% 48%, rgba(0, 0, 0, 0) 66%, rgba(6, 12, 26, .55) 88%, rgba(2, 5, 14, .85) 100%),
+    linear-gradient(180deg, rgba(125, 211, 252, .06), rgba(14, 165, 233, .04));
+}
+#gogglesOverlay.on { opacity: 1; }

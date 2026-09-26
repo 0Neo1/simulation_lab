@@ -97,6 +97,14 @@ const gauge = S.buildScrewGauge(M);
 gauge.group.position.set(62, S.TABLE_Y, 32);
 gauge.group.rotation.y = -0.35;
 scene.add(gauge.group);
+const ppe = S.buildPPEStation(M);
+ppe.group.position.set(ROOM.x1 - 2, FLOOR_Y, 90);
+ppe.group.rotation.y = -Math.PI / 2; // faces into the room
+scene.add(ppe.group);
+Object.values(ppe.items).forEach((o) => { o.userData.home = o.position.clone(); });
+const PPE_SPOT = { x: 470, z: 90, h: -Math.PI / 2 };
+const GEAR = ['coat', 'goggles', 'gloves', 'shoes'];
+const GEAR_NAMES = { coat: 'lab coat', goggles: 'safety goggles', gloves: 'nitrile gloves', shoes: 'safety shoes' };
 const rule = S.buildRule(M);
 rule.group.position.set(0, S.TABLE_Y, -40);
 scene.add(rule.group);
@@ -125,7 +133,7 @@ const state = {
   pip: true,
   sound: true,
   leadColor: 'auto',
-  mode: 'hands', // student | hands | classic
+  mode: 'auto', // auto (watch the student) | fp (first person) | classic (no human)
   started: false,
   scratchWarned: 0,
   shortWarned: 0,
@@ -534,12 +542,13 @@ const SHOULDER = { right: FIXED_SHOULDER.right.clone(), left: FIXED_SHOULDER.lef
 const LEFT_REST = V3(-78, S.TABLE_Y + 1.2, 34);
 function aimHand(hand, target, pitch = -0.2) {
   const d = target.clone().sub(SHOULDER[hand.side]);
-  const base = state.mode === 'student' && avatar ? avatar.state.heading : 0;
+  const base = bodyMode() && avatar ? avatar.state.heading : 0;
   const yaw = Math.atan2(-d.x, -d.z);
   hand.yawGoal = base + THREE.MathUtils.clamp(wrapAngle(yaw - base), -1.1, 1.1);
   hand.pitchGoal = pitch;
 }
 const wrapAngle = (a) => Math.atan2(Math.sin(a), Math.cos(a));
+const bodyMode = () => state.mode === 'auto' || state.mode === 'fp';
 const lerpAngle = (a, b, t) => a + wrapAngle(b - a) * t;
 
 // ---------------------------------------------------------------------------
@@ -555,6 +564,7 @@ const OBSTACLES = [
   [-330, -250, -170, 30], [-330, -250, 70, 270], [230, 430, 210, 290], // other benches
   [ROOM.x1 - 47, ROOM.x1, -205, -15], // apparatus cabinet
   [-167, -133, 43, 77], // stool
+  [ROOM.x1 - 50, ROOM.x1, 20, 160], // PPE station
 ];
 const BODY_R = 20;
 function collide(p) {
@@ -572,7 +582,7 @@ function collide(p) {
 }
 // Can the student reach point p from where they stand (leaning over the bench)?
 function reachable(p) {
-  if (state.mode !== 'student' || !avatar) return true;
+  if (!bodyMode() || !avatar) return true;
   const a = avatar.state.pos, h = avatar.state.heading;
   const dx = p.x - a.x, dz = p.z - a.z;
   const fwd = -dx * Math.sin(h) - dz * Math.cos(h);
@@ -580,6 +590,7 @@ function reachable(p) {
   return fwd > -12 && fwd < 96 && Math.abs(side) < 58;
 }
 function standSpot(p) {
+  if (p.x > 440 && Math.abs(p.z - PPE_SPOT.z) < 80) return PPE_SPOT;
   const nearTrolley = Math.abs(p.x - TROLLEY.x) < TROLLEY.w / 2 + 12 && Math.abs(p.z - TROLLEY.z) < TROLLEY.d / 2 + 12;
   if (nearTrolley) return { x: THREE.MathUtils.clamp(p.x, TROLLEY.x - 40, TROLLEY.x + 40), z: TROLLEY.z + TROLLEY.d / 2 + 24, h: 0 };
   return { x: THREE.MathUtils.clamp(p.x, -100, 100), z: 58, h: 0 };
@@ -610,7 +621,7 @@ async function walkTo(spot) {
 }
 // In student mode, walk over first if the target is out of reach
 async function approach(p) {
-  if (state.mode !== 'student' || !avatar || reachable(p)) return;
+  if (!bodyMode() || !avatar || reachable(p)) return;
   await walkTo(standSpot(p));
 }
 // Hands follow the body while walking: carried items in front, otherwise at the sides
@@ -632,56 +643,128 @@ function bodyHands(dt) {
   }
   void dt;
 }
+// ---- Safety gear ----
+const gearOn = (g) => !!(avatar && avatar.gear[g]);
+const allGear = () => state.mode === 'classic' || GEAR.every(gearOn);
+function wearGear(g, on = true) {
+  if (!avatar) return;
+  avatar.setGear(g, on);
+  ppe.items[g].visible = !on;
+  if (g === 'gloves' && handsLoaded) handsLoaded.setGloves(on);
+  const ov = $('gogglesOverlay');
+  if (ov) ov.classList.toggle('on', state.mode === 'fp' && gearOn('goggles'));
+  if (on) { sfx('ok'); toast(`${GEAR_NAMES[g][0].toUpperCase() + GEAR_NAMES[g].slice(1)} on.${allGear() ? ' All safety gear is on — you may start the experiment.' : ''}`, 'ok', 2600); }
+}
+function resetGear() { GEAR.forEach((g) => wearGear(g, false)); }
+// Take an item from the PPE station and put it on
+async function demoGear(g) {
+  if (!avatar || !hands || gearOn(g)) { if (avatar) wearGear(g); return; }
+  const R = hands.right;
+  const grab = ppe.group.localToWorld(ppe.grab[g].clone());
+  await approach(grab);
+  await handTo(R, grab, { pose: 'grab', contact: 'palm', dur: 0.8, arc: 6, pitch: g === 'shoes' ? -1.2 : -0.2 });
+  const itemObj = ppe.items[g];
+  const startW = itemObj.getWorldPosition(new THREE.Vector3());
+  // Carry the item to where it is worn
+  const wornAt = { coat: avatar.bodyPoint(0, 140, -14), goggles: avatar.eyeWorld(), gloves: avatar.bodyPoint(0, 105, -30), shoes: avatar.bodyPoint(0, 8, -10) }[g];
+  const parent = itemObj.parent;
+  scene.attach(itemObj);
+  await tween(0.9, (e) => {
+    itemObj.position.lerpVectors(startW, wornAt, e);
+    R.goal.lerpVectors(grab, wornAt, e);
+    if (g === 'coat') itemObj.scale.setScalar(1 + e * 0.1);
+  });
+  if (g === 'gloves') {
+    // pull each glove on: hands meet in front of the body
+    await Promise.all([
+      handTo(hands.left, avatar.bodyPoint(-6, 105, -32), { pose: 'flat', contact: 'palm', dur: 0.5, arc: 2, pitch: 0 }),
+      handTo(R, avatar.bodyPoint(6, 108, -32), { pose: 'pinch', contact: 'pinch', dur: 0.5, arc: 2, pitch: 0 }),
+    ]);
+  }
+  parent.attach(itemObj);
+  itemObj.position.copy(itemObj.userData.home || itemObj.position);
+  itemObj.scale.setScalar(1);
+  wearGear(g);
+  await wait(0.3);
+}
+
+const fp = { yaw: 0, pitch: -0.3 };
 function driveStudent(dt) {
-  if (state.mode !== 'student' || !avatar) return;
+  if (state.mode !== 'fp' || !avatar) return;
   const a = avatar.state;
-  let f = 0, st = 0;
+  let f = 0, st = 0, turn = 0;
   if (!autopilot && state.started) {
     if (keys.has('KeyW') || keys.has('ArrowUp')) f += 1;
     if (keys.has('KeyS') || keys.has('ArrowDown')) f -= 1;
     if (keys.has('KeyD')) st += 1;
     if (keys.has('KeyA')) st -= 1;
+    if (keys.has('KeyQ')) turn += 1;
+    if (keys.has('KeyE')) turn -= 1;
   }
+  fp.yaw += turn * dt * 1.8;
   walking.keys = !!(f || st);
   if (walking.keys) {
-    const cf = V3(0, 0, 0); camera.getWorldDirection(cf); cf.y = 0; cf.normalize();
-    const cr = V3(-cf.z, 0, cf.x);
-    const move = cf.multiplyScalar(f).add(cr.multiplyScalar(st)).normalize();
+    const fw = V3(-Math.sin(fp.yaw), 0, -Math.cos(fp.yaw));
+    const rt = V3(Math.cos(fp.yaw), 0, -Math.sin(fp.yaw));
+    const move = fw.multiplyScalar(f).add(rt.multiplyScalar(st)).normalize();
     const speed = keys.has('ShiftLeft') || keys.has('ShiftRight') ? 230 : 130;
     a.pos.addScaledVector(move, speed * dt);
     collide(a.pos);
-    a.heading = lerpAngle(a.heading, Math.atan2(-move.x, -move.z), Math.min(1, dt * 10));
     walking.speed = speed;
-  } else if (!walking.active) {
-    walking.speed = 0;
-    // Square up to the bench or trolley when standing at it
-    const atBench = Math.abs(a.pos.x) < 125 && a.pos.z > 45 && a.pos.z < 95;
-    const atTrolley = Math.abs(a.pos.x - TROLLEY.x) < 70 && a.pos.z > 30 && a.pos.z < 90;
-    if ((atBench || atTrolley) && !autopilot) a.heading = lerpAngle(a.heading, 0, Math.min(1, dt * 3));
+  } else if (!walking.active) walking.speed = 0;
+}
+// Game-style hands: held in view in front of the camera when not working
+function fpHands() {
+  if (!hands || !avatar) return;
+  const eye = avatar.eyeWorld();
+  const y = fp.yaw;
+  const fw = V3(-Math.sin(y), 0, -Math.cos(y)), rt = V3(Math.cos(y), 0, -Math.sin(y));
+  const bob = Math.sin(avatar.state.phase * 2) * 1.4 * Math.min(1, avatar.state.speed / 120);
+  for (const hand of [hands.right, hands.left]) {
+    const sgn = hand.side === 'right' ? 1 : -1;
+    const carrying = [...carried.values()].some((c) => c.hand === hand);
+    if (carrying) {
+      hand.setPose('grab', 'palm');
+      hand.goal.copy(eye).addScaledVector(fw, 42).addScaledVector(rt, 9 * sgn).add(V3(0, -24 + bob, 0));
+      hand.yawGoal = y; hand.pitchGoal = 0;
+    } else {
+      hand.setPose('relaxed', 'index');
+      hand.goal.copy(eye).addScaledVector(fw, 36).addScaledVector(rt, 16 * sgn).add(V3(0, -25 + bob, 0));
+      hand.yawGoal = y + sgn * 0.3; hand.pitchGoal = -0.5;
+    }
   }
 }
+function updateFPCamera() {
+  if (state.mode !== 'fp' || !avatar) return;
+  if (autopilot) fp.yaw = avatar.state.heading; else avatar.state.heading = fp.yaw;
+  const eye = avatar.eyeWorld();
+  camera.position.copy(eye);
+  const dir = V3(-Math.sin(fp.yaw) * Math.cos(fp.pitch), Math.sin(fp.pitch), -Math.cos(fp.yaw) * Math.cos(fp.pitch));
+  camera.lookAt(eye.add(dir));
+}
 let followPrev = null;
-function followCamera() {
-  if (state.mode !== 'student' || !avatar || fly) { followPrev = null; return; }
-  const chest = avatar.bodyPoint(0, 90, -40);
-  if (followPrev) {
-    const d = chest.clone().sub(followPrev);
-    camera.position.add(d);
-    controls.target.add(d);
-  }
-  followPrev = chest;
+// Watch mode: the camera chases the student; dragging still orbits around them
+function followCamera(dt = 0.016) {
+  if (state.mode !== 'auto' || !avatar || fly) return;
+  const chest = avatar.bodyPoint(0, 118, -10);
+  const d = chest.sub(controls.target).multiplyScalar(Math.min(1, dt * 3));
+  controls.target.add(d);
+  camera.position.add(d);
 }
 
 // ---------------------------------------------------------------------------
 // Tweens and autopilot (demonstrations)
 // ---------------------------------------------------------------------------
 
+// Demonstrations run on a clock that can be paused and sped up (watch mode)
+const vclock = { now: 0, scale: 1, paused: false };
 const tweens = new Set();
 function tween(dur, fn) {
-  return new Promise((resolve) => { tweens.add({ t0: performance.now(), dur: dur * 1000, fn, resolve }); });
+  return new Promise((resolve) => { tweens.add({ t0: vclock.now, dur: Math.max(1, dur * 1000), fn, resolve }); });
 }
-function runTweens() {
-  const now = performance.now();
+function runTweens(dt = 0) {
+  if (!vclock.paused) vclock.now += dt * 1000 * vclock.scale;
+  const now = vclock.now;
   for (const tw of [...tweens]) {
     const k = Math.min(1, (now - tw.t0) / tw.dur);
     tw.fn(k < 0.5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2, k);
@@ -707,7 +790,7 @@ async function withAutopilot(fn) {
     if (hands) {
       hands.right.setPose('relaxed', 'index');
       hands.left.setPose('flat', 'palm');
-      if (state.mode !== 'student') hands.right.goal.set(72, S.TABLE_Y + 6, 42); // rest at the front-right of the bench
+      if (!bodyMode()) hands.right.goal.set(72, S.TABLE_Y + 6, 42); // rest at the front-right of the bench
       hover = null;
     }
   }
@@ -816,10 +899,10 @@ async function demoPress(seconds = 1.0) {
   const seq0 = state.probe?.seq || 0;
   const t0 = performance.now();
   // Hold until the galvanometer has settled (in simulation time), however slow the frame rate
-  while (performance.now() - t0 < 6000) {
+  while (performance.now() - t0 < 6000 || vclock.paused) {
     await tween(0.15, () => { R.goal.copy(cap()); });
     checkAbort();
-    if ((state.probe?.seq || 0) > seq0 + 1 && state.probe.l === state.l && performance.now() - t0 > seconds * 800) break;
+    if ((state.probe?.seq || 0) > seq0 + 1 && state.probe.l === state.l && performance.now() - t0 > (seconds * 800) / vclock.scale) break;
   }
   const d = state.probe && state.probe.l === state.l ? state.probe.div : state.needle.theta;
   state.holdSources.delete('auto');
@@ -933,7 +1016,7 @@ function setNdc(e) {
   pointerNdcValid = true;
 }
 
-const pickRoots = () => [board.group, gauge.group, ...Object.values(ITEMS).map((it) => it.group), ...leads.map((L) => L.mesh)];
+const pickRoots = () => [board.group, gauge.group, ppe.group, ...Object.values(ITEMS).map((it) => it.group), ...leads.map((L) => L.mesh)];
 function classify(o) {
   for (let x = o; x; x = x.parent) {
     if (x.userData.term) return { kind: 'term', id: x.userData.term };
@@ -975,9 +1058,26 @@ canvas.addEventListener('pointerdown', (e) => {
     if (pending) cancelLead();
     return;
   }
+  if (state.mode === 'fp' && e.button === 0 && (!h || h.kind === 'surface' || h.kind === 'lead')) {
+    // drag to look around
+    canvas.setPointerCapture(e.pointerId);
+    pointer = { id: e.pointerId, x: e.clientX, y: e.clientY, look: true, hit: { kind: 'look' } };
+    return;
+  }
   if (e.button !== 0 || !h) { if (pending && e.button === 0) cancelLead(); return; }
   if (h.kind === 'surface' || h.kind === 'lead') { if (pending) cancelLead(); return; }
-  if (state.mode === 'student' && !reachable(h.point)) {
+  if (state.mode === 'fp' && h.kind === 'ppe') {
+    e.preventDefault();
+    if (gearOn(h.obj.userData.gear)) return;
+    const g = h.obj.userData.gear;
+    withAutopilot(() => demoGear(g));
+    return;
+  }
+  if (state.mode === 'fp' && !allGear()) {
+    toast('Safety first: put on your lab coat, goggles, gloves and safety shoes at the PPE station by the door.', 'warn', 4000);
+    return;
+  }
+  if (bodyMode() && !reachable(h.point)) {
     e.preventDefault();
     toast('Too far to reach — walking over…', 'info', 1500);
     withAutopilot(() => walkTo(standSpot(h.point)));
@@ -1020,6 +1120,12 @@ canvas.addEventListener('pointermove', (e) => {
     return;
   }
   if (e.pointerId !== pointer.id) return;
+  if (pointer.look) {
+    fp.yaw -= (e.clientX - pointer.x) * 0.0045;
+    fp.pitch = THREE.MathUtils.clamp(fp.pitch - (e.clientY - pointer.y) * 0.0045, -1.35, 0.75);
+    pointer.x = e.clientX; pointer.y = e.clientY;
+    return;
+  }
   if (!pointer.moved && Math.hypot(e.clientX - pointer.x, e.clientY - pointer.y) > 4) pointer.moved = true;
   if (pointer.hit.kind === 'jockey' && pointer.moved) {
     const p = V3(0, 0, 0);
@@ -1043,7 +1149,7 @@ function endPointer(e) {
   if (pointer.carry) dropCarried(pointer.carry);
   state.holdSources.delete('pointer');
   pointer = null;
-  controls.enabled = true;
+  controls.enabled = state.mode !== 'fp';
   canvas.style.cursor = '';
 }
 canvas.addEventListener('pointerup', endPointer);
@@ -1088,8 +1194,9 @@ function updateTip(e, h) {
     else if (h.kind === 'key') text = `Key K — click to ${state.keyIn ? 'remove' : 'insert'}`;
     else if (h.kind === 'hr') text = `High resistance — click to ${state.protect ? 'remove' : 'put in'}`;
     else if (h.kind === 'jockey') text = 'Jockey — drag to slide, hold to press';
+    else if (h.kind === 'ppe') text = gearOn(h.obj.userData.gear) ? `${GEAR_NAMES[h.obj.userData.gear]} — already wearing` : `${GEAR_NAMES[h.obj.userData.gear]} — click to put on`;
   }
-  if (text && h && h.kind !== 'surface' && state.mode === 'student' && !reachable(h.point)) text = `${text.split(' — ')[0]} — too far: walk closer (W A S D) or click to walk there`;
+  if (text && h && h.kind !== 'surface' && bodyMode() && !reachable(h.point)) text = `${text.split(' — ')[0]} — too far: walk closer (W A S D) or click to walk there`;
   if (pending && h && h.kind === 'term') text = `Connect lead to ${text}`;
   else if (pending) text = 'Click a terminal to finish the lead (Esc cancels)';
   tipEl.classList.toggle('hidden', !text);
@@ -1101,10 +1208,10 @@ function updateTip(e, h) {
   }
 }
 
-const WALK_KEYS = ['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ShiftLeft', 'ShiftRight'];
+const WALK_KEYS = ['KeyW', 'KeyA', 'KeyS', 'KeyD', 'KeyQ', 'KeyE', 'ArrowUp', 'ArrowDown', 'ShiftLeft', 'ShiftRight'];
 window.addEventListener('keydown', (e) => {
   if (e.target.tagName === 'SELECT' || (e.target.tagName === 'INPUT' && e.target.type !== 'range' && e.target.type !== 'checkbox')) return;
-  if (WALK_KEYS.includes(e.code)) { keys.add(e.code); if (state.mode === 'student' && e.code.startsWith('Arrow')) e.preventDefault(); }
+  if (WALK_KEYS.includes(e.code)) { keys.add(e.code); if (state.mode === 'fp' && e.code.startsWith('Arrow')) e.preventDefault(); }
   if (e.code === 'Escape') { if (autopilot) demoAbort = true; cancelLead(); }
   if (autopilot || !state.started) return;
   if (e.code === 'Space') { state.holdSources.add('space'); e.preventDefault(); }
@@ -1210,7 +1317,7 @@ $('optLabels').onchange = (e) => { state.labels = e.target.checked; labelsEl.cla
 $('optPip').onchange = (e) => { state.pip = e.target.checked; };
 $('optSound').onchange = (e) => (state.sound = e.target.checked);
 $('optQuality').onchange = (e) => applyQuality(!e.target.checked);
-$('optHands').onchange = (e) => { if (handsLoaded) { handsLoaded.right.root.visible = handsLoaded.left.root.visible = e.target.checked && state.mode !== 'classic'; } if (avatar) avatar.setVisible(e.target.checked && state.mode === 'student'); };
+$('optHands').onchange = (e) => { if (handsLoaded) { handsLoaded.right.root.visible = handsLoaded.left.root.visible = e.target.checked && state.mode !== 'classic'; } if (avatar) avatar.setVisible(e.target.checked && bodyMode()); };
 $('skin').onchange = (e) => handsLoaded && handsLoaded.setSkin(e.target.value);
 $('btnUndoLead').onclick = () => { if (leads.length) disconnect(leads[leads.length - 1]); };
 $('btnClearLeads').onclick = () => { [...leads].forEach(disconnect); };
@@ -1455,10 +1562,27 @@ async function demoRecordSet(Rs) {
   }
 }
 
-const PHASES = ['Set up the apparatus', 'Make the connections', 'Check the circuit', 'Find balance points', 'Measure the wire', 'Result'];
+const PHASES = ['Safety gear', 'Set up the apparatus', 'Make the connections', 'Check the circuit', 'Find balance points', 'Measure the wire', 'Result'];
 const STEPS = [
-  ...['box', 'galv', 'coil', 'cell', 'key'].map((k) => ({
+  ...GEAR.map((g) => ({
     phase: 0,
+    text: {
+      coat: 'Go to the PPE station by the door and put on a lab coat.',
+      goggles: 'Put on the safety goggles.',
+      gloves: 'Put on nitrile gloves.',
+      shoes: 'Change into safety shoes.',
+    }[g],
+    why: {
+      coat: 'A buttoned lab coat protects your clothes and skin from spills and hot components.',
+      goggles: 'Goggles protect your eyes from sparks, splashes and flying wire ends.',
+      gloves: 'Gloves keep sweat and grease off the bridge wire and protect your hands.',
+      shoes: 'Closed safety shoes protect your feet from dropped apparatus.',
+    }[g],
+    check: () => state.mode === 'classic' || gearOn(g),
+    demo: () => demoGear(g),
+  })),
+  ...['box', 'galv', 'coil', 'cell', 'key'].map((k) => ({
+    phase: 1,
     text: {
       box: 'Carry the resistance box from the trolley and place it behind gap 1.',
       galv: 'Place the galvanometer behind the centre terminal B.',
@@ -1471,31 +1595,31 @@ const STEPS = [
     demo: () => demoPlace(k),
     slots: [k],
   })),
-  { phase: 0, text: 'Stand the jockey on the bridge wire.', why: 'The jockey’s knife edge touches the wire only while it is pressed.', check: () => ITEMS.jockey.onBoard, demo: () => demoPlace('jockey'), wire: true },
-  { phase: 1, text: 'Connect the accumulator (+) to one terminal of the plug key.', why: 'The key lets you switch the current off between readings.', check: () => W().cellKey, demo: () => demoConnect('cell.+', 'key.1'), terms: ['cell.+', 'key.1'] },
-  { phase: 1, text: 'Connect the other key terminal to terminal A of the bridge.', check: () => W().keyStrip, demo: () => demoConnect('key.2', 'board.A'), terms: ['key.2', 'board.A'] },
-  { phase: 1, text: 'Connect the accumulator (−) to terminal C of the bridge.', check: () => W().cellStrip, demo: () => demoConnect('cell.-', 'board.C'), terms: ['cell.-', 'board.C'] },
-  { phase: 1, text: 'Connect the resistance box across gap 1 (between the A-strip and the centre strip).', why: 'The known resistance R forms one arm of the Wheatstone bridge.', check: () => W().box, demo: async () => { await demoConnect('box.1', 'board.g1a'); await demoConnect('box.2', 'board.g1b'); }, terms: ['box.1', 'board.g1a', 'box.2', 'board.g1b'] },
-  { phase: 1, text: 'Connect the two ends of the test wire across gap 2.', why: 'The unknown resistance X forms the adjacent arm.', check: () => W().coil, demo: async () => { await demoConnect('coil.1', 'board.g2a'); await demoConnect('coil.2', 'board.g2b'); }, terms: ['coil.1', 'board.g2a', 'coil.2', 'board.g2b'] },
-  { phase: 1, text: 'Connect one galvanometer terminal to the centre terminal B.', check: () => W().galvB, demo: () => demoConnect('galv.-', 'board.B'), terms: ['galv.-', 'board.B'] },
-  { phase: 1, text: 'Connect the other galvanometer terminal to the jockey.', why: 'Galvanometer and jockey form the detector arm between B and the point D on the wire.', check: () => W().galvJ, demo: () => demoConnect('galv.+', 'jockey.T'), terms: ['galv.+', 'jockey.T'] },
-  { phase: 2, text: 'Insert the plug in key K to switch the current on.', check: () => state.keyIn, demo: () => demoTouch(ITEMS.key.app.plug, toggleKey) },
-  { phase: 2, text: 'Take a plug out of the resistance box to introduce a known R (e.g. 2 Ω).', check: () => currentR() > 0, demo: () => demoTouch(ITEMS.box.app.plugs[2], () => togglePlug(2)) },
-  { phase: 2, text: 'With HR in, press the jockey near end A, then near end C. The deflections must be in opposite directions.', why: 'Opposite deflections at the two ends prove the circuit is correct and that a null point exists.', check: () => state.endsTapped.lo != null && state.endsTapped.hi != null && Math.sign(state.endsTapped.lo) !== Math.sign(state.endsTapped.hi), demo: async () => { if (!state.protect) await demoTouch(ITEMS.galv.app.knob, toggleHR); await demoProbe(5); await demoProbe(95); } },
-  { phase: 3, text: 'Turn the HR knob to remove the high resistance, for full galvanometer sensitivity.', check: () => !state.protect, demo: () => demoTouch(ITEMS.galv.app.knob, toggleHR) },
-  { phase: 3, text: 'Tap the jockey along the wire to find the point of zero deflection (null point).', why: 'Tap, don’t slide. Bracket the null from both sides and narrow down in 1 mm steps.', check: () => (state.probe && !state.probe.protect && Math.abs(state.probe.div) < 0.5) || state.readings.length > 0, demo: demoNull },
-  { phase: 3, text: 'Record the balance length. Take readings for three different values of R, removing the key between readings.', check: () => recordedNormal() >= 3, demo: () => demoRecordSet([2, 3, 5].slice(recordedNormal())) },
-  { phase: 3, text: 'Interchange the resistance box and the test wire (swap the gaps).', why: 'Interchanging cancels the end resistances of the bridge wire.', check: () => W().swapped, demo: demoInterchange },
-  { phase: 3, text: 'Record three balance points in the interchanged position.', check: () => recordedSwapped() >= 3, demo: () => demoRecordSet([2, 3, 5].slice(recordedSwapped())) },
-  { phase: 4, text: 'Close the screw gauge jaws and note its zero error.', check: () => state.gauge.zero != null, demo: checkZero },
-  { phase: 4, text: 'Measure the wire diameter at three places, in two perpendicular directions.', check: () => state.gauge.rows.length >= 6, demo: async () => { while (state.gauge.rows.length < 6) await gaugeReading(); } },
-  { phase: 4, text: 'Measure the length of the test wire with the metre rule.', check: () => state.length != null, demo: measureLength },
-  { phase: 5, text: 'Compare your resistivity with the standard value, then send the readings to the Observation tab.', check: () => !!state.sent, demo: async () => sendToObservation() },
+  { phase: 1, text: 'Stand the jockey on the bridge wire.', why: 'The jockey’s knife edge touches the wire only while it is pressed.', check: () => ITEMS.jockey.onBoard, demo: () => demoPlace('jockey'), wire: true },
+  { phase: 2, text: 'Connect the accumulator (+) to one terminal of the plug key.', why: 'The key lets you switch the current off between readings.', check: () => W().cellKey, demo: () => demoConnect('cell.+', 'key.1'), terms: ['cell.+', 'key.1'] },
+  { phase: 2, text: 'Connect the other key terminal to terminal A of the bridge.', check: () => W().keyStrip, demo: () => demoConnect('key.2', 'board.A'), terms: ['key.2', 'board.A'] },
+  { phase: 2, text: 'Connect the accumulator (−) to terminal C of the bridge.', check: () => W().cellStrip, demo: () => demoConnect('cell.-', 'board.C'), terms: ['cell.-', 'board.C'] },
+  { phase: 2, text: 'Connect the resistance box across gap 1 (between the A-strip and the centre strip).', why: 'The known resistance R forms one arm of the Wheatstone bridge.', check: () => W().box, demo: async () => { await demoConnect('box.1', 'board.g1a'); await demoConnect('box.2', 'board.g1b'); }, terms: ['box.1', 'board.g1a', 'box.2', 'board.g1b'] },
+  { phase: 2, text: 'Connect the two ends of the test wire across gap 2.', why: 'The unknown resistance X forms the adjacent arm.', check: () => W().coil, demo: async () => { await demoConnect('coil.1', 'board.g2a'); await demoConnect('coil.2', 'board.g2b'); }, terms: ['coil.1', 'board.g2a', 'coil.2', 'board.g2b'] },
+  { phase: 2, text: 'Connect one galvanometer terminal to the centre terminal B.', check: () => W().galvB, demo: () => demoConnect('galv.-', 'board.B'), terms: ['galv.-', 'board.B'] },
+  { phase: 2, text: 'Connect the other galvanometer terminal to the jockey.', why: 'Galvanometer and jockey form the detector arm between B and the point D on the wire.', check: () => W().galvJ, demo: () => demoConnect('galv.+', 'jockey.T'), terms: ['galv.+', 'jockey.T'] },
+  { phase: 3, text: 'Insert the plug in key K to switch the current on.', check: () => state.keyIn, demo: () => demoTouch(ITEMS.key.app.plug, toggleKey) },
+  { phase: 3, text: 'Take a plug out of the resistance box to introduce a known R (e.g. 2 Ω).', check: () => currentR() > 0, demo: () => demoTouch(ITEMS.box.app.plugs[2], () => togglePlug(2)) },
+  { phase: 3, text: 'With HR in, press the jockey near end A, then near end C. The deflections must be in opposite directions.', why: 'Opposite deflections at the two ends prove the circuit is correct and that a null point exists.', check: () => state.endsTapped.lo != null && state.endsTapped.hi != null && Math.sign(state.endsTapped.lo) !== Math.sign(state.endsTapped.hi), demo: async () => { if (!state.protect) await demoTouch(ITEMS.galv.app.knob, toggleHR); await demoProbe(5); await demoProbe(95); } },
+  { phase: 4, text: 'Turn the HR knob to remove the high resistance, for full galvanometer sensitivity.', check: () => !state.protect, demo: () => demoTouch(ITEMS.galv.app.knob, toggleHR) },
+  { phase: 4, text: 'Tap the jockey along the wire to find the point of zero deflection (null point).', why: 'Tap, don’t slide. Bracket the null from both sides and narrow down in 1 mm steps.', check: () => (state.probe && !state.probe.protect && Math.abs(state.probe.div) < 0.5) || state.readings.length > 0, demo: demoNull },
+  { phase: 4, text: 'Record the balance length. Take readings for three different values of R, removing the key between readings.', check: () => recordedNormal() >= 3, demo: () => demoRecordSet([2, 3, 5].slice(recordedNormal())) },
+  { phase: 4, text: 'Interchange the resistance box and the test wire (swap the gaps).', why: 'Interchanging cancels the end resistances of the bridge wire.', check: () => W().swapped, demo: demoInterchange },
+  { phase: 4, text: 'Record three balance points in the interchanged position.', check: () => recordedSwapped() >= 3, demo: () => demoRecordSet([2, 3, 5].slice(recordedSwapped())) },
+  { phase: 5, text: 'Close the screw gauge jaws and note its zero error.', check: () => state.gauge.zero != null, demo: checkZero },
+  { phase: 5, text: 'Measure the wire diameter at three places, in two perpendicular directions.', check: () => state.gauge.rows.length >= 6, demo: async () => { while (state.gauge.rows.length < 6) await gaugeReading(); } },
+  { phase: 5, text: 'Measure the length of the test wire with the metre rule.', check: () => state.length != null, demo: measureLength },
+  { phase: 6, text: 'Compare your resistivity with the standard value, then send the readings to the Observation tab.', check: () => !!state.sent, demo: async () => sendToObservation() },
 ];
 // Checks and balance-point steps stay ticked once achieved (the key is rightly
 // taken out between readings); setup and wiring steps stay live, so a lead
 // removed later is flagged again.
-STEPS.forEach((s, i) => { s.i = i; s.sticky = s.phase >= 2; });
+STEPS.forEach((s, i) => { s.i = i; s.sticky = s.phase >= 3; });
 function isDone(s) {
   if (s.latched) return true;
   const ok = !!s.check();
@@ -1631,6 +1755,7 @@ const LABELS = [
   ['Meter bridge', () => V3(-30, 3, S.WIRE_Z)],
   ['Screw gauge', () => gauge.group.position.clone().add(V3(0, 10, 0))],
   ['Apparatus trolley', () => V3(TROLLEY.x, S.TABLE_Y + 16, TROLLEY.z - 30)],
+  ['PPE station — safety gear', () => ppe.group.localToWorld(V3(0, 214, 6))],
 ];
 const labelEls = LABELS.map(([t]) => { const d = document.createElement('div'); d.className = 'tag'; d.textContent = t; labelsEl.appendChild(d); return d; });
 const projV = new THREE.Vector3();
@@ -1750,11 +1875,11 @@ function clampReach(p) {
 }
 function driveHands() {
   if (!hands) return;
-  const student = state.mode === 'student' && avatar;
+  const student = bodyMode() && avatar;
   if (student) {
     SHOULDER.right.copy(avatar.shoulderWorld('right'));
     SHOULDER.left.copy(avatar.shoulderWorld('left'));
-    if (walking.active || (walking.keys && !autopilot)) { bodyHands(); return; }
+    if (walking.active || (walking.keys && !autopilot)) { if (state.mode === 'fp') fpHands(); else bodyHands(); return; }
   }
   if (autopilot) return;
   const R = hands.right, Lh = hands.left;
@@ -1764,7 +1889,7 @@ function driveHands() {
       R.setPose('point', 'index');
       R.goal.copy(clampReach(hover.point.clone().add(V3(0, 4, 0))));
       aimHand(R, hover.point, -0.2);
-    } else bodyHands();
+    } else if (state.mode === 'fp') fpHands(); else bodyHands();
     return;
   }
   if (pointer && pointer.carry) {
@@ -1811,19 +1936,20 @@ function frame() {
       if (!lowGfx && fpsProbe.frames / fpsProbe.t < 22) { applyQuality(true); toast('Switched to lighter graphics for smoother motion. You can change this under “Specimen & view”.', 'info', 6000); }
     }
   }
-  runTweens();
+  runTweens(dt);
   if (state.app) advance(dt);
   driveStudent(dt);
   driveHands();
   updateCarried();
   placeJockey();
   if (hands) hands.update(dt);
-  if (avatar && state.mode === 'student' && hands) {
+  if (avatar && bodyMode() && hands) {
     const a = avatar.state, g = hands.right.goal;
     const fwd = -(g.x - a.pos.x) * Math.sin(a.heading) - (g.z - a.pos.z) * Math.cos(a.heading);
     a.leanGoal = g.y < 30 ? THREE.MathUtils.clamp((fwd - 30) / 55, 0, 0.62) : 0;
     avatar.update(dt, { moving: walking.speed > 1, speed: walking.speed, wristL: hands.left.wristWorld(), wristR: hands.right.wristWorld(), cuffL: hands.left.forearmDir(), cuffR: hands.right.forearmDir() });
   }
+  updateFPCamera();
   if (pending) updatePendingLead(hands ? hands.right.goal.clone() : (hover && hover.point ? hover.point.clone().add(V3(0, 2, 0)) : termWorld(pending.from).add(V3(0, 4, 4))));
   updateLeads();
   for (const s of [...spinning]) { s.cap.rotation.y += dt * 14; s.left -= dt; if (s.left <= 0) spinning.splice(spinning.indexOf(s), 1); }
@@ -1835,8 +1961,8 @@ function frame() {
   updateFlow(dt);
   updateHighlights(elapsed);
   updateFly();
-  followCamera();
-  controls.update();
+  followCamera(dt);
+  if (state.mode !== 'fp') controls.update();
   camera.position.x = THREE.MathUtils.clamp(camera.position.x, ROOM.x0 + 15, ROOM.x1 - 15);
   camera.position.z = THREE.MathUtils.clamp(camera.position.z, ROOM.z0 + 15, ROOM.z1 - 15);
   camera.position.y = THREE.MathUtils.clamp(camera.position.y, FLOOR_Y + 20, FLOOR_Y + 290);
@@ -1852,7 +1978,8 @@ function frame() {
   renderer.setScissorTest(false);
   renderer.setViewport(0, 0, w, h);
   renderer.render(scene, camera);
-  const showPip = state.started && state.pip && w > 360 && ITEMS.jockey.onBoard && ITEMS.galv.placed;
+  const atBench = !avatar || state.mode !== 'fp' || (Math.abs(avatar.state.pos.x) < 125 && avatar.state.pos.z < 95);
+  const showPip = state.started && state.pip && w > 360 && ITEMS.jockey.onBoard && ITEMS.galv.placed && atBench;
   $('pipLoupe').classList.toggle('hidden', !showPip);
   $('pipGalv').classList.toggle('hidden', !showPip);
   if (showPip) {
@@ -1922,7 +2049,7 @@ function newSpecimen() {
   state.length = null;
   state.probe = null;
   state.sent = false;
-  if (typeof STEPS !== 'undefined') STEPS.forEach((st) => { if (st.phase >= 3) st.latched = false; });
+  if (typeof STEPS !== 'undefined') STEPS.forEach((st) => { if (st.phase >= 4) st.latched = false; });
   buildCoilItem();
   leads.forEach(rebuildLeadMesh);
   flowKey = '';
@@ -1957,31 +2084,41 @@ function quickSetup() {
 }
 
 const MODE_HINTS = {
-  student: '<b>W A S D</b> / <b>↑ ↓</b> walk (Shift: run) · the mouse drives your hands: <b>drag</b> apparatus, <b>click</b> terminal → terminal for a lead, <b>right-click</b> a lead to remove · <b>hold</b> the jockey or <b>Space</b> to press · <b>drag</b> empty space to look around',
-  hands: '<b>Left-drag</b> apparatus to carry it · <b>click</b> a terminal, then another, to run a lead · <b>right-click</b> a lead to remove it · <b>drag</b> the jockey, <b>hold</b> or <b>Space</b> to press · <b>drag</b> empty space to look around, <b>scroll</b> to zoom',
+  auto: '<b>Watch</b>: the student performs the whole experiment. <b>Drag</b> to move the camera around them, <b>scroll</b> to zoom · <b>Pause</b> / speed in the Guide panel',
+  fp: '<b>W A S D</b> walk · <b>Q/E</b> turn · <b>drag</b> empty space to look · <b>click</b> things to use them with your hands · <b>drag</b> apparatus to carry · <b>click</b> terminal → terminal for a lead · <b>right-click</b> a lead to remove · <b>hold</b> the jockey or <b>Space</b> to press',
   classic: '<b>Drag</b> the jockey to slide it · <b>hold</b> it, <b>Space</b> or <b>Press</b> to touch the wire · <b>←/→</b> 1 mm (Shift: 1 cm) · <b>click</b> plugs, key K and the HR knob · <b>drag</b> empty space to look around',
 };
 function studentView() {
-  const a = avatar.state;
-  // Over the right shoulder, high enough to see the bench past the student
-  const t = avatar.bodyPoint(18, 72, -78);
-  const back = V3(62, 158, 165).applyAxisAngle(V3(0, 1, 0), a.heading);
-  return { pos: t.clone().add(back).toArray(), target: t.toArray() };
+  // From the middle of the room toward the student, raised to look down on them
+  const t = avatar.bodyPoint(0, 95, -20);
+  const dir = V3(60 - t.x, 0, 110 - t.z);
+  if (dir.lengthSq() < 1) dir.set(0, 0, 1);
+  dir.normalize();
+  return { pos: t.clone().addScaledVector(dir, 230).add(V3(0, 120, 0)).toArray(), target: t.toArray() };
 }
+let pendingAuto = false;
 function setMode(mode) {
-  if (mode !== 'classic' && !handsLoaded) mode = 'classic';
-  if (mode === 'student' && !avatar) mode = 'hands';
+  if (mode !== 'classic' && (!handsLoaded || !avatar)) mode = 'classic';
+  if (autopilot) { demoAbort = true; pendingAuto = mode === 'auto'; }
   state.mode = mode;
   hands = mode === 'classic' ? null : handsLoaded;
   cancelLead();
+  keys.clear();
   if (handsLoaded) {
-    const show = mode !== 'classic' && $('optHands').checked;
-    handsLoaded.right.root.visible = handsLoaded.left.root.visible = show;
-    handsLoaded.right.setSleeve(mode === 'hands');
-    handsLoaded.left.setSleeve(mode === 'hands');
+    handsLoaded.right.root.visible = handsLoaded.left.root.visible = mode !== 'classic' && $('optHands').checked;
+    handsLoaded.right.setSleeve(false);
+    handsLoaded.left.setSleeve(false);
   }
-  if (avatar) avatar.setVisible(mode === 'student');
-  if (mode !== 'student') { SHOULDER.right.copy(FIXED_SHOULDER.right); SHOULDER.left.copy(FIXED_SHOULDER.left); }
+  if (avatar) {
+    avatar.setVisible(mode !== 'classic' && $('optHands').checked);
+    avatar.setHeadVisible(mode !== 'fp');
+    fp.yaw = avatar.state.heading; fp.pitch = -0.3;
+  }
+  controls.enabled = mode !== 'fp';
+  camera.near = mode === 'fp' ? 2.5 : 0.5;
+  camera.fov = mode === 'fp' ? 70 : 40; // wide, game-like view in first person
+  camera.updateProjectionMatrix();
+  $('gogglesOverlay').classList.toggle('on', mode === 'fp' && gearOn('goggles'));
   if (mode === 'classic' && !wiringChecks().complete) {
     // No human: the bench is set up and wired for you
     [...leads].forEach(disconnect);
@@ -1993,23 +2130,46 @@ function setMode(mode) {
   document.body.dataset.mode = mode;
   followPrev = null;
   if (state.started) {
-    if (mode === 'student') { const v = studentView(); fly = { t0: performance.now(), dur: 900, p0: camera.position.clone(), t0v: controls.target.clone(), p1: V3(...v.pos), t1: V3(...v.target) }; }
-    else flyTo(mode === 'classic' || wiringChecks().complete ? 'bench' : 'setup');
+    if (mode === 'auto') { fly = null; const v = studentView(); camera.position.set(...v.pos); controls.target.set(...v.target); }
+    else if (mode === 'classic') flyTo('bench');
+    else { controls.target.copy(avatar.eyeWorld()); }
   }
   setDemoButtons(false);
+  if (mode === 'auto' && state.started && !autopilot) setTimeout(runAuto, 400);
+}
+
+// Watch mode: the student performs every remaining step, one by one
+async function runAuto() {
+  if (state.mode !== 'auto' || autopilot || !avatar) return;
+  $('autoPause').textContent = '⏸ Pause';
+  await withAutopilot(async () => {
+    let last = -1, tries = 0;
+    for (let guard = 0; guard < 90; guard++) {
+      const st = currentStep();
+      if (!st || state.mode !== 'auto') break;
+      if (st.i === last) { if (++tries > 2) { toast('The student could not finish this step. Press Restart to try again.', 'err', 6000); break; } } else { last = st.i; tries = 0; }
+      await st.demo();
+      await wait(0.35);
+    }
+  });
+  if (pendingAuto) { pendingAuto = false; if (state.mode === 'auto') setTimeout(runAuto, 200); return; }
+  if (state.mode === 'auto' && !currentStep()) { toast('The student has completed the experiment — every reading and measurement is recorded.', 'ok', 8000); $('autoPause').textContent = '↻ Watch again'; }
 }
 
 function start(mode, ready) {
   $('startScreen').classList.add('hidden');
   state.started = true;
+  demoAbort = true;
   resetBench();
-  if (avatar) { avatar.state.pos.set(40, FLOOR_Y, 150); avatar.state.heading = 0; }
+  resetGear();
+  vclock.paused = false;
+  if (avatar) { avatar.state.pos.set(470, FLOOR_Y, 300); avatar.state.heading = Math.PI / 2; } // entering by the door
   if (mode === 'classic' || ready) quickSetup();
   setMode(mode);
-  if (mode === 'student') {
-    toast(ready ? 'Walk up to the bench with W A S D (or ↑ ↓) and start experimenting.' : 'Walk to the trolley on the right (W A S D), then carry each piece of apparatus to your bench. “Show me” demonstrates any step.', 'info', 8000);
-  } else if (mode === 'hands' && !ready) {
-    toast('Start by carrying each piece of apparatus from the trolley to its place on the bench. Press “Show me” for a demonstration.', 'info', 7000);
+  if (mode === 'fp') {
+    toast('You are the student. First go to the PPE station on your left and put on a lab coat, goggles, gloves and safety shoes (click each one).', 'info', 9000);
+  } else if (mode === 'auto') {
+    toast('Watch the student gear up, set up the bench and perform the experiment. Drag to move the camera.', 'info', 7000);
   }
   sfx('ok');
 }
@@ -2024,7 +2184,7 @@ syncPlugs();
 updateGuide();
 frame();
 
-const START_BTNS = ['startStudent', 'startHands', 'startClassic'];
+const START_BTNS = ['startAuto', 'startFP', 'startClassic'];
 START_BTNS.forEach((id) => { $(id).disabled = true; });
 loadHands(scene).then((h) => {
   handsLoaded = h;
@@ -2034,25 +2194,34 @@ loadHands(scene).then((h) => {
   h.left.setPose('flat', 'palm');
   h.left.goal.copy(LEFT_REST); h.left.pos.copy(LEFT_REST);
   avatar = buildAvatar(scene, h.skinMat);
-  avatar.state.pos.set(40, FLOOR_Y, 150);
+  avatar.state.pos.set(470, FLOOR_Y, 300);
+  avatar.state.heading = Math.PI / 2;
   avatar.setVisible(false);
   h.right.root.visible = h.left.root.visible = false;
 }).catch((e) => {
-  console.warn('Hand models could not be loaded; only the no-human mode is available.', e);
+  console.warn('Human models could not be loaded; only the no-human mode is available.', e);
 }).finally(() => {
   $('loadNote').textContent = handsLoaded ? 'Ready. Choose how you want to work.' : 'Ready (human models unavailable — no-human mode only).';
   START_BTNS.forEach((id) => { $(id).disabled = !handsLoaded && id !== 'startClassic'; });
   setDemoButtons(false);
 });
-$('startStudent').onclick = () => start('student', $('startReady').checked);
-$('startHands').onclick = () => start('hands', $('startReady').checked);
+$('startAuto').onclick = () => start('auto', $('startReady').checked);
+$('startFP').onclick = () => start('fp', $('startReady').checked);
 $('startClassic').onclick = () => start('classic', true);
 $('mode').onchange = (e) => setMode(e.target.value);
+$('autoPause').onclick = () => {
+  if (!autopilot) { if (!currentStep()) start('auto', $('startReady').checked); else runAuto(); return; }
+  vclock.paused = !vclock.paused;
+  $('autoPause').textContent = vclock.paused ? '▶ Resume' : '⏸ Pause';
+};
+$('autoSpeed').onchange = (e) => { vclock.scale = +e.target.value; };
+$('autoRestart').onclick = () => start('auto', $('startReady').checked);
 
 // Exposed for automated checks and curious students
 window.meterBridge = {
   state, P, advance, leads, terminals, ITEMS, connect, disconnect, wiringChecks, findNull, setL, setR,
-  toggleKey, toggleHR, recordReading, flyTo, start, setMode, withAutopilot, walkTo, keys, currentStep, STEPS, demoInterchange,
+  ppeItems: ppe.items, pickAt: (x, y) => { const h = pick({ clientX: x, clientY: y }); return h && { kind: h.kind, name: h.obj?.userData?.gear || h.key || h.id }; },
+  toggleKey, toggleHR, recordReading, flyTo, start, setMode, withAutopilot, walkTo, keys, runAuto, vclock, fp, wearGear, allGear, currentStep, STEPS, demoInterchange,
   get hands() { return hands; }, get autopilot() { return autopilot; }, get avatar() { return avatar; },
   camera, controls, gauge,
   updateUi: () => updateUi(),

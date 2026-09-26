@@ -13,9 +13,11 @@ HTML lab animations on demand.
   Paper Chromatography, and more) shipped under `public/simulations/`.
 - **Virtual Meter Bridge lab** — `phy121` is a full 3D physics lab room
   (Three.js, vendored under `public/simulations/lib/three/` so it stays
-  offline). Three ways to work: walk the lab as a full student (keyboard to
-  walk, mouse drives the hands), use just the hands at the bench, or turn the
-  human off and use direct controls. Students set the bench up from scratch:
+  offline). Three ways to work: watch a student perform the whole experiment
+  automatically (drag to move the camera), be the student in first person
+  with game-style hands, or turn the human off and use direct controls. The
+  student must put on a lab coat, goggles, gloves and safety shoes at the PPE
+  station before the experiment can begin. The bench is set up from scratch:
   carry apparatus from the trolley, run leads between binding screws, then
   perform the experiment and measure the wire with a working screw gauge. Whatever is wired is solved as a real resistor network,
   so wrong connections behave physically; every step has a "Show me" hand

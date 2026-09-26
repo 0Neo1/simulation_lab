@@ -91,7 +91,8 @@ const physicsContent = {
         'Measure the total length L of the wire using a meter scale.',
       ],
       simulator: [
-        'Open the Simulator tab and choose how to work: "Walk as a student" (walk the lab with W A S D, hands on the mouse), "Hands only" (stay at the bench, hands on the mouse) or "No human" (the bench is ready and you use direct controls). You can switch at any time from the panel.',
+        'Open the Simulator tab and choose how to work: "Watch the student" (a student performs the whole experiment automatically while you move the camera by dragging), "Be the student" (first-person view with your own hands — walk with W A S D, look by dragging) or "No human" (the bench is ready and you use direct controls). You can switch at any time from the panel.',
+        'Safety first: before touching any apparatus, go to the PPE station by the door and put on a lab coat, safety goggles, nitrile gloves and safety shoes.',
         'In the physics lab the meter bridge is fixed on your bench and the rest of the apparatus is on the trolley beside it.',
         'Drag each item from the trolley onto its glowing place on the bench: resistance box behind gap 1, galvanometer behind terminal B, test wire behind gap 2, accumulator and plug key at the front. Stand the jockey on the bridge wire.',
         'Make the connections by clicking one binding screw and then another: accumulator (+) → key → terminal A, accumulator (−) → terminal C, resistance box across gap 1, test wire across gap 2, galvanometer between terminal B and the jockey. Right-click a lead to remove it.',

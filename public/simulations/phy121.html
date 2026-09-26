@@ -60,6 +60,7 @@
     <div class="pip" id="pipLoupe"><span>Scale loupe · read l here</span></div>
     <div class="pip" id="pipGalv"><span>Galvanometer</span></div>
 
+    <div id="gogglesOverlay" aria-hidden="true"></div>
     <div id="labels"></div>
     <div id="tip" class="tip hidden"></div>
     <div id="toasts" aria-live="polite"></div>
@@ -75,25 +76,25 @@
         <p class="lead">Determine the specific resistance of a wire using a meter bridge. The meter bridge is fixed on your bench;
           the rest of the apparatus is waiting on the trolley beside it. Choose how you want to work — you can switch at any time from the panel.</p>
         <div class="choices three">
-          <button class="choice" id="startStudent">
-            <b>Walk as a student</b>
-            <span>A full student body: walk around the lab with <i>W A S D</i> and use your hands with the mouse — fetch apparatus from the trolley, wire the bench and experiment.</span>
+          <button class="choice" id="startAuto">
+            <b>Watch the student</b>
+            <span>A student walks in, puts on lab coat, goggles, gloves and safety shoes, then sets up the bench and performs every step by themselves. Drag to move the camera around them.</span>
           </button>
-          <button class="choice mid" id="startHands">
-            <b>Hands only</b>
-            <span>Stay at the bench and use just your hands with the mouse: carry apparatus, run leads and perform the experiment.</span>
+          <button class="choice mid" id="startFP">
+            <b>Be the student</b>
+            <span>First-person view through the student's eyes, with your hands and body in view like a game. Walk with W A S D, look by dragging, and do everything yourself — starting with your safety gear.</span>
           </button>
           <button class="choice alt" id="startClassic">
             <b>No human</b>
             <span>No body or hands. The bench is ready — click plugs and the key, drag the jockey and use the panel, like the classic simulator.</span>
           </button>
         </div>
-        <label class="check startready"><input type="checkbox" id="startReady" /> Bench already set up and wired (skip setting up)</label>
+        <label class="check startready"><input type="checkbox" id="startReady" /> Bench already set up and wired (skip setting up the apparatus — safety gear is still required)</label>
         <div class="mouse">
-          <div><b>W A S D</b> / <b>↑ ↓</b> — walk (student mode) · <b>Shift</b> — run</div>
-          <div><b>Left-drag</b> on apparatus — pick it up and carry it</div>
-          <div><b>Click</b> terminal → terminal — connect a lead · <b>Right-click</b> a lead — remove</div>
-          <div><b>Drag</b> empty space — look around · <b>Scroll</b> — zoom</div>
+          <div><b>Watch</b> — drag to orbit the camera · scroll to zoom</div>
+          <div><b>Be the student</b> — W A S D walk · Q/E turn · drag to look</div>
+          <div><b>Click</b> to use things · <b>drag</b> apparatus to carry it</div>
+          <div><b>Click</b> terminal → terminal for a lead · <b>right-click</b> removes</div>
         </div>
         <p class="note" id="loadNote">Loading the lab…</p>
       </div>
@@ -108,6 +109,16 @@
         <div class="progress"><i id="guideBar"></i></div>
         <p class="instr" id="guideText"></p>
         <p class="why" id="guideWhy"></p>
+        <div class="row autobar">
+          <button class="btn" id="autoPause">⏸ Pause</button>
+          <select id="autoSpeed" title="Speed">
+            <option value="0.5">½×</option>
+            <option value="1" selected>1×</option>
+            <option value="2">2×</option>
+            <option value="4">4×</option>
+          </select>
+          <button class="btn ghost" id="autoRestart">↻ Restart</button>
+        </div>
         <div class="row">
           <button class="btn" id="btnDemo">▶ Show me</button>
           <button class="btn ghost" id="btnDoPhase">Do this phase for me</button>
@@ -124,8 +135,8 @@
       </div>
       <label class="lbl">Who performs the experiment
         <select id="mode">
-          <option value="student">Student (walk with keyboard + hands with mouse)</option>
-          <option value="hands">Hands only (mouse)</option>
+          <option value="auto">Watch the student (automatic)</option>
+          <option value="fp">Be the student (first person)</option>
           <option value="classic">No human (classic controls)</option>
         </select>
       </label>

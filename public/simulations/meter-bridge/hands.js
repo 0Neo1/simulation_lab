@@ -36,6 +36,7 @@ class Hand {
     this.model.traverse((o) => {
       if (o.isBone || o.type === 'Object3D' || o.isObject3D) if (o.name) this.bones[o.name] = o;
       if (o.isSkinnedMesh) {
+        this.skinned = o;
         o.material = skinMat;
         o.castShadow = true;
         o.receiveShadow = true;
@@ -86,6 +87,8 @@ class Hand {
     const inner = new THREE.Mesh(new THREE.CylinderGeometry(2.5, 2.9, 7, 20, 1, false), skinMat);
     inner.rotation.x = Math.PI / 2; inner.scale.set(1.2, 1, 0.8); inner.position.set(0, 0.3, 3.4);
     this.root.add(sleeve, cuff, inner);
+    this.inner = inner;
+    this.skinMat = skinMat;
     this.sleeve = sleeve;
     this.cuff = cuff;
 
@@ -164,6 +167,12 @@ class Hand {
     this.sleeve.quaternion.setFromUnitVectors(new THREE.Vector3(0, -1, 0), dir);
   }
 
+  // Nitrile gloves: swap the skin for glove material, including the cuff over the wrist
+  setGloves(on, gloveMat) {
+    this.skinned.material = on ? gloveMat : this.skinMat;
+    this.inner.material = on ? gloveMat : this.skinMat;
+  }
+
   // Show or hide the hand's own lab-coat sleeve (hidden when a full body supplies the arms)
   setSleeve(v) { this.sleeve.visible = v; this.cuff.visible = v; }
 
@@ -186,11 +195,17 @@ export async function loadHands(scene, base = './meter-bridge/assets/') {
     clearcoat: 0.08, clearcoatRoughness: 0.6,
   });
   const sleeveMat = new THREE.MeshStandardMaterial({ color: 0xf4f6f8, roughness: 0.92, side: THREE.DoubleSide });
+  const gloveMat = new THREE.MeshPhysicalMaterial({
+    color: 0x2f7fe0, roughness: 0.42, metalness: 0,
+    sheen: 0.8, sheenRoughness: 0.35, sheenColor: new THREE.Color(0x9cc9ff),
+    clearcoat: 0.35, clearcoatRoughness: 0.4,
+  });
   const right = new Hand(r, 'right', skinMat, sleeveMat);
   const left = new Hand(l, 'left', skinMat, sleeveMat);
   scene.add(right.root, left.root);
   return {
-    right, left, skinMat,
+    right, left, skinMat, gloveMat,
+    setGloves(on) { right.setGloves(on, gloveMat); left.setGloves(on, gloveMat); },
     setSkin(tone) { skinMat.color.setHex(SKIN_TONES[tone] ?? SKIN_TONES.medium); },
     update(dt) { right.update(dt); left.update(dt); },
   };

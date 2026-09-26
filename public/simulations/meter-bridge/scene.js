@@ -6,6 +6,7 @@
 // group's local frame.
 import * as THREE from 'three';
 import { BOX_PLUGS, GALV } from './physics.js';
+import { makeGoggles } from './avatar.js';
 
 export const TABLE_Y = -3;
 export const WIRE_Z = 6;
@@ -678,4 +679,109 @@ export function slotMarker(M, w, d, label) {
   g.userData.label = label;
   g.userData.plane = plane;
   return g;
+}
+
+// ---------------------------------------------------------------------------
+// Personal protective equipment (PPE) station by the lab door
+// ---------------------------------------------------------------------------
+
+// Built facing +Z in its own frame (x along the wall, y up from the floor).
+// Each item group carries userData.kind = 'ppe' and userData.gear = its name.
+export function buildPPEStation(M) {
+  const group = new THREE.Group();
+  const white = new THREE.MeshStandardMaterial({ color: 0xf1f3f5, roughness: 0.6 });
+  const steel = M.steel;
+  const panel = mesh(new THREE.BoxGeometry(140, 170, 2), new THREE.MeshStandardMaterial({ color: 0xe8edf2, roughness: 0.7 }));
+  panel.position.set(0, 125, 1);
+  group.add(panel);
+  const sign = new THREE.Mesh(new THREE.PlaneGeometry(130, 30), new THREE.MeshStandardMaterial({ map: canvasTexture(1040, 240, (g, w, h) => {
+    g.fillStyle = '#0b5ed7'; g.fillRect(0, 0, w, h);
+    g.fillStyle = '#fff'; g.font = 'bold 64px Arial'; g.textAlign = 'center';
+    g.fillText('SAFETY FIRST · WEAR YOUR PPE', w / 2, 86);
+    g.font = '40px Arial';
+    g.fillText('lab coat  ·  goggles  ·  gloves  ·  safety shoes', w / 2, 170);
+    g.fillStyle = '#facc15'; g.fillRect(0, h - 14, w, 14);
+  }), roughness: 0.5 }));
+  sign.position.set(0, 196, 2.2);
+  group.add(sign);
+
+  const proxyMat = new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false, colorWrite: false });
+  const item = (name, g) => {
+    g.userData.kind = 'ppe'; g.userData.gear = name;
+    // An invisible, slightly larger box so the whole item is easy to click
+    const box = new THREE.Box3().setFromObject(g);
+    const size = box.getSize(new THREE.Vector3()).addScalar(4);
+    const proxy = new THREE.Mesh(new THREE.BoxGeometry(size.x, size.y, size.z), proxyMat);
+    proxy.position.copy(box.getCenter(new THREE.Vector3())).sub(g.position);
+    proxy.renderOrder = -1;
+    g.add(proxy);
+    g.traverse((o) => { o.userData.pick = g; if (o.isMesh && o !== proxy) o.castShadow = true; });
+    group.add(g);
+    return g;
+  };
+
+  // Lab coat hanging from a hook
+  const hook = mesh(new THREE.CylinderGeometry(0.8, 0.8, 8, 10), steel);
+  hook.rotation.x = Math.PI / 2; hook.position.set(-42, 178, 5);
+  group.add(hook);
+  const coat = new THREE.Group();
+  const coatBody = new THREE.Mesh(new THREE.LatheGeometry([[0.1, -80], [17, -80], [16, -55], [14, -35], [16, -12], [15, -2], [6, 0], [0.1, 0]].map(([r, y]) => new THREE.Vector2(r, y)), 32), white);
+  coatBody.scale.set(1, 1, 0.45);
+  const sleeveL = mesh(new THREE.CylinderGeometry(4.2, 4.8, 48, 14), white);
+  sleeveL.position.set(-15, -28, 1); sleeveL.rotation.z = 0.12;
+  const sleeveR = sleeveL.clone(); sleeveR.position.x = 15; sleeveR.rotation.z = -0.12;
+  const collar = mesh(new THREE.TorusGeometry(6.5, 1.6, 8, 20, Math.PI), white);
+  collar.position.set(0, -3, -1); collar.rotation.set(Math.PI / 2 - 0.3, 0, Math.PI);
+  coat.add(coatBody, sleeveL, sleeveR, collar);
+  coat.position.set(-42, 176, 10);
+  item('coat', coat);
+
+  // Shelf with a pair of wraparound goggles
+  const shelf = mesh(new THREE.BoxGeometry(70, 2, 22), new THREE.MeshStandardMaterial({ color: 0xcfd6de, roughness: 0.5 }));
+  shelf.position.set(24, 138, 11);
+  group.add(shelf);
+  const goggles = makeGoggles();
+  goggles.scale.setScalar(0.85);
+  goggles.position.set(14, 142.5, 12);
+  goggles.rotation.y = Math.PI; // lenses facing the student
+  item('goggles', goggles);
+
+  // Nitrile glove dispenser box on the wall
+  const gloves = new THREE.Group();
+  const box = mesh(new THREE.BoxGeometry(26, 13, 10), new THREE.MeshStandardMaterial({ map: canvasTexture(260, 130, (g, w, h) => {
+    g.fillStyle = '#1d4ed8'; g.fillRect(0, 0, w, h);
+    g.fillStyle = '#fff'; g.font = 'bold 22px Arial'; g.textAlign = 'center';
+    g.fillText('NITRILE GLOVES', w / 2, 30); g.font = '16px Arial'; g.fillText('size M · powder-free', w / 2, 112);
+    g.fillStyle = '#0f172a'; g.beginPath(); g.ellipse(w / 2, 66, 60, 16, 0, 0, Math.PI * 2); g.fill();
+  }), roughness: 0.5 }));
+  const tuft = mesh(new THREE.SphereGeometry(4, 12, 8), new THREE.MeshPhysicalMaterial({ color: 0x2f7fe0, roughness: 0.45, sheen: 0.8 }));
+  tuft.scale.set(1.6, 0.6, 0.8); tuft.position.set(0, 0.5, 5.4);
+  gloves.add(box, tuft);
+  gloves.position.set(40, 108, 6.5);
+  item('gloves', gloves);
+
+  // Mat with a pair of safety shoes
+  const mat = mesh(new THREE.BoxGeometry(64, 1, 40), new THREE.MeshStandardMaterial({ color: 0x1f2937, roughness: 0.9 }));
+  mat.position.set(12, 0.5, 26);
+  group.add(mat);
+  const shoes = new THREE.Group();
+  const bootMat = new THREE.MeshStandardMaterial({ color: 0x141414, roughness: 0.45, metalness: 0.1 });
+  const capMat = new THREE.MeshStandardMaterial({ color: 0x3a3a3a, roughness: 0.3, metalness: 0.5 });
+  [-7, 7].forEach((x) => {
+    const upper = mesh(new THREE.BoxGeometry(10, 9, 25), bootMat); upper.position.set(x, 5.5, 0);
+    const sole = mesh(new THREE.BoxGeometry(11, 3, 27), new THREE.MeshStandardMaterial({ color: 0x0b1220 })); sole.position.set(x, 1.5, 0);
+    const cap = mesh(new THREE.SphereGeometry(5.2, 14, 8, 0, Math.PI * 2, 0, Math.PI / 2), capMat); cap.scale.set(1, 0.85, 1.1); cap.position.set(x, 3, -11);
+    shoes.add(upper, sole, cap);
+  });
+  shoes.position.set(14, 1, 26);
+  item('shoes', shoes);
+
+  // Where a hand takes each item (local frame)
+  const grab = {
+    coat: new THREE.Vector3(-42, 168, 12),
+    goggles: new THREE.Vector3(14, 144, 12),
+    gloves: new THREE.Vector3(40, 112, 12),
+    shoes: new THREE.Vector3(14, 12, 26),
+  };
+  return { group, items: { coat, goggles, gloves, shoes }, grab };
 }
