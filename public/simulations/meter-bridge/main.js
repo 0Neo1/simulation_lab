@@ -238,10 +238,78 @@ function pickColor(a) {
   return COLORS[leads.length % COLORS.length];
 }
 
+// ---- Lead routing: leads go round the meter bridge board and drape over
+// whatever they cross instead of passing through it ----
+const BOARD_RECT = { x0: -56, x1: 56, z0: -12, z1: 16, top: 1.1 };
+const inRect = (p, r, m = 0) => p.x > r.x0 - m && p.x < r.x1 + m && p.z > r.z0 - m && p.z < r.z1 + m;
+function leadObstacles() {
+  const list = [BOARD_RECT];
+  const box = new THREE.Box3();
+  for (const it of Object.values(ITEMS)) {
+    if (!it.group || !it.group.visible || carried.has(it.key)) continue;
+    box.setFromObject(it.group);
+    list.push({ x0: box.min.x, x1: box.max.x, z0: box.min.z, z1: box.max.z, top: box.max.y + 0.3, item: it.key });
+  }
+  return list;
+}
+// Length of a straight xz path from p to q that lies inside the board, ignoring the part within `near` of q
+function crossesBoard(p, q, near = 0) {
+  let inside = 0;
+  const n = 24;
+  for (let i = 1; i < n; i++) {
+    const t = i / n;
+    const x = p.x + (q.x - p.x) * t, z = p.z + (q.z - p.z) * t;
+    if (Math.hypot(q.x - x, q.z - z) < near || Math.hypot(p.x - x, p.z - z) < near) continue;
+    if (inRect({ x, z }, BOARD_RECT)) inside++;
+  }
+  return inside > 0;
+}
+function routedLeadCurve(a, b, slack = 1) {
+  const floor = S.TABLE_Y + 0.25;
+  const obstacles = leadObstacles();
+  const aOn = inRect(a, BOARD_RECT, 1), bOn = inRect(b, BOARD_RECT, 1);
+  // A lead from off the board to a terminal on it (or across it) detours round a board corner
+  let via = null;
+  if (!(aOn && bOn) && crossesBoard(a, b, aOn || bOn ? 16 : 0)) {
+    let best = Infinity;
+    for (const [cx, cz] of [[-61, 21], [61, 21], [-61, -17], [61, -17]]) {
+      const P = { x: cx, z: cz };
+      const okA = !crossesBoard(P, a, aOn ? 16 : 0), okB = !crossesBoard(P, b, bOn ? 16 : 0);
+      const cost = Math.hypot(a.x - cx, a.z - cz) + Math.hypot(b.x - cx, b.z - cz);
+      if (okA && okB && cost < best) { best = cost; via = V3(cx, floor, cz); }
+    }
+  }
+  const up = (p, h) => p.clone().add(V3(0, h, 0));
+  const sagPt = (p, q, f) => { const m = p.clone().lerp(q, f); m.y = floor; return m; };
+  const pts = [a.clone(), up(a, 1.3)];
+  if (via) pts.push(sagPt(a, via, 0.55), via, sagPt(via, b, 0.45));
+  else { const base = S.leadCurve(a, b, { slack }); pts.push(...base.points.slice(2, -2)); }
+  pts.push(up(b, 1.3), b.clone());
+  // Drape: sample the path and lift it over the board and apparatus it crosses
+  const raw = new THREE.CatmullRomCurve3(pts, false, 'centripetal');
+  const N = 40;
+  const out = [];
+  for (let i = 0; i <= N; i++) {
+    const p = raw.getPoint(i / N);
+    if (i > 1 && i < N - 1) {
+      const dA = Math.hypot(p.x - a.x, p.z - a.z), dB = Math.hypot(p.x - b.x, p.z - b.z);
+      let h = floor;
+      for (const o of obstacles) {
+        if (!inRect(p, o, 0.6)) continue;
+        if ((inRect(a, o, 1) && dA < 4) || (inRect(b, o, 1) && dB < 4)) continue; // its own terminal
+        h = Math.max(h, o.top);
+      }
+      p.y = Math.max(p.y, h);
+    }
+    out.push(p);
+  }
+  return new THREE.CatmullRomCurve3(out, false, 'centripetal', 0.3);
+}
+
 function rebuildLeadMesh(L) {
   if (L.mesh) { scene.remove(L.mesh); S.disposeGroup(L.mesh); }
   L.pa = termWorld(L.a); L.pb = termWorld(L.b);
-  L.curve = S.leadCurve(L.pa, L.pb, { slack: L.slack });
+  L.curve = routedLeadCurve(L.pa, L.pb, L.slack);
   L.mesh = S.leadMesh(L.curve, L.color);
   L.mesh.traverse((o) => { o.userData.lead = L; });
   scene.add(L.mesh);

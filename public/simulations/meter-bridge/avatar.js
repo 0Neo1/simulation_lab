@@ -80,8 +80,8 @@ function turnBone(bone, axisW, angle) {
 
 import { POSES } from './hands.js';
 
-// In first person only the forearms and hands (and legs, looking down) are drawn
-const HIDE_IN_FP = ['Spine', 'Spine1', 'Spine2', 'Neck', 'Head', 'LeftShoulder', 'RightShoulder', 'LeftArm', 'RightArm'];
+// In first person only the forearms and hands are drawn (like a game's view model)
+const KEEP_IN_FP = /^(Left|Right)(ForeArm|Hand)/;
 const d2r = THREE.MathUtils.degToRad;
 
 // Adds per-vertex masks from the skin weights and a small shader layer to a
@@ -93,25 +93,21 @@ function patchMesh(mesh, bones, { tint = false, glove = false } = {}) {
   const si = geo.attributes.skinIndex, sw = geo.attributes.skinWeight;
   const skel = mesh.skeleton.bones.map((b) => b.name.replace('mixamorig', ''));
   const isHand = skel.map((n) => /^(Left|Right)Hand/.test(n));
-  const isHide = skel.map((n) => HIDE_IN_FP.includes(n));
+  const isKeep = skel.map((n) => KEEP_IN_FP.test(n));
   const aGlove = new Float32Array(si.count), aHide = new Float32Array(si.count);
   for (let i = 0; i < si.count; i++) {
     for (let k = 0; k < 4; k++) {
       const b = si.getComponent(i, k), w = sw.getComponent(i, k);
       if (isHand[b]) aGlove[i] += w;
-      if (isHide[b]) aHide[i] += w;
+      if (isKeep[b]) aHide[i] += w;
     }
+    aHide[i] = 1 - aHide[i];
   }
   geo.setAttribute('aGlove', new THREE.BufferAttribute(aGlove, 1));
   geo.setAttribute('aHide', new THREE.BufferAttribute(aHide, 1));
-  const src = mesh.material;
-  // A physically based material: skin gets a soft sheen that reads as skin under the lab lights
-  const mat = new THREE.MeshPhysicalMaterial({
-    map: src.map, normalMap: src.normalMap, roughnessMap: src.roughnessMap, metalnessMap: src.metalnessMap,
-    roughness: src.roughness ?? 0.8, metalness: src.metalness ?? 0, color: src.color,
-    sheen: glove ? 0.35 : 0.1, sheenRoughness: 0.6, sheenColor: new THREE.Color(glove ? 0xffc4a8 : 0xffffff),
-  });
-  if (src.normalScale) mat.normalScale.copy(src.normalScale);
+  // Keep the model's own material (and so its authored skin and cloth look);
+  // only a small shader layer is added
+  const mat = mesh.material.clone();
   const u = {
     uTint: { value: new THREE.Color(1, 1, 1) }, uTintMix: { value: 0 }, uTintBase: { value: 0.5 }, uTintGain: { value: 0.8 },
     uGlove: { value: 0 }, uGloveColor: { value: new THREE.Color(0x2c78dc) }, uFP: { value: 0 },
@@ -168,7 +164,6 @@ export async function loadAvatar(scene) {
   patch('Wolf3D_Outfit_Top', { tint: true });
   patch('Wolf3D_Outfit_Bottom', { tint: true });
   patch('Wolf3D_Outfit_Footwear', { tint: true });
-  patch('Wolf3D_Head', {});
   const setTint = (name, hex, base, gain, mix = 1) => {
     const u = U[name]; if (!u) return;
     u.uTint.value.setHex(hex); u.uTintBase.value = base; u.uTintGain.value = gain; u.uTintMix.value = mix;
@@ -194,8 +189,9 @@ export async function loadAvatar(scene) {
   const hipY = W('Hips').y;
 
   // Lab coat: the jacket turns white (see setGear) and a coat skirt hangs to the knees
-  const skirt = new THREE.Mesh(new THREE.LatheGeometry([[18.5, W('RightLeg').y - 4], [17.6, hipY - 14], [16.6, hipY + 4]].map(([r, y]) => new THREE.Vector2(r, y)), 40), M.coat);
-  skirt.scale.set(1, 1, 0.74);
+  // Open at the front like a real coat, and roomy enough that the legs stay inside
+  const skirt = new THREE.Mesh(new THREE.LatheGeometry([[21.5, W('RightLeg').y - 2], [20, hipY - 14], [18.2, hipY + 4]].map(([r, y]) => new THREE.Vector2(r, y)), 48, Math.PI + 0.5, Math.PI * 2 - 1.0), M.coat);
+  skirt.scale.set(1, 1, 0.86);
   attachTo(B.Hips, shadow(skirt));
   // Name badge and pen on the chest, placed on the jacket surface found by a ray
   const chestFront = (() => {
@@ -285,7 +281,7 @@ export async function loadAvatar(scene) {
     gear[name] = on;
     if (name === 'coat') {
       if (on) setTint('Wolf3D_Outfit_Top', 0xf5f7fa, 0.78, 0.35); else casualTop();
-      skirt.visible = on; coatBits.visible = on && !fpView;
+      skirt.visible = on && !fpView; coatBits.visible = on && !fpView;
     } else if (name === 'goggles') goggles.visible = on;
     else if (name === 'gloves') { if (U.Wolf3D_Body) U.Wolf3D_Body.uGlove.value = on ? 1 : 0; }
     else if (name === 'shoes') { if (on) setTint('Wolf3D_Outfit_Footwear', 0x111214, 0.25, 0.55); else setTint('Wolf3D_Outfit_Footwear', 0xffffff, 0, 0, 0); }
@@ -390,6 +386,8 @@ export async function loadAvatar(scene) {
     ['Wolf3D_Head', 'EyeLeft', 'EyeRight', 'Wolf3D_Teeth'].forEach((n) => { if (parts[n]) parts[n].visible = v; });
     Object.values(U).forEach((u) => { u.uFP.value = v ? 0 : 1; });
     coatBits.visible = gear.coat && v;
+    skirt.visible = gear.coat && v;
+    ['Wolf3D_Outfit_Bottom', 'Wolf3D_Outfit_Footwear'].forEach((n) => { if (parts[n]) parts[n].visible = v; });
   }
 
   // Hand controllers with the interface the lab uses (goal, pose, contact, yaw/pitch);
