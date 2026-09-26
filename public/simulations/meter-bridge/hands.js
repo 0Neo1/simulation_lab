@@ -20,7 +20,7 @@ export const POSES = {
   flat: { index: [4, 4, 2], middle: [4, 4, 2], ring: [5, 5, 3], pinky: [6, 6, 3], thumb: [8, 6, 4], spread: 8 },
 };
 
-const SKIN_TONES = { light: 0xf1c7a9, medium: 0xd29c78, tan: 0xa8714f, deep: 0x6b4430 };
+const SKIN_TONES = { light: 0xf1c7a9, medium: 0xd29c78, tan: 0xa8714f, deep: 0x6b4430, student: 0x6b412c };
 
 const tmpV = new THREE.Vector3();
 const tmpQ = new THREE.Quaternion();
@@ -185,10 +185,15 @@ class Hand {
   }
 }
 
-export async function loadHands(scene, base = './meter-bridge/assets/') {
-  const loader = new GLTFLoader();
-  const load = (f) => new Promise((res, rej) => loader.load(base + f, res, undefined, rej));
-  const [r, l] = await Promise.all([load('hand-right.glb'), load('hand-left.glb')]);
+export const ASSET_BASE = './meter-bridge/assets/';
+const gltfLoader = new GLTFLoader();
+// Loads a .glb from the assets folder (the single place asset loading happens)
+export function loadGLB(f, base = ASSET_BASE) {
+  return new Promise((res, rej) => gltfLoader.load(base + f, res, undefined, rej));
+}
+
+export async function loadHands(scene) {
+  const [r, l] = await Promise.all([loadGLB('hand-right.glb'), loadGLB('hand-left.glb')]);
   const skinMat = new THREE.MeshPhysicalMaterial({
     color: SKIN_TONES.medium, roughness: 0.55, metalness: 0,
     sheen: 0.6, sheenRoughness: 0.5, sheenColor: new THREE.Color(0xffd7c2),

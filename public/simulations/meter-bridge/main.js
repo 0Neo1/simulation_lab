@@ -5,7 +5,7 @@ import * as P from './physics.js';
 import * as S from './scene.js';
 import { buildRoom, ROOM, TROLLEY, FLOOR_Y } from './room.js';
 import { loadHands } from './hands.js';
-import { buildAvatar } from './avatar.js';
+import { loadAvatar } from './avatar.js';
 
 const $ = (id) => document.getElementById(id);
 const stage = $('stage');
@@ -633,11 +633,11 @@ function bodyHands(dt) {
     const carrying = [...carried.values()].some((c) => c.hand === hand);
     if (carrying) {
       hand.setPose('grab', 'palm');
-      hand.goal.copy(avatar.bodyPoint(s * 12, 100, -34));
+      hand.goal.copy(avatar.bodyPoint(s * 12, 104, -32));
       hand.yawGoal = avatar.state.heading; hand.pitchGoal = 0;
     } else {
       hand.setPose('relaxed', 'index');
-      hand.goal.copy(avatar.bodyPoint(s * 25, 72, -2 + swing * 14 * s));
+      hand.goal.copy(avatar.bodyPoint(s * 23, 80, -3 + swing * 14 * s));
       hand.yawGoal = avatar.state.heading + s * 0.1; hand.pitchGoal = -1.35;
     }
   }
@@ -722,6 +722,7 @@ function fpHands() {
   const bob = Math.sin(avatar.state.phase * 2) * 1.4 * Math.min(1, avatar.state.speed / 120);
   for (const hand of [hands.right, hands.left]) {
     const sgn = hand.side === 'right' ? 1 : -1;
+    hand.speed = 35; // held in view: follow the head closely so the hands never swim
     const carrying = [...carried.values()].some((c) => c.hand === hand);
     if (carrying) {
       hand.setPose('grab', 'palm');
@@ -736,7 +737,7 @@ function fpHands() {
 }
 function updateFPCamera() {
   if (state.mode !== 'fp' || !avatar) return;
-  if (autopilot) fp.yaw = avatar.state.heading; else avatar.state.heading = fp.yaw;
+  if (autopilot) fp.yaw = lerpAngle(fp.yaw, avatar.state.heading, 0.12); else avatar.state.heading = fp.yaw;
   const eye = avatar.eyeWorld();
   camera.position.copy(eye);
   const dir = V3(-Math.sin(fp.yaw) * Math.cos(fp.pitch), Math.sin(fp.pitch), -Math.cos(fp.yaw) * Math.cos(fp.pitch));
@@ -745,7 +746,7 @@ function updateFPCamera() {
 let followPrev = null;
 // Watch mode: the camera chases the student; dragging still orbits around them
 function followCamera(dt = 0.016) {
-  if (state.mode !== 'auto' || !avatar || fly) return;
+  if (state.mode !== 'auto' || !avatar || fly || state.holdCamera) return;
   const chest = avatar.bodyPoint(0, 118, -10);
   const d = chest.sub(controls.target).multiplyScalar(Math.min(1, dt * 3));
   controls.target.add(d);
@@ -1110,7 +1111,10 @@ canvas.addEventListener('pointerdown', (e) => {
   }
 });
 
+let lastMouse = null; // last cursor position over the canvas, re-picked every frame
+canvas.addEventListener('pointerleave', () => { lastMouse = null; });
 canvas.addEventListener('pointermove', (e) => {
+  lastMouse = { clientX: e.clientX, clientY: e.clientY };
   if (!state.started) return;
   const h = pick(e);
   hover = h;
@@ -1318,7 +1322,6 @@ $('optPip').onchange = (e) => { state.pip = e.target.checked; };
 $('optSound').onchange = (e) => (state.sound = e.target.checked);
 $('optQuality').onchange = (e) => applyQuality(!e.target.checked);
 $('optHands').onchange = (e) => { if (handsLoaded) { handsLoaded.right.root.visible = handsLoaded.left.root.visible = e.target.checked && state.mode !== 'classic'; } if (avatar) avatar.setVisible(e.target.checked && bodyMode()); };
-$('skin').onchange = (e) => handsLoaded && handsLoaded.setSkin(e.target.value);
 $('btnUndoLead').onclick = () => { if (leads.length) disconnect(leads[leads.length - 1]); };
 $('btnClearLeads').onclick = () => { [...leads].forEach(disconnect); };
 $('btnDemo').onclick = () => { const s = currentStep(); if (s && s.demo) withAutopilot(s.demo); };
@@ -1771,11 +1774,49 @@ function updateLabels(w, h) {
   });
 }
 
+// Close-up insets: drag by the title bar, minimise with the – button.
+// Position and minimised state are remembered in this browser.
+function setupPip(el) {
+  const key = `mbPip:${el.id}`;
+  const bar = el.querySelector('.pipbar'), btn = el.querySelector('.pipmin');
+  const clampPos = (x, y) => {
+    const sw = stage.clientWidth, sh = stage.clientHeight;
+    return [THREE.MathUtils.clamp(x, 0, Math.max(0, sw - el.offsetWidth)), THREE.MathUtils.clamp(y, 0, Math.max(0, sh - 22))];
+  };
+  const put = (x, y) => { [x, y] = clampPos(x, y); el.style.left = `${x}px`; el.style.top = `${y}px`; el.style.right = 'auto'; el.style.bottom = 'auto'; };
+  const save = () => { try { localStorage.setItem(key, JSON.stringify({ x: el.offsetLeft, y: el.offsetTop, min: el.classList.contains('min') })); } catch (e) { /* storage unavailable */ } };
+  try {
+    const v = JSON.parse(localStorage.getItem(key) || 'null');
+    if (v) { if (v.min) el.classList.add('min'); requestAnimationFrame(() => put(v.x, v.y)); }
+  } catch (e) { /* storage unavailable */ }
+  const setMin = (m) => { el.classList.toggle('min', m); btn.textContent = m ? '▢' : '–'; btn.title = m ? 'Restore' : 'Minimise'; save(); };
+  if (el.classList.contains('min')) setMin(true);
+  btn.addEventListener('pointerdown', (e) => e.stopPropagation());
+  btn.addEventListener('click', (e) => { e.stopPropagation(); setMin(!el.classList.contains('min')); });
+  bar.addEventListener('dblclick', () => setMin(!el.classList.contains('min')));
+  bar.addEventListener('pointerdown', (e) => {
+    e.preventDefault(); e.stopPropagation();
+    bar.setPointerCapture(e.pointerId);
+    const ox = e.clientX - el.offsetLeft, oy = e.clientY - el.offsetTop;
+    el.classList.add('dragging');
+    const move = (ev) => put(ev.clientX - ox, ev.clientY - oy);
+    const up = () => { el.classList.remove('dragging'); bar.removeEventListener('pointermove', move); bar.removeEventListener('pointerup', up); bar.removeEventListener('pointercancel', up); save(); };
+    bar.addEventListener('pointermove', move);
+    bar.addEventListener('pointerup', up);
+    bar.addEventListener('pointercancel', up);
+  });
+  window.addEventListener('resize', () => { if (el.style.left) put(el.offsetLeft, el.offsetTop); });
+}
+setupPip($('pipLoupe'));
+setupPip($('pipGalv'));
+
 const loupeCam = new THREE.PerspectiveCamera(26, 250 / 150, 0.5, 300);
 const galvCam = new THREE.PerspectiveCamera(30, 250 / 150, 0.5, 300);
 function renderPip(el, cam) {
+  if (el.classList.contains('min')) return;
+  const BAR = 22;
   const sr = stage.getBoundingClientRect(), r = el.getBoundingClientRect();
-  const x = r.left - sr.left + 2, w = r.width - 4, h = r.height - 4;
+  const x = r.left - sr.left + 2, w = r.width - 4, h = r.height - 4 - BAR;
   const y = sr.height - (r.top - sr.top) - r.height + 2;
   cam.aspect = w / h; cam.updateProjectionMatrix();
   renderer.setViewport(x, y, w, h); renderer.setScissor(x, y, w, h);
@@ -1869,7 +1910,8 @@ function placeJockey() {
 // The student's right hand follows the mouse and adopts the right grip.
 function clampReach(p) {
   const d = p.clone().sub(SHOULDER.right);
-  const max = 88;
+  // shoulder → wrist (forearm may stretch 40 %) plus wrist → fingertip
+  const max = avatar ? avatar.armLen.upper + avatar.armLen.fore * 1.4 + 17 : 88;
   if (d.length() > max) p.copy(SHOULDER.right).addScaledVector(d.normalize(), max);
   return p;
 }
@@ -1883,6 +1925,11 @@ function driveHands() {
   }
   if (autopilot) return;
   const R = hands.right, Lh = hands.left;
+  const usable = hover && hover.point && hover.kind !== 'surface' && hover.kind !== 'lead';
+  if (student && state.mode === 'fp' && !usable && !(pointer && (pointer.carry || pointer.hit.kind === 'jockey')) && !state.holdSources.size && !pending) {
+    fpHands();
+    return;
+  }
   if (student && (!hover || !hover.point || (!reachable(hover.point) && !(pointer && pointer.carry)) || (hover.kind === 'surface' && !pointer)) && !state.holdSources.size && !pending) {
     // Nothing within reach under the mouse: arms relax at the sides, or point toward a far object
     if (hover && hover.point && hover.kind !== 'surface') {
@@ -1892,6 +1939,7 @@ function driveHands() {
     } else if (state.mode === 'fp') fpHands(); else bodyHands();
     return;
   }
+  R.speed = 22;
   if (pointer && pointer.carry) {
     R.setPose('grab', 'palm');
     if (student) clampReach(R.goal);
@@ -1919,7 +1967,7 @@ function driveHands() {
     const a = avatar.state.pos;
     const atBench = Math.abs(a.x) < 118 && a.z < 80;
     if (atBench) { Lh.setPose('flat', 'palm'); Lh.goal.set(a.x - 20, S.TABLE_Y + 1.2, 40); Lh.yawGoal = 0.3; Lh.pitchGoal = 0; }
-    else { Lh.setPose('relaxed', 'index'); Lh.goal.copy(avatar.bodyPoint(-25, 72, -2)); Lh.yawGoal = avatar.state.heading - 0.1; Lh.pitchGoal = -1.35; }
+    else { Lh.setPose('relaxed', 'index'); Lh.goal.copy(avatar.bodyPoint(-23, 80, -3)); Lh.yawGoal = avatar.state.heading - 0.1; Lh.pitchGoal = -1.35; }
     return;
   }
   Lh.setPose('flat', 'palm'); Lh.goal.copy(LEFT_REST); Lh.yawGoal = 0.35; Lh.pitchGoal = 0;
@@ -1933,12 +1981,14 @@ function frame() {
     fpsProbe.frames++; fpsProbe.t += dt;
     if (fpsProbe.t > 5) {
       fpsProbe.done = true;
-      if (!lowGfx && fpsProbe.frames / fpsProbe.t < 22) { applyQuality(true); toast('Switched to lighter graphics for smoother motion. You can change this under “Specimen & view”.', 'info', 6000); }
+      if (!lowGfx && fpsProbe.frames / fpsProbe.t < 22) toast('Motion looks slow on this computer. Untick “High-quality graphics” under “Specimen & view” for smoother motion.', 'info', 8000);
     }
   }
   runTweens(dt);
   if (state.app) advance(dt);
   driveStudent(dt);
+  // The view or the body may have moved since the mouse last did: re-aim at what is under the cursor now
+  if (state.started && lastMouse && hands && !(pointer && (pointer.look || pointer.carry))) hover = pick(lastMouse);
   driveHands();
   updateCarried();
   placeJockey();
@@ -1946,7 +1996,8 @@ function frame() {
   if (avatar && bodyMode() && hands) {
     const a = avatar.state, g = hands.right.goal;
     const fwd = -(g.x - a.pos.x) * Math.sin(a.heading) - (g.z - a.pos.z) * Math.cos(a.heading);
-    a.leanGoal = g.y < 30 ? THREE.MathUtils.clamp((fwd - 30) / 55, 0, 0.62) : 0;
+    // lean over the bench to reach (in first person the torso is hidden and the camera does not follow the lean)
+    a.leanGoal = g.y < 30 ? THREE.MathUtils.clamp((fwd - 22) / 50, 0, 0.8) : 0;
     avatar.update(dt, { moving: walking.speed > 1, speed: walking.speed, wristL: hands.left.wristWorld(), wristR: hands.right.wristWorld(), cuffL: hands.left.forearmDir(), cuffR: hands.right.forearmDir() });
   }
   updateFPCamera();
@@ -2193,11 +2244,14 @@ loadHands(scene).then((h) => {
   h.right.goal.set(60, 20, 50); h.right.pos.copy(h.right.goal);
   h.left.setPose('flat', 'palm');
   h.left.goal.copy(LEFT_REST); h.left.pos.copy(LEFT_REST);
-  avatar = buildAvatar(scene, h.skinMat);
-  avatar.state.pos.set(470, FLOOR_Y, 300);
-  avatar.state.heading = Math.PI / 2;
-  avatar.setVisible(false);
   h.right.root.visible = h.left.root.visible = false;
+  h.setSkin('student');
+  return loadAvatar(scene).then((a) => {
+    avatar = a;
+    avatar.state.pos.set(470, FLOOR_Y, 300);
+    avatar.state.heading = Math.PI / 2;
+    avatar.setVisible(false);
+  });
 }).catch((e) => {
   console.warn('Human models could not be loaded; only the no-human mode is available.', e);
 }).finally(() => {

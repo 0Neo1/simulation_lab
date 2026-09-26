@@ -57,8 +57,8 @@
       <text x="120" y="148" class="sch small">E · K</text>
     </svg>
 
-    <div class="pip" id="pipLoupe"><span>Scale loupe · read l here</span></div>
-    <div class="pip" id="pipGalv"><span>Galvanometer</span></div>
+    <div class="pip" id="pipLoupe"><div class="pipbar"><span>Scale loupe · read l here</span><button class="pipmin" title="Minimise">–</button></div></div>
+    <div class="pip" id="pipGalv"><div class="pipbar"><span>Galvanometer</span><button class="pipmin" title="Minimise">–</button></div></div>
 
     <div id="gogglesOverlay" aria-hidden="true"></div>
     <div id="labels"></div>
@@ -145,14 +145,7 @@
         <span id="leadColors" class="swatches"></span>
       </div>
       <div class="row small">
-        Hands:
-        <select id="skin">
-          <option value="light">Light</option>
-          <option value="medium" selected>Medium</option>
-          <option value="tan">Tan</option>
-          <option value="deep">Deep</option>
-        </select>
-        <label class="check inline"><input type="checkbox" id="optHands" checked /> show</label>
+        <label class="check inline"><input type="checkbox" id="optHands" checked /> Show the student</label>
       </div>
     </details>
 
