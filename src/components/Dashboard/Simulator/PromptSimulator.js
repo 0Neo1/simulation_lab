@@ -1,7 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
 
-const API_KEY = process.env.REACT_APP_GEMINI_API_KEY || '';
-const MODEL = process.env.REACT_APP_GEMINI_MODEL || 'gemini-3.1-pro-preview';
+// Requests go to a same-origin endpoint; the server (see deploy/nginx.conf)
+// adds the Gemini API key, so the key is never shipped to the browser.
+const GENERATE_URL = process.env.REACT_APP_GENERATE_URL || '/api/generate';
 const STORAGE_KEY = 'savedPromptSimulations';
 
 const examples = [
@@ -100,19 +101,12 @@ const PromptSimulator = () => {
 
     if (!canGenerate) return;
 
-    if (!API_KEY) {
-      setError(
-        'Simulation service is not configured. Please contact the administrator.'
-      );
-      return;
-    }
-
     setIsGenerating(true);
     setError('');
 
     try {
       const response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${API_KEY}`,
+        GENERATE_URL,
         {
           method: 'POST',
           headers: {
