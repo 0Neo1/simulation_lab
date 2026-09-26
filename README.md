@@ -13,10 +13,11 @@ HTML lab animations on demand.
   Paper Chromatography, and more) shipped under `public/simulations/`.
 - **Virtual Meter Bridge lab** — `phy121` is a full 3D physics lab room
   (Three.js, vendored under `public/simulations/lib/three/` so it stays
-  offline). Students set the bench up from scratch with rigged human hands
-  that follow the mouse: carry apparatus from the trolley, run leads between
-  binding screws, then perform the experiment and measure the wire with a
-  working screw gauge. Whatever is wired is solved as a real resistor network,
+  offline). Three ways to work: walk the lab as a full student (keyboard to
+  walk, mouse drives the hands), use just the hands at the bench, or turn the
+  human off and use direct controls. Students set the bench up from scratch:
+  carry apparatus from the trolley, run leads between binding screws, then
+  perform the experiment and measure the wire with a working screw gauge. Whatever is wired is solved as a real resistor network,
   so wrong connections behave physically; every step has a "Show me" hand
   demonstration. Source lives in `public/simulations/meter-bridge/`; hand
   models are MIT-licensed WebXR "generic-hand" assets.

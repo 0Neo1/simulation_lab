@@ -5,6 +5,7 @@ import * as P from './physics.js';
 import * as S from './scene.js';
 import { buildRoom, ROOM, TROLLEY, FLOOR_Y } from './room.js';
 import { loadHands } from './hands.js';
+import { buildAvatar } from './avatar.js';
 
 const $ = (id) => document.getElementById(id);
 const stage = $('stage');
@@ -124,6 +125,7 @@ const state = {
   pip: true,
   sound: true,
   leadColor: 'auto',
+  mode: 'hands', // student | hands | classic
   started: false,
   scratchWarned: 0,
   shortWarned: 0,
@@ -524,13 +526,150 @@ function sfx(kind) {
 // Hands
 // ---------------------------------------------------------------------------
 
-let hands = null;
-const SHOULDER = { right: V3(40, 45, 120), left: V3(-40, 45, 120) };
+let hands = null; // the hands in use (null in the no-human mode)
+let handsLoaded = null;
+let avatar = null;
+const FIXED_SHOULDER = { right: V3(40, 45, 120), left: V3(-40, 45, 120) };
+const SHOULDER = { right: FIXED_SHOULDER.right.clone(), left: FIXED_SHOULDER.left.clone() };
 const LEFT_REST = V3(-78, S.TABLE_Y + 1.2, 34);
 function aimHand(hand, target, pitch = -0.2) {
   const d = target.clone().sub(SHOULDER[hand.side]);
-  hand.yawGoal = THREE.MathUtils.clamp(Math.atan2(-d.x, -d.z), -1.1, 1.1);
+  const base = state.mode === 'student' && avatar ? avatar.state.heading : 0;
+  const yaw = Math.atan2(-d.x, -d.z);
+  hand.yawGoal = base + THREE.MathUtils.clamp(wrapAngle(yaw - base), -1.1, 1.1);
   hand.pitchGoal = pitch;
+}
+const wrapAngle = (a) => Math.atan2(Math.sin(a), Math.cos(a));
+const lerpAngle = (a, b, t) => a + wrapAngle(b - a) * t;
+
+// ---------------------------------------------------------------------------
+// Student body: walking, collisions, reach
+// ---------------------------------------------------------------------------
+
+const keys = new Set();
+const walking = { active: false, speed: 0, keys: false };
+// Floor-plan obstacles (x0, x1, z0, z1) the student cannot walk through
+const OBSTACLES = [
+  [-120, 120, -45, 45], // own bench
+  [TROLLEY.x - TROLLEY.w / 2 - 6, TROLLEY.x + TROLLEY.w / 2 + 8, TROLLEY.z - TROLLEY.d / 2, TROLLEY.z + TROLLEY.d / 2],
+  [-330, -250, -170, 30], [-330, -250, 70, 270], [230, 430, 210, 290], // other benches
+  [ROOM.x1 - 47, ROOM.x1, -205, -15], // apparatus cabinet
+  [-167, -133, 43, 77], // stool
+];
+const BODY_R = 20;
+function collide(p) {
+  p.x = THREE.MathUtils.clamp(p.x, ROOM.x0 + BODY_R, ROOM.x1 - BODY_R);
+  p.z = THREE.MathUtils.clamp(p.z, ROOM.z0 + BODY_R, ROOM.z1 - BODY_R);
+  for (const [x0, x1, z0, z1] of OBSTACLES) {
+    const a = x0 - BODY_R, b = x1 + BODY_R, c = z0 - BODY_R, d = z1 + BODY_R;
+    if (p.x > a && p.x < b && p.z > c && p.z < d) {
+      const pen = [p.x - a, b - p.x, p.z - c, d - p.z];
+      const m = Math.min(...pen);
+      if (m === pen[0]) p.x = a; else if (m === pen[1]) p.x = b; else if (m === pen[2]) p.z = c; else p.z = d;
+    }
+  }
+  return p;
+}
+// Can the student reach point p from where they stand (leaning over the bench)?
+function reachable(p) {
+  if (state.mode !== 'student' || !avatar) return true;
+  const a = avatar.state.pos, h = avatar.state.heading;
+  const dx = p.x - a.x, dz = p.z - a.z;
+  const fwd = -dx * Math.sin(h) - dz * Math.cos(h);
+  const side = dx * Math.cos(h) - dz * Math.sin(h);
+  return fwd > -12 && fwd < 96 && Math.abs(side) < 58;
+}
+function standSpot(p) {
+  const nearTrolley = Math.abs(p.x - TROLLEY.x) < TROLLEY.w / 2 + 12 && Math.abs(p.z - TROLLEY.z) < TROLLEY.d / 2 + 12;
+  if (nearTrolley) return { x: THREE.MathUtils.clamp(p.x, TROLLEY.x - 40, TROLLEY.x + 40), z: TROLLEY.z + TROLLEY.d / 2 + 24, h: 0 };
+  return { x: THREE.MathUtils.clamp(p.x, -100, 100), z: 58, h: 0 };
+}
+async function walkTo(spot) {
+  if (!avatar) return;
+  const a = avatar.state;
+  const dest = collide(V3(spot.x, FLOOR_Y, spot.z));
+  const pts = [a.pos.clone()];
+  // Go round by the front aisle when moving between bench and trolley
+  if (Math.abs(a.pos.x - dest.x) > 60 && (a.pos.z < 80 || dest.z < 80)) {
+    pts.push(collide(V3(a.pos.x, FLOOR_Y, Math.max(a.pos.z, 84))), collide(V3(dest.x, FLOOR_Y, Math.max(dest.z, 84))));
+  }
+  pts.push(dest);
+  walking.active = true;
+  for (let i = 1; i < pts.length; i++) {
+    const p0 = pts[i - 1], p1 = pts[i];
+    const len = p0.distanceTo(p1);
+    if (len < 1) continue;
+    const hd = Math.atan2(-(p1.x - p0.x), -(p1.z - p0.z));
+    walking.speed = 140;
+    await tween(len / 140, (e, k) => { a.pos.lerpVectors(p0, p1, k); a.heading = lerpAngle(a.heading, hd, 0.25); });
+    checkAbort();
+  }
+  walking.speed = 0;
+  await tween(0.35, () => { a.heading = lerpAngle(a.heading, spot.h ?? 0, 0.3); });
+  walking.active = false;
+}
+// In student mode, walk over first if the target is out of reach
+async function approach(p) {
+  if (state.mode !== 'student' || !avatar || reachable(p)) return;
+  await walkTo(standSpot(p));
+}
+// Hands follow the body while walking: carried items in front, otherwise at the sides
+function bodyHands(dt) {
+  if (!hands || !avatar) return;
+  const swing = Math.sin(avatar.state.phase) * Math.min(1, avatar.state.speed / 120);
+  for (const hand of [hands.right, hands.left]) {
+    const s = hand.side === 'right' ? 1 : -1;
+    const carrying = [...carried.values()].some((c) => c.hand === hand);
+    if (carrying) {
+      hand.setPose('grab', 'palm');
+      hand.goal.copy(avatar.bodyPoint(s * 12, 100, -34));
+      hand.yawGoal = avatar.state.heading; hand.pitchGoal = 0;
+    } else {
+      hand.setPose('relaxed', 'index');
+      hand.goal.copy(avatar.bodyPoint(s * 25, 72, -2 + swing * 14 * s));
+      hand.yawGoal = avatar.state.heading + s * 0.1; hand.pitchGoal = -1.35;
+    }
+  }
+  void dt;
+}
+function driveStudent(dt) {
+  if (state.mode !== 'student' || !avatar) return;
+  const a = avatar.state;
+  let f = 0, st = 0;
+  if (!autopilot && state.started) {
+    if (keys.has('KeyW') || keys.has('ArrowUp')) f += 1;
+    if (keys.has('KeyS') || keys.has('ArrowDown')) f -= 1;
+    if (keys.has('KeyD')) st += 1;
+    if (keys.has('KeyA')) st -= 1;
+  }
+  walking.keys = !!(f || st);
+  if (walking.keys) {
+    const cf = V3(0, 0, 0); camera.getWorldDirection(cf); cf.y = 0; cf.normalize();
+    const cr = V3(-cf.z, 0, cf.x);
+    const move = cf.multiplyScalar(f).add(cr.multiplyScalar(st)).normalize();
+    const speed = keys.has('ShiftLeft') || keys.has('ShiftRight') ? 230 : 130;
+    a.pos.addScaledVector(move, speed * dt);
+    collide(a.pos);
+    a.heading = lerpAngle(a.heading, Math.atan2(-move.x, -move.z), Math.min(1, dt * 10));
+    walking.speed = speed;
+  } else if (!walking.active) {
+    walking.speed = 0;
+    // Square up to the bench or trolley when standing at it
+    const atBench = Math.abs(a.pos.x) < 125 && a.pos.z > 45 && a.pos.z < 95;
+    const atTrolley = Math.abs(a.pos.x - TROLLEY.x) < 70 && a.pos.z > 30 && a.pos.z < 90;
+    if ((atBench || atTrolley) && !autopilot) a.heading = lerpAngle(a.heading, 0, Math.min(1, dt * 3));
+  }
+}
+let followPrev = null;
+function followCamera() {
+  if (state.mode !== 'student' || !avatar || fly) { followPrev = null; return; }
+  const chest = avatar.bodyPoint(0, 90, -40);
+  if (followPrev) {
+    const d = chest.clone().sub(followPrev);
+    camera.position.add(d);
+    controls.target.add(d);
+  }
+  followPrev = chest;
 }
 
 // ---------------------------------------------------------------------------
@@ -568,7 +707,7 @@ async function withAutopilot(fn) {
     if (hands) {
       hands.right.setPose('relaxed', 'index');
       hands.left.setPose('flat', 'palm');
-      hands.right.goal.set(72, S.TABLE_Y + 6, 42); // rest at the front-right of the bench
+      if (state.mode !== 'student') hands.right.goal.set(72, S.TABLE_Y + 6, 42); // rest at the front-right of the bench
       hover = null;
     }
   }
@@ -606,7 +745,9 @@ function updateCarried() {
 }
 async function demoPlace(key) {
   const it = ITEMS[key];
+  if (!hands) { placeAtSlot(key); return; }
   const R = hands.right;
+  await approach(it.group.localToWorld(it.app.grip.clone()));
   if (key === 'jockey') { it.group.rotation.set(0, 0, 0); it.group.position.y = S.TABLE_Y; }
   const grip = () => it.group.localToWorld(it.app.grip.clone());
   await handTo(R, grip(), { pose: 'point', contact: 'palm', dur: 0.8, arc: 10 });
@@ -616,6 +757,7 @@ async function demoPlace(key) {
   let dest;
   if (key === 'jockey') dest = V3(S.lToX(state.l), S.WIRE_Y + 1.2 + it.app.grip.y, S.WIRE_Z);
   else dest = V3(it.slot[0], S.TABLE_Y, it.slot[1]).add(it.app.grip.clone().applyAxisAngle(V3(0, 1, 0), it.slot[2] || 0));
+  await approach(dest);
   if (key !== 'jockey') {
     const r0 = it.group.rotation.y;
     tween(1.1, (e) => { it.group.rotation.y = THREE.MathUtils.lerp(r0, it.slot[2] || 0, e); });
@@ -629,25 +771,36 @@ async function demoPlace(key) {
   await handTo(R, dest.clone().add(V3(0, 12, 12)), { dur: 0.4, arc: 0 });
 }
 async function demoConnect(a, b) {
+  if (!hands) { connect(a, b); return; }
   const R = hands.right;
+  await approach(termWorld(a));
   await handTo(R, termWorld(a).add(V3(0, 0.6, 0)), { pose: 'pinch', contact: 'pinch', dur: 0.8, arc: 10, pitch: -0.4 });
   startLead(a);
   await wait(0.2);
+  await approach(termWorld(b));
   await handTo(R, termWorld(b).add(V3(0, 0.6, 0)), { pose: 'pinch', contact: 'pinch', dur: 1.0, arc: 12, pitch: -0.4 });
   finishLead(b);
   await wait(0.15);
 }
 async function demoTouch(obj, fn, pose = 'pinch') {
+  if (!hands) { fn(); await wait(0.15); return; }
   const R = hands.right;
   const p = obj.getWorldPosition(new THREE.Vector3()).add(V3(0, 2.2, 0));
+  await approach(p);
   await handTo(R, p, { pose, contact: pose === 'pinch' ? 'pinch' : 'index', dur: 0.7, arc: 8, pitch: -0.4 });
   fn();
   await wait(0.35);
 }
 async function demoSlide(l) {
-  const R = hands.right;
   const j = ITEMS.jockey;
+  if (!hands) {
+    const l0 = state.l;
+    await tween(Math.min(0.8, 0.2 + Math.abs(l - l0) / 80), (e) => { setL(l0 + (l - l0) * e, true); });
+    return;
+  }
+  const R = hands.right;
   const grip = () => j.group.localToWorld(j.app.grip.clone());
+  await approach(grip());
   await handTo(R, grip(), { pose: 'pinch', contact: 'pinch', dur: 0.6, arc: 6, pitch: -0.25 });
   const l0 = state.l;
   R.speed = 40;
@@ -655,7 +808,7 @@ async function demoSlide(l) {
   R.speed = 14;
 }
 async function demoPress(seconds = 1.0) {
-  const R = hands.right;
+  const R = hands ? hands.right : { goal: V3(0, 0, 0) };
   const j = ITEMS.jockey;
   const cap = () => j.group.localToWorld(V3(0, 9.75, 0));
   await handTo(R, cap(), { pose: 'press', contact: 'index', dur: 0.35, arc: 2, pitch: -0.32 });
@@ -687,6 +840,8 @@ async function demoNull() {
     if (Math.sign(d) === Math.sign(dlo)) lo = mid; else hi = mid;
   }
   let l = Math.round(((lo + hi) / 2) * 10) / 10;
+  // Near the null: take the high resistance out for full sensitivity, then refine
+  if (state.protect) await demoTouch(ITEMS.galv.app.knob, toggleHR);
   let d = await demoProbe(l);
   for (let i = 0; i < 6 && Math.abs(d) > 0.45; i++) {
     const step = -Math.sign(d) * Math.sign(dhi - dlo) * 0.1;
@@ -695,10 +850,21 @@ async function demoNull() {
   }
 }
 
+const GAP_SWAP = { 'board.g1a': 'board.g2a', 'board.g2a': 'board.g1a', 'board.g1b': 'board.g2b', 'board.g2b': 'board.g1b' };
 async function demoInterchange() {
-  const R = hands.right, Lh = hands.left;
   const box = ITEMS.box, coil = ITEMS.coil;
   const bSlot = box.slot, cSlot = coil.slot;
+  if (!hands) {
+    // No-human mode: swap the two pieces and move their leads straight away
+    box.slot = [cSlot[0], bSlot[1], 0]; coil.slot = [bSlot[0], cSlot[1], 0];
+    placeAtSlot('box'); placeAtSlot('coil');
+    for (const L of leads) { if (GAP_SWAP[L.a]) L.a = GAP_SWAP[L.a]; else if (GAP_SWAP[L.b]) L.b = GAP_SWAP[L.b]; rebuildLeadMesh(L); }
+    leadsVersion++; state.probe = null; sfx('thud');
+    toast('R and X interchanged: the resistance box is now in gap 2 and the test wire in gap 1. Now X = R·l / (100 − l).', 'info', 6000);
+    return;
+  }
+  const R = hands.right, Lh = hands.left;
+  await approach(V3(0, S.TABLE_Y, -20));
   const bGrip = () => box.group.localToWorld(box.app.grip.clone());
   const cGrip = () => coil.group.localToWorld(coil.app.grip.clone());
   await Promise.all([
@@ -811,6 +977,12 @@ canvas.addEventListener('pointerdown', (e) => {
   }
   if (e.button !== 0 || !h) { if (pending && e.button === 0) cancelLead(); return; }
   if (h.kind === 'surface' || h.kind === 'lead') { if (pending) cancelLead(); return; }
+  if (state.mode === 'student' && !reachable(h.point)) {
+    e.preventDefault();
+    toast('Too far to reach — walking over…', 'info', 1500);
+    withAutopilot(() => walkTo(standSpot(h.point)));
+    return;
+  }
   e.preventDefault();
   controls.enabled = false;
   canvas.setPointerCapture(e.pointerId);
@@ -917,6 +1089,7 @@ function updateTip(e, h) {
     else if (h.kind === 'hr') text = `High resistance — click to ${state.protect ? 'remove' : 'put in'}`;
     else if (h.kind === 'jockey') text = 'Jockey — drag to slide, hold to press';
   }
+  if (text && h && h.kind !== 'surface' && state.mode === 'student' && !reachable(h.point)) text = `${text.split(' — ')[0]} — too far: walk closer (W A S D) or click to walk there`;
   if (pending && h && h.kind === 'term') text = `Connect lead to ${text}`;
   else if (pending) text = 'Click a terminal to finish the lead (Esc cancels)';
   tipEl.classList.toggle('hidden', !text);
@@ -928,8 +1101,10 @@ function updateTip(e, h) {
   }
 }
 
+const WALK_KEYS = ['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ShiftLeft', 'ShiftRight'];
 window.addEventListener('keydown', (e) => {
   if (e.target.tagName === 'SELECT' || (e.target.tagName === 'INPUT' && e.target.type !== 'range' && e.target.type !== 'checkbox')) return;
+  if (WALK_KEYS.includes(e.code)) { keys.add(e.code); if (state.mode === 'student' && e.code.startsWith('Arrow')) e.preventDefault(); }
   if (e.code === 'Escape') { if (autopilot) demoAbort = true; cancelLead(); }
   if (autopilot || !state.started) return;
   if (e.code === 'Space') { state.holdSources.add('space'); e.preventDefault(); }
@@ -941,8 +1116,8 @@ window.addEventListener('keydown', (e) => {
   else if (e.code === 'KeyH') toggleHR();
   else if (e.code === 'KeyR') recordReading();
 });
-window.addEventListener('keyup', (e) => { if (e.code === 'Space') state.holdSources.delete('space'); });
-window.addEventListener('blur', () => state.holdSources.clear());
+window.addEventListener('keyup', (e) => { keys.delete(e.code); if (e.code === 'Space') state.holdSources.delete('space'); });
+window.addEventListener('blur', () => { state.holdSources.clear(); keys.clear(); });
 
 function setL(l, quiet = false) {
   const nl = Math.round(THREE.MathUtils.clamp(l, 0, 100) * 100) / 100;
@@ -1010,7 +1185,6 @@ $('btnHR').onclick = () => { if (!autopilot) (hands ? withAutopilot(() => demoTo
 $('btnSwap').onclick = () => {
   const w = wiringChecks();
   if (!w.box || !w.coil) return toast('Connect the resistance box and the test wire across the two gaps first.', 'err');
-  if (!hands) return toast('Interchanging needs the hands; reload the page.', 'err');
   withAutopilot(demoInterchange);
 };
 $('lSlider').addEventListener('input', (e) => setL(+e.target.value));
@@ -1036,8 +1210,8 @@ $('optLabels').onchange = (e) => { state.labels = e.target.checked; labelsEl.cla
 $('optPip').onchange = (e) => { state.pip = e.target.checked; };
 $('optSound').onchange = (e) => (state.sound = e.target.checked);
 $('optQuality').onchange = (e) => applyQuality(!e.target.checked);
-$('optHands').onchange = (e) => { if (hands) { hands.right.root.visible = hands.left.root.visible = e.target.checked; } };
-$('skin').onchange = (e) => hands && hands.setSkin(e.target.value);
+$('optHands').onchange = (e) => { if (handsLoaded) { handsLoaded.right.root.visible = handsLoaded.left.root.visible = e.target.checked && state.mode !== 'classic'; } if (avatar) avatar.setVisible(e.target.checked && state.mode === 'student'); };
+$('skin').onchange = (e) => handsLoaded && handsLoaded.setSkin(e.target.value);
 $('btnUndoLead').onclick = () => { if (leads.length) disconnect(leads[leads.length - 1]); };
 $('btnClearLeads').onclick = () => { [...leads].forEach(disconnect); };
 $('btnDemo').onclick = () => { const s = currentStep(); if (s && s.demo) withAutopilot(s.demo); };
@@ -1055,8 +1229,7 @@ document.addEventListener('click', (e) => { const b = e.target.closest('button')
 document.querySelectorAll('[data-view]').forEach((b) => (b.onclick = () => flyTo(b.dataset.view)));
 function setDemoButtons(busy) {
   ['btnDemo', 'btnDoPhase', 'btnAuto', 'btnSwap', 'btnZero', 'btnGauge', 'btnLength', 'btnKey', 'btnHR'].forEach((id) => { $(id).disabled = busy; });
-  $('btnDemo').textContent = busy ? 'Demonstrating… (Esc stops)' : '▶ Show me';
-  if (!hands) { $('btnDemo').disabled = true; $('btnDoPhase').disabled = true; }
+  $('btnDemo').textContent = busy ? 'Working… (Esc stops)' : state.mode === 'classic' ? '▶ Do this step' : '▶ Show me';
 }
 
 function toast(msg, kind = 'info', ms = 4200) {
@@ -1099,6 +1272,7 @@ let gaugeNow = 3;
 async function turnGaugeTo(mm, sampleMm, dur = 1.4) {
   const start = gaugeNow;
   const ratchetAt = (r) => gauge.group.localToWorld(V3(gauge.zeroX + 10 + r * 0.3, gauge.axisY + 1.2, 0.8));
+  if (hands) await approach(ratchetAt(start));
   if (hands) await handTo(hands.right, ratchetAt(start), { pose: 'pinch', contact: 'pinch', dur: 0.6, arc: 6, pitch: -0.15 });
   await tween(dur, (e) => {
     const r = start + (mm - start) * e;
@@ -1141,6 +1315,7 @@ async function measureLength() {
   flyTo('coil');
   if (hands) {
     const c = ITEMS.coil.group;
+    await approach(c.position);
     await handTo(hands.right, c.localToWorld(V3(8.8, 3, 3.3)), { pose: 'point', dur: 0.8 });
     await handTo(hands.right, c.localToWorld(V3(-8.8, 3, 3.3)), { pose: 'point', dur: 1.0, arc: 2 });
   }
@@ -1567,11 +1742,34 @@ function placeJockey() {
 }
 
 // The student's right hand follows the mouse and adopts the right grip.
+function clampReach(p) {
+  const d = p.clone().sub(SHOULDER.right);
+  const max = 88;
+  if (d.length() > max) p.copy(SHOULDER.right).addScaledVector(d.normalize(), max);
+  return p;
+}
 function driveHands() {
-  if (!hands || autopilot) return;
+  if (!hands) return;
+  const student = state.mode === 'student' && avatar;
+  if (student) {
+    SHOULDER.right.copy(avatar.shoulderWorld('right'));
+    SHOULDER.left.copy(avatar.shoulderWorld('left'));
+    if (walking.active || (walking.keys && !autopilot)) { bodyHands(); return; }
+  }
+  if (autopilot) return;
   const R = hands.right, Lh = hands.left;
+  if (student && (!hover || !hover.point || (!reachable(hover.point) && !(pointer && pointer.carry)) || (hover.kind === 'surface' && !pointer)) && !state.holdSources.size && !pending) {
+    // Nothing within reach under the mouse: arms relax at the sides, or point toward a far object
+    if (hover && hover.point && hover.kind !== 'surface') {
+      R.setPose('point', 'index');
+      R.goal.copy(clampReach(hover.point.clone().add(V3(0, 4, 0))));
+      aimHand(R, hover.point, -0.2);
+    } else bodyHands();
+    return;
+  }
   if (pointer && pointer.carry) {
     R.setPose('grab', 'palm');
+    if (student) clampReach(R.goal);
     aimHand(R, R.goal, 0);
   } else if (state.holdSources.size && ITEMS.jockey.onBoard) {
     R.setPose('press', 'index');
@@ -1587,9 +1785,18 @@ function driveHands() {
     else if (k === 'surface') { R.setPose('relaxed', 'index'); R.goal.copy(hover.point).add(V3(0, 3.5, 0)); aimHand(R, R.goal, -0.2); }
     else { R.setPose('point', 'index'); R.goal.copy(hover.point).add(V3(0, 1.4, 0)); aimHand(R, R.goal, -0.35); }
   }
+  if (student) clampReach(R.goal);
   R.goal.y = Math.max(R.goal.y, S.TABLE_Y + 1);
   R.goal.x = THREE.MathUtils.clamp(R.goal.x, ROOM.x0 + 30, ROOM.x1 - 30);
   R.goal.z = THREE.MathUtils.clamp(R.goal.z, ROOM.z0 + 30, ROOM.z1 - 30);
+  if (student) {
+    // Left hand rests on the bench edge in front of the student, or hangs at the side
+    const a = avatar.state.pos;
+    const atBench = Math.abs(a.x) < 118 && a.z < 80;
+    if (atBench) { Lh.setPose('flat', 'palm'); Lh.goal.set(a.x - 20, S.TABLE_Y + 1.2, 40); Lh.yawGoal = 0.3; Lh.pitchGoal = 0; }
+    else { Lh.setPose('relaxed', 'index'); Lh.goal.copy(avatar.bodyPoint(-25, 72, -2)); Lh.yawGoal = avatar.state.heading - 0.1; Lh.pitchGoal = -1.35; }
+    return;
+  }
   Lh.setPose('flat', 'palm'); Lh.goal.copy(LEFT_REST); Lh.yawGoal = 0.35; Lh.pitchGoal = 0;
 }
 
@@ -1606,10 +1813,17 @@ function frame() {
   }
   runTweens();
   if (state.app) advance(dt);
+  driveStudent(dt);
   driveHands();
   updateCarried();
   placeJockey();
   if (hands) hands.update(dt);
+  if (avatar && state.mode === 'student' && hands) {
+    const a = avatar.state, g = hands.right.goal;
+    const fwd = -(g.x - a.pos.x) * Math.sin(a.heading) - (g.z - a.pos.z) * Math.cos(a.heading);
+    a.leanGoal = g.y < 30 ? THREE.MathUtils.clamp((fwd - 30) / 55, 0, 0.62) : 0;
+    avatar.update(dt, { moving: walking.speed > 1, speed: walking.speed, wristL: hands.left.wristWorld(), wristR: hands.right.wristWorld(), cuffL: hands.left.forearmDir(), cuffR: hands.right.forearmDir() });
+  }
   if (pending) updatePendingLead(hands ? hands.right.goal.clone() : (hover && hover.point ? hover.point.clone().add(V3(0, 2, 0)) : termWorld(pending.from).add(V3(0, 4, 4))));
   updateLeads();
   for (const s of [...spinning]) { s.cap.rotation.y += dt * 14; s.left -= dt; if (s.left <= 0) spinning.splice(spinning.indexOf(s), 1); }
@@ -1621,6 +1835,7 @@ function frame() {
   updateFlow(dt);
   updateHighlights(elapsed);
   updateFly();
+  followCamera();
   controls.update();
   camera.position.x = THREE.MathUtils.clamp(camera.position.x, ROOM.x0 + 15, ROOM.x1 - 15);
   camera.position.z = THREE.MathUtils.clamp(camera.position.z, ROOM.z0 + 15, ROOM.z1 - 15);
@@ -1741,12 +1956,61 @@ function quickSetup() {
   toast('The bench is set up and wired. Insert key K, choose R and find the balance point.', 'info', 6000);
 }
 
-function start(mode) {
+const MODE_HINTS = {
+  student: '<b>W A S D</b> / <b>↑ ↓</b> walk (Shift: run) · the mouse drives your hands: <b>drag</b> apparatus, <b>click</b> terminal → terminal for a lead, <b>right-click</b> a lead to remove · <b>hold</b> the jockey or <b>Space</b> to press · <b>drag</b> empty space to look around',
+  hands: '<b>Left-drag</b> apparatus to carry it · <b>click</b> a terminal, then another, to run a lead · <b>right-click</b> a lead to remove it · <b>drag</b> the jockey, <b>hold</b> or <b>Space</b> to press · <b>drag</b> empty space to look around, <b>scroll</b> to zoom',
+  classic: '<b>Drag</b> the jockey to slide it · <b>hold</b> it, <b>Space</b> or <b>Press</b> to touch the wire · <b>←/→</b> 1 mm (Shift: 1 cm) · <b>click</b> plugs, key K and the HR knob · <b>drag</b> empty space to look around',
+};
+function studentView() {
+  const a = avatar.state;
+  // Over the right shoulder, high enough to see the bench past the student
+  const t = avatar.bodyPoint(18, 72, -78);
+  const back = V3(62, 158, 165).applyAxisAngle(V3(0, 1, 0), a.heading);
+  return { pos: t.clone().add(back).toArray(), target: t.toArray() };
+}
+function setMode(mode) {
+  if (mode !== 'classic' && !handsLoaded) mode = 'classic';
+  if (mode === 'student' && !avatar) mode = 'hands';
+  state.mode = mode;
+  hands = mode === 'classic' ? null : handsLoaded;
+  cancelLead();
+  if (handsLoaded) {
+    const show = mode !== 'classic' && $('optHands').checked;
+    handsLoaded.right.root.visible = handsLoaded.left.root.visible = show;
+    handsLoaded.right.setSleeve(mode === 'hands');
+    handsLoaded.left.setSleeve(mode === 'hands');
+  }
+  if (avatar) avatar.setVisible(mode === 'student');
+  if (mode !== 'student') { SHOULDER.right.copy(FIXED_SHOULDER.right); SHOULDER.left.copy(FIXED_SHOULDER.left); }
+  if (mode === 'classic' && !wiringChecks().complete) {
+    // No human: the bench is set up and wired for you
+    [...leads].forEach(disconnect);
+    carried.clear();
+    quickSetup();
+  }
+  $('mode').value = mode;
+  $('hint').innerHTML = MODE_HINTS[mode];
+  document.body.dataset.mode = mode;
+  followPrev = null;
+  if (state.started) {
+    if (mode === 'student') { const v = studentView(); fly = { t0: performance.now(), dur: 900, p0: camera.position.clone(), t0v: controls.target.clone(), p1: V3(...v.pos), t1: V3(...v.target) }; }
+    else flyTo(mode === 'classic' || wiringChecks().complete ? 'bench' : 'setup');
+  }
+  setDemoButtons(false);
+}
+
+function start(mode, ready) {
   $('startScreen').classList.add('hidden');
   state.started = true;
   resetBench();
-  if (mode === 'quick') { quickSetup(); flyTo('bench'); }
-  else { flyTo('setup'); toast('Start by carrying each piece of apparatus from the trolley to its place on the bench. Press “Show me” for a demonstration.', 'info', 7000); }
+  if (avatar) { avatar.state.pos.set(40, FLOOR_Y, 150); avatar.state.heading = 0; }
+  if (mode === 'classic' || ready) quickSetup();
+  setMode(mode);
+  if (mode === 'student') {
+    toast(ready ? 'Walk up to the bench with W A S D (or ↑ ↓) and start experimenting.' : 'Walk to the trolley on the right (W A S D), then carry each piece of apparatus to your bench. “Show me” demonstrates any step.', 'info', 8000);
+  } else if (mode === 'hands' && !ready) {
+    toast('Start by carrying each piece of apparatus from the trolley to its place on the bench. Press “Show me” for a demonstration.', 'info', 7000);
+  }
   sfx('ok');
 }
 
@@ -1760,29 +2024,36 @@ syncPlugs();
 updateGuide();
 frame();
 
-$('startGuided').disabled = true;
-$('startQuick').disabled = true;
+const START_BTNS = ['startStudent', 'startHands', 'startClassic'];
+START_BTNS.forEach((id) => { $(id).disabled = true; });
 loadHands(scene).then((h) => {
-  hands = h;
-  hands.right.goal.set(60, 20, 50); hands.right.pos.copy(hands.right.goal);
-  hands.left.setPose('flat', 'palm');
-  hands.left.goal.copy(LEFT_REST); hands.left.pos.copy(LEFT_REST);
+  handsLoaded = h;
+  h.right.shoulder = SHOULDER.right;
+  h.left.shoulder = SHOULDER.left;
+  h.right.goal.set(60, 20, 50); h.right.pos.copy(h.right.goal);
+  h.left.setPose('flat', 'palm');
+  h.left.goal.copy(LEFT_REST); h.left.pos.copy(LEFT_REST);
+  avatar = buildAvatar(scene, h.skinMat);
+  avatar.state.pos.set(40, FLOOR_Y, 150);
+  avatar.setVisible(false);
+  h.right.root.visible = h.left.root.visible = false;
 }).catch((e) => {
-  console.warn('Hand models could not be loaded; continuing without hands.', e);
+  console.warn('Hand models could not be loaded; only the no-human mode is available.', e);
 }).finally(() => {
-  $('loadNote').textContent = hands ? 'Ready — your hands follow the mouse.' : 'Ready.';
-  $('startGuided').disabled = false;
-  $('startQuick').disabled = false;
+  $('loadNote').textContent = handsLoaded ? 'Ready. Choose how you want to work.' : 'Ready (human models unavailable — no-human mode only).';
+  START_BTNS.forEach((id) => { $(id).disabled = !handsLoaded && id !== 'startClassic'; });
   setDemoButtons(false);
 });
-$('startGuided').onclick = () => start('guided');
-$('startQuick').onclick = () => start('quick');
+$('startStudent').onclick = () => start('student', $('startReady').checked);
+$('startHands').onclick = () => start('hands', $('startReady').checked);
+$('startClassic').onclick = () => start('classic', true);
+$('mode').onchange = (e) => setMode(e.target.value);
 
 // Exposed for automated checks and curious students
 window.meterBridge = {
   state, P, advance, leads, terminals, ITEMS, connect, disconnect, wiringChecks, findNull, setL, setR,
-  toggleKey, toggleHR, recordReading, flyTo, start, withAutopilot, currentStep, STEPS, demoInterchange,
-  get hands() { return hands; }, get autopilot() { return autopilot; },
+  toggleKey, toggleHR, recordReading, flyTo, start, setMode, withAutopilot, walkTo, keys, currentStep, STEPS, demoInterchange,
+  get hands() { return hands; }, get autopilot() { return autopilot; }, get avatar() { return avatar; },
   camera, controls, gauge,
   updateUi: () => updateUi(),
 };

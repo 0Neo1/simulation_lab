@@ -73,21 +73,26 @@
       <div class="card">
         <h2>Welcome to the Physics Lab</h2>
         <p class="lead">Determine the specific resistance of a wire using a meter bridge. The meter bridge is fixed on your bench;
-          the rest of the apparatus is waiting on the trolley beside it.</p>
-        <div class="choices">
-          <button class="choice" id="startGuided">
-            <b>Start from scratch</b>
-            <span>Set up the apparatus, make every connection and perform the experiment, step by step. Use <i>Show me</i> for a demonstration of any step.</span>
+          the rest of the apparatus is waiting on the trolley beside it. Choose how you want to work — you can switch at any time from the panel.</p>
+        <div class="choices three">
+          <button class="choice" id="startStudent">
+            <b>Walk as a student</b>
+            <span>A full student body: walk around the lab with <i>W A S D</i> and use your hands with the mouse — fetch apparatus from the trolley, wire the bench and experiment.</span>
           </button>
-          <button class="choice alt" id="startQuick">
-            <b>Quick start</b>
-            <span>The bench is already set up and wired. Go straight to finding balance points.</span>
+          <button class="choice mid" id="startHands">
+            <b>Hands only</b>
+            <span>Stay at the bench and use just your hands with the mouse: carry apparatus, run leads and perform the experiment.</span>
+          </button>
+          <button class="choice alt" id="startClassic">
+            <b>No human</b>
+            <span>No body or hands. The bench is ready — click plugs and the key, drag the jockey and use the panel, like the classic simulator.</span>
           </button>
         </div>
+        <label class="check startready"><input type="checkbox" id="startReady" /> Bench already set up and wired (skip setting up)</label>
         <div class="mouse">
+          <div><b>W A S D</b> / <b>↑ ↓</b> — walk (student mode) · <b>Shift</b> — run</div>
           <div><b>Left-drag</b> on apparatus — pick it up and carry it</div>
-          <div><b>Click</b> terminal → terminal — connect a lead</div>
-          <div><b>Right-click</b> a lead — disconnect it</div>
+          <div><b>Click</b> terminal → terminal — connect a lead · <b>Right-click</b> a lead — remove</div>
           <div><b>Drag</b> empty space — look around · <b>Scroll</b> — zoom</div>
         </div>
         <p class="note" id="loadNote">Loading the lab…</p>
@@ -117,6 +122,13 @@
         <button class="btn ghost" id="btnUndoLead">Undo last lead</button>
         <button class="btn ghost" id="btnClearLeads">Remove all leads</button>
       </div>
+      <label class="lbl">Who performs the experiment
+        <select id="mode">
+          <option value="student">Student (walk with keyboard + hands with mouse)</option>
+          <option value="hands">Hands only (mouse)</option>
+          <option value="classic">No human (classic controls)</option>
+        </select>
+      </label>
       <div class="row small">
         Lead colour:
         <span id="leadColors" class="swatches"></span>

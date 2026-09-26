@@ -87,6 +87,7 @@ class Hand {
     inner.rotation.x = Math.PI / 2; inner.scale.set(1.2, 1, 0.8); inner.position.set(0, 0.3, 3.4);
     this.root.add(sleeve, cuff, inner);
     this.sleeve = sleeve;
+    this.cuff = cuff;
 
     this.current = JSON.parse(JSON.stringify(POSES.relaxed));
     this.target = POSES.relaxed;
@@ -163,6 +164,13 @@ class Hand {
     this.sleeve.quaternion.setFromUnitVectors(new THREE.Vector3(0, -1, 0), dir);
   }
 
+  // Show or hide the hand's own lab-coat sleeve (hidden when a full body supplies the arms)
+  setSleeve(v) { this.sleeve.visible = v; this.cuff.visible = v; }
+
+  // Where the forearm meets the hand, and the direction back up the forearm
+  wristWorld() { return this.root.localToWorld(new THREE.Vector3(0, 0.4, 4.2)); }
+  forearmDir() { return new THREE.Vector3(0, 0, 1).applyQuaternion(this.root.getWorldQuaternion(new THREE.Quaternion())); }
+
   tipWorld() {
     return this.bones['index-finger-tip'].getWorldPosition(new THREE.Vector3());
   }
@@ -182,7 +190,7 @@ export async function loadHands(scene, base = './meter-bridge/assets/') {
   const left = new Hand(l, 'left', skinMat, sleeveMat);
   scene.add(right.root, left.root);
   return {
-    right, left,
+    right, left, skinMat,
     setSkin(tone) { skinMat.color.setHex(SKIN_TONES[tone] ?? SKIN_TONES.medium); },
     update(dt) { right.update(dt); left.update(dt); },
   };

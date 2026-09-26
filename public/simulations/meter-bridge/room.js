@@ -368,7 +368,7 @@ export function buildRoom(scene, tableY) {
   room.add(trolley);
 
   // Stools at the working bench
-  { const s = buildStool(M); s.position.set(-104, FLOOR_Y, 58); room.add(s); }
+  { const s = buildStool(M); s.position.set(-150, FLOOR_Y, 60); room.add(s); }
 
   // Other benches in the room, with a stool or two
   [[-290, -70, Math.PI / 2], [-290, 170, Math.PI / 2], [330, 250, 0]].forEach(([x, z, r]) => {

@@ -214,3 +214,8 @@ tbody tr:empty { display: none; }
 .swatches button.auto { width: auto; border-radius: 6px; padding: 0 6px; background: #1e293b; color: #cbd5e1; font-size: 11px; }
 .check.inline { display: inline-flex; margin: 0 0 0 8px; }
 .btn:disabled { opacity: .45; cursor: not-allowed; }
+
+.choices.three { grid-template-columns: repeat(3, 1fr); }
+.choice.mid { background: linear-gradient(135deg, #0f766e, #155e75); }
+.startready { margin: 12px 0 0; color: #cbd5e1; font-size: 13px; }
+@media (max-width: 760px) { .choices.three { grid-template-columns: 1fr; } }
