@@ -4,7 +4,6 @@ import { RoomEnvironment } from 'three/addons/RoomEnvironment.js';
 import * as P from './physics.js';
 import * as S from './scene.js';
 import { buildRoom, ROOM, TROLLEY, FLOOR_Y } from './room.js';
-import { loadHands } from './hands.js';
 import { loadAvatar } from './avatar.js';
 
 const $ = (id) => document.getElementById(id);
@@ -566,7 +565,7 @@ const OBSTACLES = [
   [-167, -133, 43, 77], // stool
   [ROOM.x1 - 50, ROOM.x1, 20, 160], // PPE station
 ];
-const BODY_R = 20;
+const BODY_R = 16;
 function collide(p) {
   p.x = THREE.MathUtils.clamp(p.x, ROOM.x0 + BODY_R, ROOM.x1 - BODY_R);
   p.z = THREE.MathUtils.clamp(p.z, ROOM.z0 + BODY_R, ROOM.z1 - BODY_R);
@@ -1088,6 +1087,8 @@ canvas.addEventListener('pointerdown', (e) => {
   controls.enabled = false;
   canvas.setPointerCapture(e.pointerId);
   pointer = { id: e.pointerId, x: e.clientX, y: e.clientY, moved: false, t0: performance.now(), hit: h };
+  // Keep the hand on what was clicked for a moment, so the action is seen being done
+  state.actionHold = { point: h.point.clone(), until: performance.now() + 900, pose: h.kind === 'term' ? 'pinch' : 'press' };
   if (h.kind === 'term') {
     if (pending) { if (pending.from === h.id) cancelLead(); else finishLead(h.id); }
     else startLead(h.id);
@@ -1908,15 +1909,18 @@ function placeJockey() {
 }
 
 // The student's right hand follows the mouse and adopts the right grip.
+const armReach = () => (avatar ? avatar.armLen.upper + avatar.armLen.fore + avatar.armLen.hand - 2 : 88);
 function clampReach(p) {
+  state.reachTarget = p.clone(); // where the student wants to reach (drives the lean)
   const d = p.clone().sub(SHOULDER.right);
-  // shoulder → wrist (forearm may stretch 40 %) plus wrist → fingertip
-  const max = avatar ? avatar.armLen.upper + avatar.armLen.fore * 1.4 + 17 : 88;
+  // shoulder → fingertip; beyond this the student leans over the bench instead
+  const max = armReach();
   if (d.length() > max) p.copy(SHOULDER.right).addScaledVector(d.normalize(), max);
   return p;
 }
 function driveHands() {
   if (!hands) return;
+  state.reachTarget = null;
   const student = bodyMode() && avatar;
   if (student) {
     SHOULDER.right.copy(avatar.shoulderWorld('right'));
@@ -1925,6 +1929,14 @@ function driveHands() {
   }
   if (autopilot) return;
   const R = hands.right, Lh = hands.left;
+  const hold = state.actionHold && performance.now() < state.actionHold.until ? state.actionHold : null;
+  if (student && hold && !pointer && !state.holdSources.size) {
+    R.setPose(hold.pose, hold.pose === 'pinch' ? 'pinch' : 'index');
+    R.speed = 22;
+    R.goal.copy(clampReach(hold.point.clone().add(V3(0, 1.2, 0))));
+    aimHand(R, R.goal, -0.4);
+    return;
+  }
   const usable = hover && hover.point && hover.kind !== 'surface' && hover.kind !== 'lead';
   if (student && state.mode === 'fp' && !usable && !(pointer && (pointer.carry || pointer.hit.kind === 'jockey')) && !state.holdSources.size && !pending) {
     fpHands();
@@ -1994,11 +2006,15 @@ function frame() {
   placeJockey();
   if (hands) hands.update(dt);
   if (avatar && bodyMode() && hands) {
-    const a = avatar.state, g = hands.right.goal;
-    const fwd = -(g.x - a.pos.x) * Math.sin(a.heading) - (g.z - a.pos.z) * Math.cos(a.heading);
-    // lean over the bench to reach (in first person the torso is hidden and the camera does not follow the lean)
-    a.leanGoal = g.y < 30 ? THREE.MathUtils.clamp((fwd - 22) / 50, 0, 0.8) : 0;
-    avatar.update(dt, { moving: walking.speed > 1, speed: walking.speed, wristL: hands.left.wristWorld(), wristR: hands.right.wristWorld(), cuffL: hands.left.forearmDir(), cuffR: hands.right.forearmDir() });
+    const a = avatar.state;
+    // Lean over the bench until the target is within arm's reach (in first person
+    // the torso is hidden and the camera does not follow the lean)
+    const tgt = autopilot ? hands.right.goal : state.reachTarget;
+    if (tgt && tgt.y < 30) {
+      const deficit = tgt.distanceTo(SHOULDER.right) - (armReach() - 9);
+      a.leanGoal = THREE.MathUtils.clamp(a.lean + deficit / 45, 0, 0.95);
+    } else a.leanGoal = 0;
+    avatar.update(dt, { moving: walking.speed > 1, speed: walking.speed, handL: hands.left, handR: hands.right });
   }
   updateFPCamera();
   if (pending) updatePendingLead(hands ? hands.right.goal.clone() : (hover && hover.point ? hover.point.clone().add(V3(0, 2, 0)) : termWorld(pending.from).add(V3(0, 4, 4))));
@@ -2157,8 +2173,6 @@ function setMode(mode) {
   keys.clear();
   if (handsLoaded) {
     handsLoaded.right.root.visible = handsLoaded.left.root.visible = mode !== 'classic' && $('optHands').checked;
-    handsLoaded.right.setSleeve(false);
-    handsLoaded.left.setSleeve(false);
   }
   if (avatar) {
     avatar.setVisible(mode !== 'classic' && $('optHands').checked);
@@ -2237,21 +2251,16 @@ frame();
 
 const START_BTNS = ['startAuto', 'startFP', 'startClassic'];
 START_BTNS.forEach((id) => { $(id).disabled = true; });
-loadHands(scene).then((h) => {
+loadAvatar(scene).then((a) => {
+  avatar = a;
+  avatar.state.pos.set(470, FLOOR_Y, 300);
+  avatar.state.heading = Math.PI / 2;
+  avatar.setVisible(false);
+  // The student's own hands are the interactive hands
+  const h = a.hands;
   handsLoaded = h;
-  h.right.shoulder = SHOULDER.right;
-  h.left.shoulder = SHOULDER.left;
-  h.right.goal.set(60, 20, 50); h.right.pos.copy(h.right.goal);
-  h.left.setPose('flat', 'palm');
-  h.left.goal.copy(LEFT_REST); h.left.pos.copy(LEFT_REST);
-  h.right.root.visible = h.left.root.visible = false;
-  h.setSkin('student');
-  return loadAvatar(scene).then((a) => {
-    avatar = a;
-    avatar.state.pos.set(470, FLOOR_Y, 300);
-    avatar.state.heading = Math.PI / 2;
-    avatar.setVisible(false);
-  });
+  h.right.goal.copy(a.bodyPoint(23, 80, -3)); h.right.pos.copy(h.right.goal);
+  h.left.goal.copy(a.bodyPoint(-23, 80, -3)); h.left.pos.copy(h.left.goal);
 }).catch((e) => {
   console.warn('Human models could not be loaded; only the no-human mode is available.', e);
 }).finally(() => {
@@ -2277,6 +2286,6 @@ window.meterBridge = {
   ppeItems: ppe.items, pickAt: (x, y) => { const h = pick({ clientX: x, clientY: y }); return h && { kind: h.kind, name: h.obj?.userData?.gear || h.key || h.id }; },
   toggleKey, toggleHR, recordReading, flyTo, start, setMode, withAutopilot, walkTo, keys, runAuto, vclock, fp, wearGear, allGear, currentStep, STEPS, demoInterchange,
   get hands() { return hands; }, get autopilot() { return autopilot; }, get avatar() { return avatar; },
-  camera, controls, gauge,
+  camera, controls, gauge, walking, hoverKind: () => hover && hover.kind, lastMouseSet: () => !!lastMouse,
   updateUi: () => updateUi(),
 };

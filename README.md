@@ -21,8 +21,11 @@ HTML lab animations on demand.
   carry apparatus from the trolley, run leads between binding screws, then
   perform the experiment and measure the wire with a working screw gauge. Whatever is wired is solved as a real resistor network,
   so wrong connections behave physically; every step has a "Show me" hand
-  demonstration. Source lives in `public/simulations/meter-bridge/`; hand
-  models are MIT-licensed WebXR "generic-hand" assets.
+  demonstration. Source lives in `public/simulations/meter-bridge/`. The
+  student is a textured, rigged Ready Player Me avatar (see
+  `assets/STUDENT-LICENSE.md`); its own hands and fingers are driven by IK and
+  per-finger curls, and the gloves, coat and shoes are shader layers on its
+  clothing.
 - **Dynamic Lab Pages** — every experiment renders Theory, Procedure,
   Simulator, and Observation tabs from a centralized data file
   (`src/data/experimentContent.js`), with auto-computed metrics, savable

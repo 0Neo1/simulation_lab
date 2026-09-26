@@ -1,9 +1,11 @@
 // The student: a realistic, textured and rigged character (a Ready Player Me
-// avatar, see assets/STUDENT-LICENSE.md) who arrives in everyday clothes and puts on
-// the lab's safety gear (lab coat, goggles, gloves, safety shoes). The gear is
-// attached to the skeleton so it moves with the body. The character's own
-// hands are collapsed and replaced by the rigged WebXR hands (which can wear
-// gloves); the arms reach them with two-bone IK on the real arm bones.
+// avatar, see assets/STUDENT-LICENSE.md). The character's own hands are the
+// interactive hands: arms reach with two-bone IK on the real arm bones, the
+// wrist turns to the requested orientation and each finger curls on its own
+// bones. Safety gear is applied to the character's own clothes in the shader
+// (white lab coat, black safety shoes, blue nitrile gloves on the skin of the
+// hands) so it fits and deforms with the body; goggles and the coat's lower
+// skirt are separate meshes attached to bones.
 // Units are cm; the group's origin is between the feet on the floor and the
 // student faces −Z when heading = 0.
 import * as THREE from 'three';
@@ -76,6 +78,67 @@ function turnBone(bone, axisW, angle) {
   bone.updateMatrixWorld(true);
 }
 
+import { POSES } from './hands.js';
+
+// In first person only the forearms and hands (and legs, looking down) are drawn
+const HIDE_IN_FP = ['Spine', 'Spine1', 'Spine2', 'Neck', 'Head', 'LeftShoulder', 'RightShoulder', 'LeftArm', 'RightArm'];
+const d2r = THREE.MathUtils.degToRad;
+
+// Adds per-vertex masks from the skin weights and a small shader layer to a
+// skinned mesh's material: an optional tint of the clothing (keeping the
+// texture's folds and shading), blue nitrile gloves over the hands, and
+// discarding the torso/head in first person.
+function patchMesh(mesh, bones, { tint = false, glove = false } = {}) {
+  const geo = mesh.geometry;
+  const si = geo.attributes.skinIndex, sw = geo.attributes.skinWeight;
+  const skel = mesh.skeleton.bones.map((b) => b.name.replace('mixamorig', ''));
+  const isHand = skel.map((n) => /^(Left|Right)Hand/.test(n));
+  const isHide = skel.map((n) => HIDE_IN_FP.includes(n));
+  const aGlove = new Float32Array(si.count), aHide = new Float32Array(si.count);
+  for (let i = 0; i < si.count; i++) {
+    for (let k = 0; k < 4; k++) {
+      const b = si.getComponent(i, k), w = sw.getComponent(i, k);
+      if (isHand[b]) aGlove[i] += w;
+      if (isHide[b]) aHide[i] += w;
+    }
+  }
+  geo.setAttribute('aGlove', new THREE.BufferAttribute(aGlove, 1));
+  geo.setAttribute('aHide', new THREE.BufferAttribute(aHide, 1));
+  const src = mesh.material;
+  // A physically based material: skin gets a soft sheen that reads as skin under the lab lights
+  const mat = new THREE.MeshPhysicalMaterial({
+    map: src.map, normalMap: src.normalMap, roughnessMap: src.roughnessMap, metalnessMap: src.metalnessMap,
+    roughness: src.roughness ?? 0.8, metalness: src.metalness ?? 0, color: src.color,
+    sheen: glove ? 0.35 : 0.1, sheenRoughness: 0.6, sheenColor: new THREE.Color(glove ? 0xffc4a8 : 0xffffff),
+  });
+  if (src.normalScale) mat.normalScale.copy(src.normalScale);
+  const u = {
+    uTint: { value: new THREE.Color(1, 1, 1) }, uTintMix: { value: 0 }, uTintBase: { value: 0.5 }, uTintGain: { value: 0.8 },
+    uGlove: { value: 0 }, uGloveColor: { value: new THREE.Color(0x2c78dc) }, uFP: { value: 0 },
+  };
+  mat.onBeforeCompile = (shader) => {
+    Object.assign(shader.uniforms, u);
+    shader.vertexShader = shader.vertexShader
+      .replace('#include <common>', '#include <common>\nattribute float aGlove; attribute float aHide; varying float vGlove; varying float vHide;')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvGlove = aGlove; vHide = aHide;');
+    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <common>', `#include <common>
+varying float vGlove; varying float vHide;
+uniform vec3 uTint; uniform float uTintMix; uniform float uTintBase; uniform float uTintGain;
+uniform float uGlove; uniform vec3 uGloveColor; uniform float uFP;`)
+      .replace('#include <clipping_planes_fragment>', '#include <clipping_planes_fragment>\nif (uFP > 0.5 && vHide > 0.5) discard;')
+      .replace('#include <map_fragment>', `#include <map_fragment>
+float lum = dot(diffuseColor.rgb, vec3(0.299, 0.587, 0.114));
+diffuseColor.rgb = mix(diffuseColor.rgb, uTint * clamp(uTintBase + uTintGain * lum, 0.0, 1.2), uTintMix);
+float gloveK = smoothstep(0.3, 0.7, vGlove) * uGlove;
+diffuseColor.rgb = mix(diffuseColor.rgb, uGloveColor * (0.78 + 0.3 * lum), gloveK);`)
+      .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = mix(roughnessFactor, 0.36, gloveK);');
+  };
+  mat.customProgramCacheKey = () => `mb-${glove ? 'g' : ''}${tint ? 't' : ''}`;
+  mesh.material = mat;
+  return u;
+}
+
 export async function loadAvatar(scene) {
   const gltf = await loadGLB('student.glb');
   const root = new THREE.Group();
@@ -95,17 +158,29 @@ export async function loadAvatar(scene) {
   const rest = {};
   Object.entries(B).forEach(([n, b]) => { rest[n] = b.quaternion.clone(); });
   const W = (n) => B[n].getWorldPosition(new THREE.Vector3());
-  const armLen = { upper: W('LeftArm').distanceTo(W('LeftForeArm')), fore: W('LeftForeArm').distanceTo(W('LeftHand')) };
+  const armLen = { upper: W('RightArm').distanceTo(W('RightForeArm')), fore: W('RightForeArm').distanceTo(W('RightHand')) };
+  armLen.hand = W('RightHand').distanceTo(W('RightHandMiddle4'));
 
-  // ---- Safety gear, built in the rest (T) pose and attached to bones ----
+  // ---- Clothing and skin shading ----
+  const U = {};
+  const patch = (name, opts) => { if (parts[name]) U[name] = patchMesh(parts[name], B, opts); };
+  patch('Wolf3D_Body', { glove: true });
+  patch('Wolf3D_Outfit_Top', { tint: true });
+  patch('Wolf3D_Outfit_Bottom', { tint: true });
+  patch('Wolf3D_Outfit_Footwear', { tint: true });
+  patch('Wolf3D_Head', {});
+  const setTint = (name, hex, base, gain, mix = 1) => {
+    const u = U[name]; if (!u) return;
+    u.uTint.value.setHex(hex); u.uTintBase.value = base; u.uTintGain.value = gain; u.uTintMix.value = mix;
+  };
+  // Everyday clothes: a navy sweatshirt and denim jeans (the model's suit re-coloured)
+  const casualTop = () => setTint('Wolf3D_Outfit_Top', 0x1f3b63, 0.45, 0.9);
+  setTint('Wolf3D_Outfit_Bottom', 0x3a5a8c, 0.4, 0.95);
+  casualTop();
+
   const M = {
-    coat: new THREE.MeshStandardMaterial({ color: 0xf5f7f9, roughness: 0.86 }),
-    coatShade: new THREE.MeshStandardMaterial({ color: 0xe1e6eb, roughness: 0.9 }),
-    dark: new THREE.MeshStandardMaterial({ color: 0x1b1f27, roughness: 0.5 }),
+    coat: new THREE.MeshStandardMaterial({ color: 0xf3f5f7, roughness: 0.85, side: THREE.DoubleSide }),
     pen: new THREE.MeshStandardMaterial({ color: 0x1d4ed8, roughness: 0.4 }),
-    boot: new THREE.MeshStandardMaterial({ color: 0x131313, roughness: 0.42, metalness: 0.1 }),
-    toecap: new THREE.MeshStandardMaterial({ color: 0x3b3b3b, roughness: 0.3, metalness: 0.6 }),
-    sole: new THREE.MeshStandardMaterial({ color: 0x0b0d12, roughness: 0.8 }),
     badge: new THREE.MeshStandardMaterial({ map: canvasTex(128, 160, (g, w, h) => {
       g.fillStyle = '#fff'; g.fillRect(0, 0, w, h);
       g.fillStyle = '#1e3a8a'; g.fillRect(0, 0, w, 36);
@@ -116,74 +191,33 @@ export async function loadAvatar(scene) {
   };
   const shadow = (o) => { o.traverse((m) => { if (m.isMesh) m.castShadow = true; }); return o; };
   const attachTo = (bone, obj) => { root.add(obj); root.updateMatrixWorld(true); bone.attach(obj); return obj; };
-  const hipY = W('Hips').y, neckY = W('Neck').y;
-  const coat = new THREE.Group();
-  // Upper coat on the chest (follows leaning), skirt from the hips to the knees
-  const chest = new THREE.Mesh(new THREE.LatheGeometry([[0.1, hipY - 12], [17, hipY - 12], [15.6, hipY + 4], [16.2, hipY + 16], [17.4, neckY - 12], [16.6, neckY - 6], [12, neckY - 1], [7, neckY + 1.5], [0.1, neckY + 1.5]].map(([r, y]) => new THREE.Vector2(r, y)), 40), M.coat);
-  chest.scale.set(1, 1, 0.9);
-  chest.position.z = -1.2;
-  const skirt = new THREE.Mesh(new THREE.LatheGeometry([[18, W('LeftLeg').y - 4], [17.2, hipY - 14], [16.8, hipY + 2]].map(([r, y]) => new THREE.Vector2(r, y)), 40, 0, Math.PI * 2), M.coat);
-  skirt.material = M.coat.clone(); skirt.material.side = THREE.DoubleSide;
+  const hipY = W('Hips').y;
+
+  // Lab coat: the jacket turns white (see setGear) and a coat skirt hangs to the knees
+  const skirt = new THREE.Mesh(new THREE.LatheGeometry([[18.5, W('RightLeg').y - 4], [17.6, hipY - 14], [16.6, hipY + 4]].map(([r, y]) => new THREE.Vector2(r, y)), 40), M.coat);
   skirt.scale.set(1, 1, 0.74);
-  const front = new THREE.Group();
-  const zF = -17.4 * 0.9 - 1.2 - 0.3;
-  const lapelL = new THREE.Mesh(new THREE.PlaneGeometry(6, 18), M.coatShade);
-  lapelL.position.set(-5, neckY - 10, zF); lapelL.rotation.set(0, Math.PI, -0.35);
-  const lapelR = lapelL.clone(); lapelR.position.x = 5; lapelR.rotation.z = 0.35;
-  front.add(lapelL, lapelR);
-  for (let i = 0; i < 4; i++) {
-    const b = new THREE.Mesh(new THREE.CylinderGeometry(0.75, 0.75, 0.4, 12), M.dark);
-    b.rotation.x = Math.PI / 2; b.position.set(1, neckY - 22 - i * 10, zF);
-    front.add(b);
-  }
-  const pocket = new THREE.Mesh(new THREE.PlaneGeometry(7.5, 6), M.coatShade);
-  pocket.position.set(-9.5, neckY - 16, zF + 0.1); pocket.rotation.y = Math.PI;
-  const pen = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.42, 7.5, 10), M.pen);
-  pen.position.set(-7.8, neckY - 13.5, zF - 0.3);
-  const badge = new THREE.Mesh(new THREE.PlaneGeometry(4.4, 5.6), M.badge);
-  badge.position.set(9.5, neckY - 16, zF); badge.rotation.y = Math.PI;
-  front.add(pocket, pen, badge);
-  const upperCoat = new THREE.Group(); upperCoat.add(chest, front);
-  attachTo(B.Spine1, shadow(upperCoat));
   attachTo(B.Hips, shadow(skirt));
-  // Sleeves along each upper arm and forearm, with a cuff at the wrist
-  const sleeves = [];
-  ['Left', 'Right'].forEach((side) => {
-    const seg = (a, b, r0, r1, bone) => {
-      const pa = W(a), pb = W(b);
-      const m = new THREE.Mesh(new THREE.CylinderGeometry(r1, r0, pa.distanceTo(pb) + 2, 20, 1, true), M.coat);
-      m.position.copy(pa).lerp(pb, 0.5);
-      m.quaternion.setFromUnitVectors(V(0, 1, 0), pb.clone().sub(pa).normalize());
-      sleeves.push(attachTo(bone, shadow(m)));
-    };
-    seg(`${side}Arm`, `${side}ForeArm`, 5.6, 5.0, B[`${side}Arm`]);
-    seg(`${side}ForeArm`, `${side}Hand`, 5.0, 4.2, B[`${side}ForeArm`]);
-    const cuff = new THREE.Mesh(new THREE.TorusGeometry(4.2, 0.6, 8, 20), M.coat);
-    const ph = W(`${side}Hand`), pf = W(`${side}ForeArm`);
-    cuff.position.copy(ph).lerp(pf, 0.04);
-    cuff.quaternion.setFromUnitVectors(V(0, 0, 1), ph.clone().sub(pf).normalize());
-    sleeves.push(attachTo(B[`${side}ForeArm`], cuff));
-  });
-  coat.visible = false;
+  // Name badge and pen on the chest, placed on the jacket surface found by a ray
+  const chestFront = (() => {
+    const top = parts.Wolf3D_Outfit_Top;
+    const y = W('Spine2').y + 2;
+    const hits = top ? new THREE.Raycaster(V(0, y, -60), V(0, 0, 1)).intersectObject(top) : [];
+    return hits.length ? hits[0].point.z : -14;
+  })();
+  const coatBits = new THREE.Group();
+  const badge = new THREE.Mesh(new THREE.PlaneGeometry(4.2, 5.4), M.badge);
+  badge.position.set(8.5, W('Spine2').y + 2, chestFront - 0.6); badge.rotation.set(-0.1, Math.PI, 0);
+  const pen = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.4, 7, 10), M.pen);
+  pen.position.set(-8.5, W('Spine2').y + 4, chestFront - 0.9); pen.rotation.x = -0.1;
+  coatBits.add(badge, pen);
+  attachTo(B.Spine2, shadow(coatBits));
+
   // Goggles on the head at eye level
   const goggles = makeGoggles();
   const eyeY = B.LeftEye ? W('LeftEye').y : W('Head').y + 9;
   goggles.position.set(0, eyeY + 0.4, W('Head').z - 0.6);
   goggles.scale.set(0.9, 0.95, 1.08);
   attachTo(B.Head, shadow(goggles));
-  // Safety shoes: black leather with a steel toe cap and a thick sole
-  const boots = ['Left', 'Right'].map((side) => {
-    const foot = W(`${side}Foot`), toe = W(`${side}ToeBase`);
-    const g = new THREE.Group();
-    const len = 27, cz = (foot.z + toe.z) / 2 - 2;
-    const upper = new THREE.Mesh(new THREE.BoxGeometry(10.5, 10, len), M.boot); upper.position.set(foot.x, 6, cz);
-    const sole = new THREE.Mesh(new THREE.BoxGeometry(11.2, 2.6, len + 1), M.sole); sole.position.set(foot.x, 1.2, cz);
-    const cap = new THREE.Mesh(new THREE.SphereGeometry(5.5, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2), M.toecap);
-    cap.scale.set(1, 0.9, 1.1); cap.position.set(foot.x, 2.2, cz - len / 2 + 5);
-    const collar = new THREE.Mesh(new THREE.CylinderGeometry(6, 6.2, 5, 18), M.boot); collar.position.set(foot.x, 12, foot.z + 2);
-    g.add(upper, sole, cap, collar);
-    return attachTo(B[`${side}Foot`], shadow(g));
-  });
 
   // A student look: no hat or moustache; a short haircut modelled on the scalp
   if (parts.Wolf3D_Headwear) parts.Wolf3D_Headwear.visible = false;
@@ -199,8 +233,7 @@ export async function loadAvatar(scene) {
     });
     const hairMat = new THREE.MeshStandardMaterial({ map: hairTex, roughness: 0.85, color: 0xffffff });
     const top = W('HeadTop_End'), head = W('Head');
-    const eyeY0 = B.LeftEye ? W('LeftEye').y : head.y + 9;
-    const cy = eyeY0 + 5.5, r = (top.y - cy) * 1.06;
+    const cy = eyeY + 5.5, r = (top.y - cy) * 1.06;
     const hair = new THREE.Group();
     const crown = new THREE.Mesh(new THREE.SphereGeometry(r, 40, 24, 0, Math.PI * 2, 0, Math.PI * 0.5), hairMat);
     crown.scale.set(0.9, 0.95, 1.02);
@@ -215,20 +248,49 @@ export async function loadAvatar(scene) {
     parts.hair = hair;
   }
 
-  // The character's own hands give way to the rigged (glove-able) hands
-  B.LeftHand.scale.setScalar(0.001);
-  B.RightHand.scale.setScalar(0.001);
+  // ---- Hand rig, measured in the rest pose (student at the origin, facing −Z) ----
+  const FINGERS = { index: 'Index', middle: 'Middle', ring: 'Ring', pinky: 'Pinky' };
+  const rig = {};
+  ['Left', 'Right'].forEach((side) => {
+    const h = `${side}Hand`;
+    const f0 = W(`${h}Middle1`).sub(W(h)).normalize();
+    const lat = W(`${h}Index1`).sub(W(`${h}Pinky1`)).normalize();
+    let n0 = f0.clone().cross(lat).normalize();
+    // The palm normal points toward the body's centre line in the rest pose
+    if (n0.x * -Math.sign(W(h).x) < 0) n0.negate();
+    const q0 = B[h].getWorldQuaternion(new THREE.Quaternion());
+    const m0 = new THREE.Matrix4().makeBasis(f0, n0, f0.clone().cross(n0)).invert();
+    // Curl axes in each finger bone's own frame: rotating the finger toward the palm
+    const axisW = f0.clone().cross(n0).normalize();
+    const curl = {};
+    Object.entries(FINGERS).forEach(([k, F]) => {
+      curl[k] = [1, 2, 3].map((j) => {
+        const b = B[`${h}${F}${j}`];
+        return { b, axis: axisW.clone().applyQuaternion(b.getWorldQuaternion(new THREE.Quaternion()).invert()).normalize() };
+      });
+    });
+    const t0 = W(`${h}Thumb2`).sub(W(`${h}Thumb1`)).normalize();
+    const tAxisW = t0.clone().cross(n0).normalize();
+    curl.thumb = [1, 2, 3].map((j) => {
+      const b = B[`${h}Thumb${j}`];
+      return { b, axis: tAxisW.clone().applyQuaternion(b.getWorldQuaternion(new THREE.Quaternion()).invert()).normalize() };
+    });
+    rig[side] = { q0, m0, curl, off: V(0, 0, 0), offKey: '' };
+  });
 
   const gear = { coat: false, goggles: false, gloves: false, shoes: false };
   const state = { pos: new THREE.Vector3(0, 0, 70), heading: 0, lean: 0, leanGoal: 0, phase: 0, speed: 0, visible: true, lookDown: 0 };
   let fpView = false;
   function setGear(name, on) {
     gear[name] = on;
-    if (name === 'coat') { upperCoat.visible = on && !fpView; skirt.visible = on; sleeves.forEach((m) => { m.visible = on; }); if (parts.Wolf3D_Outfit_Top) parts.Wolf3D_Outfit_Top.visible = !on && !fpView; }
-    else if (name === 'goggles') goggles.visible = on;
-    else if (name === 'shoes') { boots.forEach((b) => { b.visible = on; }); if (parts.Wolf3D_Outfit_Footwear) parts.Wolf3D_Outfit_Footwear.visible = !on; }
+    if (name === 'coat') {
+      if (on) setTint('Wolf3D_Outfit_Top', 0xf5f7fa, 0.78, 0.35); else casualTop();
+      skirt.visible = on; coatBits.visible = on && !fpView;
+    } else if (name === 'goggles') goggles.visible = on;
+    else if (name === 'gloves') { if (U.Wolf3D_Body) U.Wolf3D_Body.uGlove.value = on ? 1 : 0; }
+    else if (name === 'shoes') { if (on) setTint('Wolf3D_Outfit_Footwear', 0x111214, 0.25, 0.55); else setTint('Wolf3D_Outfit_Footwear', 0xffffff, 0, 0, 0); }
   }
-  ['coat', 'goggles', 'shoes'].forEach((g) => setGear(g, false));
+  ['coat', 'goggles', 'gloves', 'shoes'].forEach((g) => setGear(g, false));
 
   function place() {
     root.position.set(state.pos.x, state.pos.y, state.pos.z);
@@ -239,30 +301,65 @@ export async function loadAvatar(scene) {
   function eyeWorld() { return V(state.pos.x, state.pos.y + EYE_HEIGHT, state.pos.z).add(V(-Math.sin(state.heading), 0, -Math.cos(state.heading)).multiplyScalar(8)); }
   function bodyPoint(x, y, z) { place(); return root.localToWorld(V(x, y, z)); }
 
-  // Two-bone IK on the real arm bones; the forearm may stretch a little so the
-  // hand can reach across the bench
+  // Two-bone IK on the real arm bones (no stretching: the student leans to reach)
   function solveArm(side, wrist) {
     const S = W(`${side}Arm`);
-    const a = armLen.upper, b0 = armLen.fore;
+    const a = armLen.upper, b = armLen.fore;
     const d = wrist.clone().sub(S);
-    let dist = d.length();
-    const k = THREE.MathUtils.clamp((dist - a) / b0, 1, 1.4);
-    const b = b0 * k;
-    B[`${side}ForeArm`].scale.set(1, k, 1);
-    dist = Math.min(dist, a + b - 0.01);
+    const dist = Math.min(d.length(), a + b - 0.05);
     const dir = d.normalize();
     const along = (a * a - b * b + dist * dist) / (2 * dist);
     const h = Math.sqrt(Math.max(0, a * a - along * along));
     const sgn = side === 'Left' ? -1 : 1;
-    const pole = V(sgn * 0.7, -1, 0.35).applyAxisAngle(V(0, 1, 0), state.heading);
+    const pole = V(sgn * 0.75, -1, 0.3).applyAxisAngle(V(0, 1, 0), state.heading);
     pole.sub(dir.clone().multiplyScalar(pole.dot(dir))).normalize();
     const E = S.clone().addScaledVector(dir, along).addScaledVector(pole, h);
-    const Wp = S.clone().addScaledVector(dir, dist);
     aimBone(B[`${side}Arm`], W(`${side}ForeArm`), E);
-    aimBone(B[`${side}ForeArm`], W(`${side}Hand`), Wp);
+    aimBone(B[`${side}ForeArm`], W(`${side}Hand`), S.clone().addScaledVector(dir, dist));
+  }
+  // The hand's world orientation for a yaw/pitch (fingers along −Z, palm down at 0/0)
+  function handQuat(side, yaw, pitch) {
+    const e = new THREE.Euler(pitch, yaw, 0, 'YXZ');
+    const F = V(0, 0, -1).applyEuler(e), N = V(0, -1, 0).applyEuler(e);
+    const m1 = new THREE.Matrix4().makeBasis(F, N, F.clone().cross(N));
+    const q = new THREE.Quaternion().setFromRotationMatrix(m1.multiply(rig[side].m0));
+    return q.multiply(rig[side].q0);
+  }
+  function setWorldQuat(bone, q) {
+    const pq = bone.parent.getWorldQuaternion(new THREE.Quaternion()).invert();
+    bone.quaternion.copy(pq.multiply(q));
+    bone.updateMatrixWorld(true);
+  }
+  function contactPoint(side, contact, palmN) {
+    const h = `${side}Hand`;
+    if (contact === 'pinch') return W(`${h}Index4`).lerp(W(`${h}Thumb4`), 0.5);
+    if (contact === 'palm') return W(h).lerp(W(`${h}Middle1`), 0.55).addScaledVector(palmN, 2.2);
+    return W(`${h}Index4`);
+  }
+  // Places a hand so that its contact point (fingertip, pinch or palm) is at hand.pos
+  function poseHand(side, hand) {
+    const r = rig[side];
+    const q = handQuat(side, hand.yaw, hand.pitch);
+    const key = hand.contact;
+    if (r.offKey !== key) { r.offKey = key; r.off.set(0, -2, -armLen.hand); }
+    const wrist = hand.pos.clone().sub(r.off.clone().applyQuaternion(q));
+    solveArm(side, wrist);
+    setWorldQuat(B[`${side}Hand`], q);
+    const cur = hand.current;
+    for (const [k, list] of Object.entries(r.curl)) {
+      const ang = cur[k];
+      list.forEach(({ b, axis }, j) => {
+        b.quaternion.copy(rest[b.name.replace('mixamorig', '')]).multiply(new THREE.Quaternion().setFromAxisAngle(axis, d2r(ang[j]) * (k === 'thumb' ? 0.6 : 1)));
+      });
+    }
+    B[`${side}Hand`].updateMatrixWorld(true);
+    // Remember where the contact point sits relative to the wrist, in the hand's frame, for next frame
+    const cp = contactPoint(side, key, V(0, -1, 0).applyEuler(new THREE.Euler(hand.pitch, hand.yaw, 0, 'YXZ')));
+    r.off.copy(cp.sub(W(`${side}Hand`)).applyQuaternion(q.clone().invert()));
+    hand.tip = W(`${side}HandIndex4`);
   }
 
-  function update(dt, { moving, speed, wristL, wristR }) {
+  function update(dt, { moving, speed, handL, handR }) {
     state.speed += (speed - state.speed) * Math.min(1, dt * 8);
     const amp = Math.min(1, state.speed / 120);
     state.phase += (state.speed * dt) / 55 * Math.PI;
@@ -272,30 +369,63 @@ export async function loadAvatar(scene) {
     Object.entries(rest).forEach(([n, q]) => B[n].quaternion.copy(q));
     root.updateMatrixWorld(true);
     const side = V(1, 0, 0).applyAxisAngle(V(0, 1, 0), state.heading); // student's right
-    // Walk cycle: hips swing the thighs, knees bend on the back swing
     turnBone(B.LeftUpLeg, side, sw * 0.45 * amp);
     turnBone(B.RightUpLeg, side, -sw * 0.45 * amp);
     turnBone(B.LeftLeg, side, -Math.max(0, -Math.cos(state.phase)) * 0.8 * amp);
     turnBone(B.RightLeg, side, -Math.max(0, Math.cos(state.phase)) * 0.8 * amp);
-    // Lean over the bench from the waist, look down at the work
     turnBone(B.Spine, side, -state.lean * 0.55);
     turnBone(B.Spine1, side, -state.lean * 0.3);
     turnBone(B.Spine2, side, -state.lean * 0.15);
     turnBone(B.Neck, side, -(state.lean * 0.3 + state.lookDown));
-    if (wristL) solveArm('Left', wristL);
-    if (wristR) solveArm('Right', wristR);
+    if (handL) poseHand('Left', handL);
+    if (handR) poseHand('Right', handR);
   }
 
   function setVisible(v) { state.visible = v; root.visible = v; }
-  // First person: the camera sits in the head, so hide the head, neck and torso
-  // (they would fill the view); legs, coat sleeves and the hands stay visible
+  // First person: the camera sits in the head, so the head, neck and torso are
+  // not drawn (they would fill the view); arms, hands and legs stay visible
   function setHeadVisible(v) {
     fpView = !v;
     B.Head.scale.setScalar(v ? 1 : 0.001);
-    ['Wolf3D_Body', 'Wolf3D_Head', 'EyeLeft', 'EyeRight', 'Wolf3D_Teeth'].forEach((n) => { if (parts[n]) parts[n].visible = v; });
-    if (parts.Wolf3D_Outfit_Top) parts.Wolf3D_Outfit_Top.visible = v && !gear.coat;
-    upperCoat.visible = v && gear.coat;
+    ['Wolf3D_Head', 'EyeLeft', 'EyeRight', 'Wolf3D_Teeth'].forEach((n) => { if (parts[n]) parts[n].visible = v; });
+    Object.values(U).forEach((u) => { u.uFP.value = v ? 0 : 1; });
+    coatBits.visible = gear.coat && v;
   }
 
-  return { root, bones: B, parts, state, gear, armLen, update, shoulderWorld, eyeWorld, setVisible, setHeadVisible, setGear, bodyPoint };
+  // Hand controllers with the interface the lab uses (goal, pose, contact, yaw/pitch);
+  // the avatar applies them to its own arm, wrist and finger bones in update()
+  class BodyHand {
+    constructor(sideName) {
+      this.side = sideName; // 'right' | 'left'
+      this.pos = V(0, 0, 0); this.goal = V(0, 0, 0);
+      this.yaw = 0; this.yawGoal = 0; this.pitch = 0; this.pitchGoal = 0;
+      this.speed = 14; this.contact = 'index';
+      this.current = JSON.parse(JSON.stringify(POSES.relaxed));
+      this.target = POSES.relaxed;
+      this.root = { visible: true };
+      this.tip = V(0, 0, 0);
+    }
+    setPose(name, contact) { this.target = POSES[name] || POSES.relaxed; if (contact) this.contact = contact; }
+    update(dt) {
+      const k = 1 - Math.exp(-dt * this.speed);
+      this.pos.lerp(this.goal, k);
+      this.yaw += Math.atan2(Math.sin(this.yawGoal - this.yaw), Math.cos(this.yawGoal - this.yaw)) * k;
+      this.pitch += (this.pitchGoal - this.pitch) * k;
+      const kp = 1 - Math.exp(-dt * 16);
+      ['index', 'middle', 'ring', 'pinky', 'thumb'].forEach((f) => {
+        for (let i = 0; i < 3; i++) this.current[f][i] += (this.target[f][i] - this.current[f][i]) * kp;
+      });
+    }
+    tipWorld() { return this.tip.clone(); }
+    setSleeve() {}
+  }
+  const right = new BodyHand('right'), left = new BodyHand('left');
+  const hands = {
+    right, left,
+    setGloves(on) { setGear('gloves', on); },
+    setSkin() {},
+    update(dt) { right.update(dt); left.update(dt); },
+  };
+
+  return { root, bones: B, parts, state, gear, armLen, hands, update, shoulderWorld, eyeWorld, setVisible, setHeadVisible, setGear, bodyPoint };
 }
