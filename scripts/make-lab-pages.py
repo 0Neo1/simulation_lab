@@ -1,5 +1,7 @@
-# Writes the small HTML page for each experiment (python3 shell.py id [id…])
-import sys
+# Writes the small HTML page that loads each 3D experiment.
+# Usage (from the repository root): python3 scripts/make-lab-pages.py phy124 che123 …
+import os, sys
+SIM = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'public', 'simulations')
 TPL = '''<!doctype html>
 <html lang="en">
 <head>
@@ -31,10 +33,10 @@ import re
 for id in sys.argv[1:]:
     title = sys.argv[0]
     try:
-        src = open(f'../labs/{id}.js').read()
+        src = open(os.path.join(SIM, 'labs', f'{id}.js')).read()
         m = re.search(r"title:\s*'([^']+)'", src)
         title = m.group(1) if m else id
     except FileNotFoundError:
         title = id
-    open(f'../{id}.html', 'w').write(TPL.format(id=id, title=title + ' — Virtual Lab'))
+    open(os.path.join(SIM, f'{id}.html'), 'w').write(TPL.format(id=id, title=title + ' — Virtual Lab'))
     print('wrote', id)

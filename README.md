@@ -8,24 +8,35 @@ HTML lab animations on demand.
 
 ## Features
 
-- **Interactive Simulations** — 28+ pre-built, fully offline HTML5 simulations
-  (Meter Bridge, Convex Lens, Potentiometer, Ohm's Law, Titrations, Flame Test,
-  Paper Chromatography, and more) shipped under `public/simulations/`.
-- **Virtual Meter Bridge lab** — `phy121` is a full 3D physics lab room
-  (Three.js, vendored under `public/simulations/lib/three/` so it stays
-  offline). Three ways to work: watch a student perform the whole experiment
-  automatically (drag to move the camera), be the student in first person
-  with game-style hands, or turn the human off and use direct controls. The
-  student must put on a lab coat, goggles, gloves and safety shoes at the PPE
-  station before the experiment can begin. The bench is set up from scratch:
-  carry apparatus from the trolley, run leads between binding screws, then
-  perform the experiment and measure the wire with a working screw gauge. Whatever is wired is solved as a real resistor network,
-  so wrong connections behave physically; every step has a "Show me" hand
-  demonstration. Source lives in `public/simulations/meter-bridge/`. The
-  student is a textured, rigged Ready Player Me avatar (see
-  `assets/STUDENT-LICENSE.md`); its own hands and fingers are driven by IK and
-  per-finger curls, and the gloves, coat and shoes are shader layers on its
-  clothing.
+- **3D virtual labs for every experiment** — all 28 physics and chemistry
+  experiments under `public/simulations/` are full 3D lab rooms (Three.js,
+  vendored under `public/simulations/lib/three/` so everything stays offline).
+  Each one offers three ways to work: watch a student perform the whole
+  experiment automatically (drag to move the camera), be the student in
+  first person with game-style hands (W A S D to walk), or turn the human off
+  and use direct controls. The student must put on a lab coat, goggles,
+  gloves and safety shoes at the PPE station first, then carries the
+  apparatus from the trolley to the bench and performs every step; each step
+  has a "Show me" demonstration. Readings go into an observation table and
+  can be sent to the Observation tab or exported as CSV.
+  - *Physics*: meter bridge, potentiometer and Ohm's law circuits are wired
+    lead by lead and solved as real resistor networks (wrong connections
+    behave physically); lens experiments throw a computed, defocus-blurred
+    image on the screen; springs, trolleys, marbles and Melde's thread move
+    with real dynamics; vernier calipers, screw gauges, spherometer and
+    Searle's micrometer have legible scales.
+  - *Chemistry*: glassware holds real volumes (levels follow the vessel's
+    shape); titrations use a burette, pipette and indicator chemistry with
+    transient and permanent end-point colours; test-tube reactions show
+    precipitates, effervescence and fumes; flame tests, chromatography,
+    sublimation and crystallisation are animated step by step.
+  - Code: the shared engine is `public/simulations/lab-engine/` (engine,
+    `chem.js` and `phys.js` apparatus); each experiment is a spec in
+    `public/simulations/labs/<id>.js`, loaded by `<id>.html` (regenerate the
+    pages with `python3 scripts/make-lab-pages.py <id> …`). The meter bridge
+    lives in `public/simulations/meter-bridge/`, which also holds the room,
+    the student avatar (a rigged Ready Player Me model, see
+    `assets/STUDENT-LICENSE.md`) and the shared apparatus.
 - **Dynamic Lab Pages** — every experiment renders Theory, Procedure,
   Simulator, and Observation tabs from a centralized data file
   (`src/data/experimentContent.js`), with auto-computed metrics, savable
@@ -69,7 +80,7 @@ Outputs to `build/`. Deploy that folder to any static host with SPA fallback.
 ```
 lab_simulation/
 ├── public/
-│   ├── simulations/            # 28 self-contained HTML5 lab simulations
+│   ├── simulations/            # 28 3D lab experiments (lab-engine/, labs/, meter-bridge/)
 │   └── interactive-simulations/ # standalone simulations site
 ├── src/
 │   ├── components/
