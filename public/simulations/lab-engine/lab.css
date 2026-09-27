@@ -1,0 +1,9 @@
+/* Additions to the meter bridge lab styles for the other experiments */
+.labdiagram { width: auto; height: auto; min-width: 200px; max-width: 260px; padding: 8px 10px; font-size: 11.5px; color: #cbd5e1; line-height: 1.45; }
+.labdiagram svg { display: block; width: 100%; height: auto; }
+.labdiagram b { color: #e2e8f0; }
+.labdiagram .big { font-size: 20px; font-weight: 800; color: #67e8f9; display: block; margin: 2px 0; }
+#panel .m b.ok { color: #34d399; }
+#panel .m b.warn { color: #fbbf24; }
+.swatch { display: inline-block; width: 14px; height: 14px; border-radius: 3px; vertical-align: -2px; border: 1px solid #334155; margin-right: 4px; }
+.lbl input[type=number], .lbl input[type=text] { width: 100%; background: #0b1220; color: #f8fafc; border: 1px solid #334155; border-radius: 6px; padding: 5px 8px; margin-top: 4px; }

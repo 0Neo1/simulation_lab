@@ -71,6 +71,37 @@ function woodTex(base, dark, rings = 60) {
 }
 
 // Chalkboard with the circuit diagram, formulae and the outline of the method
+// A chalkboard written for any experiment: title, an optional diagram drawn by
+// the experiment, formulae and method steps.
+function customBoardTexture(b) {
+  return tex(2048, 820, (g, w, h) => {
+    const bg = g.createLinearGradient(0, 0, w, h);
+    bg.addColorStop(0, '#1f3b2d'); bg.addColorStop(1, '#193226');
+    g.fillStyle = bg; g.fillRect(0, 0, w, h);
+    for (let i = 0; i < 40; i++) {
+      g.fillStyle = `rgba(255,255,255,${0.012 + Math.random() * 0.02})`;
+      g.beginPath(); g.ellipse(Math.random() * w, Math.random() * h, 60 + Math.random() * 220, 20 + Math.random() * 60, Math.random(), 0, Math.PI * 2); g.fill();
+    }
+    const hand = '"Comic Sans MS", "Segoe Print", cursive';
+    const chalk = (c = '#f4f1e8') => { g.strokeStyle = c; g.fillStyle = c; g.lineCap = 'round'; g.lineJoin = 'round'; };
+    chalk();
+    g.font = `bold 60px ${hand}`;
+    g.fillText(b.title || '', 70, 100);
+    g.lineWidth = 5;
+    g.beginPath(); g.moveTo(70, 118); g.lineTo(Math.min(1900, 90 + g.measureText(b.title || '').width), 118); g.stroke();
+    const split = b.draw ? 1080 : 70;
+    if (b.draw) { g.save(); g.lineWidth = 6; g.font = `42px ${hand}`; b.draw(g, chalk, hand); g.restore(); chalk(); }
+    chalk('#fde68a');
+    g.font = `bold 48px ${hand}`;
+    (b.formulas || []).forEach((t, i) => g.fillText(t, split, 220 + i * 70));
+    chalk();
+    g.font = `34px ${hand}`;
+    const y0 = 240 + (b.formulas || []).length * 70;
+    (b.steps || []).forEach((t, i) => g.fillText(`${i + 1}. ${t}`, split, y0 + i * 54));
+    if (b.note) { chalk('#93c5fd'); g.fillText(b.note, split, y0 + (b.steps || []).length * 54 + 24); }
+  });
+}
+
 function chalkboardTexture() {
   return tex(2048, 820, (g, w, h) => {
     const bg = g.createLinearGradient(0, 0, w, h);
@@ -131,7 +162,19 @@ function chalkboardTexture() {
 function posterTexture(kind) {
   return tex(512, 700, (g, w, h) => {
     g.fillStyle = '#fbfaf5'; g.fillRect(0, 0, w, h);
-    if (kind === 'safety') {
+    if (kind === 'chemsafety') {
+      g.fillStyle = '#c2410c'; g.fillRect(0, 0, w, 120);
+      g.fillStyle = '#fff'; g.font = 'bold 50px Arial'; g.textAlign = 'center';
+      g.fillText('CHEMICAL', w / 2, 58); g.fillText('SAFETY', w / 2, 108);
+      g.save(); g.translate(w / 2, 250); g.rotate(Math.PI / 4);
+      g.fillStyle = '#fff'; g.fillRect(-85, -85, 170, 170); g.strokeStyle = '#dc2626'; g.lineWidth = 14; g.strokeRect(-85, -85, 170, 170);
+      g.restore();
+      g.fillStyle = '#111'; g.beginPath(); g.moveTo(w / 2 - 40, 200); g.lineTo(w / 2 + 40, 200); g.lineTo(w / 2 + 20, 260); g.lineTo(w / 2 - 20, 260); g.closePath(); g.fill();
+      g.fillRect(w / 2 - 60, 285, 120, 16);
+      g.font = '26px Arial'; g.textAlign = 'left';
+      ['• Goggles & gloves at all times', '• Never taste or smell directly', '• Add acid to water, not reverse', '• Point test tubes away from people', '• Wash spills with plenty of water']
+        .forEach((t, i) => g.fillText(t, 36, 410 + i * 54));
+    } else if (kind === 'safety') {
       g.fillStyle = '#b91c1c'; g.fillRect(0, 0, w, 120);
       g.fillStyle = '#fff'; g.font = 'bold 54px Arial'; g.textAlign = 'center';
       g.fillText('ELECTRICAL', w / 2, 60); g.fillText('SAFETY', w / 2, 110);
@@ -233,7 +276,7 @@ function buildStool(M) {
   return g;
 }
 
-export function buildRoom(scene, tableY) {
+export function buildRoom(scene, tableY, opts = {}) {
   const M = {
     floor: new THREE.MeshStandardMaterial({ map: floorTexture(), roughness: 0.55, metalness: 0 }),
     wall: new THREE.MeshStandardMaterial({ map: plasterTexture('#e9e4d8'), roughness: 0.95 }),
@@ -246,7 +289,7 @@ export function buildRoom(scene, tableY) {
     handleMetal: new THREE.MeshStandardMaterial({ color: 0xb8bec6, metalness: 1, roughness: 0.3 }),
     stoolSeat: new THREE.MeshStandardMaterial({ color: 0x1f2937, roughness: 0.6 }),
     frame: new THREE.MeshStandardMaterial({ color: 0xf5f5f0, roughness: 0.5 }),
-    board: new THREE.MeshStandardMaterial({ map: chalkboardTexture(), roughness: 0.92 }),
+    board: new THREE.MeshStandardMaterial({ map: opts.board ? customBoardTexture(opts.board) : chalkboardTexture(), roughness: 0.92 }),
     boardFrame: new THREE.MeshStandardMaterial({ map: woodTex('#7a5230', '#3b2412'), roughness: 0.6 }),
     sky: new THREE.MeshBasicMaterial({ map: skyTexture() }),
     glass: new THREE.MeshPhysicalMaterial({ color: 0xdff3ff, roughness: 0.05, transmission: 0.9, transparent: true, opacity: 0.25, depthWrite: false }),
@@ -324,7 +367,7 @@ export function buildRoom(scene, tableY) {
     p.position.set(x, FLOOR_Y + 170, ROOM.z0 + 1);
     room.add(p);
   };
-  poster('safety', -250);
+  poster(opts.poster || 'safety', -250);
   poster('periodic', 250);
   const clock = new THREE.Group();
   const face = new THREE.Mesh(new THREE.CircleGeometry(16, 40), new THREE.MeshStandardMaterial({ map: clockFaceTexture(), roughness: 0.4 }));

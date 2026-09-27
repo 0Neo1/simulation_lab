@@ -21,7 +21,7 @@ const SCREW_TOP = 0.62; // binding screw lead anchor above its base
 // Procedural textures
 // ---------------------------------------------------------------------------
 
-function canvasTexture(w, h, draw, { repeat, srgb = true } = {}) {
+export function canvasTexture(w, h, draw, { repeat, srgb = true } = {}) {
   const c = document.createElement('canvas');
   c.width = w; c.height = h;
   draw(c.getContext('2d'), w, h);
@@ -32,7 +32,7 @@ function canvasTexture(w, h, draw, { repeat, srgb = true } = {}) {
   return t;
 }
 
-function woodTexture(base, dark, seed = 1, rings = 60) {
+export function woodTexture(base, dark, seed = 1, rings = 60) {
   let s = seed;
   const rnd = () => ((s = (s * 16807) % 2147483647) / 2147483647);
   return canvasTexture(1024, 256, (g, w, h) => {
@@ -138,7 +138,7 @@ function lidTexture() {
   });
 }
 
-function labelTexture(text, { bg = '#0f172a', fg = '#fde68a', w = 256, h = 96, font = 'bold 44px Georgia, serif' } = {}) {
+export function labelTexture(text, { bg = '#0f172a', fg = '#fde68a', w = 256, h = 96, font = 'bold 44px Georgia, serif' } = {}) {
   return canvasTexture(w, h, (g) => {
     g.fillStyle = bg; g.fillRect(0, 0, w, h);
     g.fillStyle = fg; g.font = font; g.textAlign = 'center'; g.textBaseline = 'middle';
@@ -224,7 +224,7 @@ export function makeMaterials() {
 
 export const LEAD_COLORS = { red: 0xc0262d, black: 0x1f1f1f, blue: 0x1d4ed8, yellow: 0xd6a312, green: 0x15803d, white: 0xdedede };
 
-function mesh(geo, mat, { cast = true, receive = true } = {}) {
+export function mesh(geo, mat, { cast = true, receive = true } = {}) {
   const m = new THREE.Mesh(geo, mat);
   m.castShadow = cast; m.receiveShadow = receive;
   return m;
@@ -232,7 +232,7 @@ function mesh(geo, mat, { cast = true, receive = true } = {}) {
 
 // Knurled binding screw at `pos` (its base). The cap is exposed so it can be
 // spun when a lead is tightened.
-function bindingScrew(M, pos) {
+export function bindingScrew(M, pos) {
   const g = new THREE.Group();
   const base = mesh(new THREE.CylinderGeometry(0.55, 0.65, 0.5, 20), M.brass);
   base.position.y = 0.25;
@@ -253,7 +253,7 @@ function bindingScrew(M, pos) {
   return g;
 }
 
-function plug(M) {
+export function plug(M) {
   const g = new THREE.Group();
   const head = mesh(new THREE.CylinderGeometry(0.62, 0.7, 1.3, 24), M.ebonite);
   head.position.y = 1.35;
@@ -268,7 +268,7 @@ function plug(M) {
 }
 
 // Adds a binding screw at local `pos` and registers it as a terminal.
-function terminal(M, group, terms, name, pos, label) {
+export function terminal(M, group, terms, name, pos, label) {
   const s = bindingScrew(M, pos);
   group.add(s);
   terms[name] = { local: pos.clone().setY(pos.y + SCREW_TOP), screw: s, label };
