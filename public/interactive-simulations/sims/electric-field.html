@@ -1,124 +1,108 @@
 <!DOCTYPE html>
-<html lang="en"><head><meta charset="UTF-8"><title>Electric Field</title><link rel="stylesheet" href="../styles.css"></head>
-<body>
-<header><a href="../index.html"><h1>Electric Field Lines</h1></a><p>Place charges and visualize the field.</p></header>
-<main>
-<a class="back-link" href="../index.html">&larr; All simulations</a>
-<div class="sim-container">
-  <div>
-    <div class="canvas-wrap"><canvas id="cv" width="800" height="500"></canvas></div>
-    <div class="info-box">
-      <h3>The Physics</h3>
-      <p>The electric field at a point is the force per unit positive test charge. Field lines start on positive charges and end on negative ones.</p>
-      <div class="formula">E⃗ = Σ k q_i (r⃗ − r⃗_i) / |r − r_i|³</div>
-    </div>
-  </div>
-  <div class="controls">
-    <h3>Controls</h3>
-    <p style="font-size:13px; color:#888888;">Click to place positive charge.<br>Shift+click for negative.<br>Right-click to remove.</p>
-    <div class="control-row"><label>Show: <select id="mode"><option value="arrows">Field arrows</option><option value="lines">Field lines</option></select></label></div>
-    <div class="btn-row"><button id="clear">Clear</button><button class="secondary" id="dipole">Dipole</button></div>
-  </div>
-</div>
-</main>
-<script>
-const cv=document.getElementById('cv'), ctx=cv.getContext('2d');
-let charges = [{x:300,y:250,q:1},{x:500,y:250,q:-1}];
-
-function E(x,y){
-  let ex=0, ey=0;
-  for(const c of charges){
-    const dx=x-c.x, dy=y-c.y, r2=dx*dx+dy*dy+25;
-    const r3 = Math.pow(r2, 1.5);
-    ex += c.q*dx/r3*5e3;
-    ey += c.q*dy/r3*5e3;
-  }
-  return [ex,ey];
-}
-
-function draw(){
-  ctx.clearRect(0,0,cv.width,cv.height);
-  ctx.fillStyle='#0a0a0a'; ctx.fillRect(0,0,cv.width,cv.height);
-  const mode = document.getElementById('mode').value;
-  if(mode==='arrows'){
-    for(let y=20;y<cv.height;y+=30){
-      for(let x=20;x<cv.width;x+=30){
-        const [ex,ey] = E(x,y);
-        const m = Math.hypot(ex,ey);
-        const len = Math.min(15, Math.log(1+m)*4);
-        const ang = Math.atan2(ey,ex);
-        const c = Math.min(255, m*20);
-        ctx.strokeStyle=`rgb(${c},${c},${c})`;
-        ctx.lineWidth=1.5;
-        ctx.beginPath();
-        ctx.moveTo(x-len*Math.cos(ang)/2, y-len*Math.sin(ang)/2);
-        ctx.lineTo(x+len*Math.cos(ang)/2, y+len*Math.sin(ang)/2);
-        ctx.stroke();
-        ctx.fillStyle=`rgb(${c},${c},${c})`;
-        ctx.beginPath();
-        const ax=x+len*Math.cos(ang)/2, ay=y+len*Math.sin(ang)/2;
-        ctx.moveTo(ax,ay);
-        ctx.lineTo(ax-5*Math.cos(ang-0.4),ay-5*Math.sin(ang-0.4));
-        ctx.lineTo(ax-5*Math.cos(ang+0.4),ay-5*Math.sin(ang+0.4));
-        ctx.closePath(); ctx.fill();
-      }
-    }
-  } else {
-    // field lines from positive charges
-    ctx.strokeStyle='#ffffff'; ctx.lineWidth=1.5;
-    for(const c of charges){
-      if(c.q<=0) continue;
-      const N = 12;
-      for(let i=0;i<N;i++){
-        const a = (i/N)*2*Math.PI;
-        let px = c.x + 22*Math.cos(a), py = c.y + 22*Math.sin(a);
-        ctx.beginPath(); ctx.moveTo(px,py);
-        for(let s=0;s<400;s++){
-          const [ex,ey] = E(px,py);
-          const m = Math.hypot(ex,ey);
-          if(m<0.01) break;
-          px += ex/m*3; py += ey/m*3;
-          if(px<0||px>cv.width||py<0||py>cv.height) break;
-          // stop near a charge
-          let near = false;
-          for(const c2 of charges){
-            if(Math.hypot(px-c2.x,py-c2.y) < 22 && c2 !== c) { near = true; break; }
-          }
-          ctx.lineTo(px,py);
-          if(near) break;
-        }
-        ctx.stroke();
-      }
-    }
-  }
-  // charges
-  for(const c of charges){
-    ctx.fillStyle = c.q>0?'#888888':'#ffffff';
-    ctx.beginPath(); ctx.arc(c.x,c.y,16,0,2*Math.PI); ctx.fill();
-    ctx.strokeStyle='#dddddd'; ctx.lineWidth=2; ctx.stroke();
-    ctx.fillStyle='#fff'; ctx.font='bold 16px sans-serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
-    ctx.fillText(c.q>0?'+':'−', c.x, c.y);
-    ctx.textAlign='left'; ctx.textBaseline='alphabetic';
-  }
-}
-
-cv.oncontextmenu = e=>{
-  e.preventDefault();
-  const r=cv.getBoundingClientRect(),s=cv.width/r.width;
-  const mx=(e.clientX-r.left)*s, my=(e.clientY-r.top)*s;
-  charges = charges.filter(c=>Math.hypot(c.x-mx,c.y-my)>20);
-  draw();
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Electric Field</title>
+<link rel="stylesheet" href="../engine/concept.css">
+<script type="importmap">{"imports":{"three":"../../simulations/lib/three/three.module.min.js","three/addons/":"../../simulations/lib/three/addons/"}}</script>
+</head><body>
+<script type="module">
+import { runSim, V3, MAT, mesh, std, THREE } from '../engine/concept.js';
+// Point charges on a table; the field is shown with an arrow grid and field lines in the
+// table plane (y = H). Drag the charges around. A small positive test charge can be released.
+const H = 0.6, GX = 21, GZ = 13, SP = 1.4;
+let charges = [], arrows, lines, probe, probeTr, pv, dummy = new THREE.Object3D();
+const PRESETS = {
+  dipole: [[-4, 0, 1], [4, 0, -1]],
+  like: [[-4, 0, 1], [4, 0, 1]],
+  single: [[0, 0, 1]],
+  quad: [[-4, -4, 1], [4, -4, -1], [4, 4, 1], [-4, 4, -1]],
+  plates: Array.from({ length: 9 }, (_, i) => [-5, (i - 4) * 1.4, 0.35]).concat(Array.from({ length: 9 }, (_, i) => [5, (i - 4) * 1.4, -0.35])),
 };
-cv.onclick = e=>{
-  const r=cv.getBoundingClientRect(),s=cv.width/r.width;
-  const mx=(e.clientX-r.left)*s, my=(e.clientY-r.top)*s;
-  const q = e.shiftKey ? -1 : 1;
-  charges.push({x:mx,y:my,q});
-  draw();
-};
-document.getElementById('mode').onchange=draw;
-document.getElementById('clear').onclick=()=>{charges=[]; draw();};
-document.getElementById('dipole').onclick=()=>{charges=[{x:300,y:250,q:1},{x:500,y:250,q:-1}]; draw();};
-draw();
+function field(x, z) { let ex = 0, ez = 0; for (const c of charges) { const dx = x - c.x, dz = z - c.z, r2 = dx * dx + dz * dz + 0.05, r3 = r2 * Math.sqrt(r2); ex += c.q * dx / r3; ez += c.q * dz / r3; } return [ex * 10, ez * 10]; }
+runSim({
+  title: 'Electric Field', subtitle: 'The field shows the force a small positive charge would feel at every point.',
+  stage: 'studio', camera: { pos: [0, 24, 20], target: [0, 0, 0] }, stageOpts: { floorSize: 24, gridDiv: 24 },
+  hint: 'drag the charges', dragPlaneNormal: [0, 1, 0],
+  controls: [
+    { id: 'preset', label: 'Arrangement', type: 'select', value: 'dipole', reset: true, options: [{ value: 'dipole', label: 'Dipole (+ and −)' }, { value: 'like', label: 'Two like charges' }, { value: 'single', label: 'Single charge' }, { value: 'quad', label: 'Quadrupole' }, { value: 'plates', label: 'Parallel plates' }] },
+    { id: 'scale', label: 'Charge size', min: 0.2, max: 3, step: 0.1, value: 1, unit: '× q', reset: false },
+    { id: 'grid', label: 'Show field-arrow grid', type: 'check', value: true },
+    { id: 'lines', label: 'Show field lines', type: 'check', value: true },
+  ],
+  buttons: [{ id: 'rel', label: 'Release test charge', run: (c) => { pv = { x: -9, z: 2.5, vx: 0, vz: 0 }; probeTr.clear(); c.play(); } }, { id: 'flip', label: 'Flip all signs', kind: 'ghost', run: () => { charges.forEach((c) => { c.q = -c.q; c.paint(); }); } }],
+  readouts: [{ id: 'E', label: '|E| at test charge' }, { id: 'dir', label: 'Direction' }, { id: 'n', label: 'Charges' }, { id: 'net', label: 'Net charge' }],
+  info: 'Field lines start on positive charges and end on negative ones. They never cross, and where they crowd together the field is strong. Each arrow shows the direction of the force on a small positive charge placed there; brighter, longer arrows mean a stronger field. Between parallel plates the field is almost uniform. Release the test charge to see it pushed along the field.',
+  formulas: ['E = F / q₀', 'E = k q / r² (point charge)', 'E = V / d (parallel plates)'],
+  pickables: () => charges,
+  onDrag(ctx, id, p) { const c = charges[id - 1]; if (!c) return; c.x = Math.max(-13, Math.min(13, p.x)); c.z = Math.max(-8, Math.min(8, p.z)); ctx.dirty = true; },
+  setup(ctx) {
+    const table = mesh(new THREE.BoxGeometry(30, 0.5, 19), std(0x0f172a, { roughness: 0.6 })); table.position.y = 0.25; ctx.scene.add(table);
+    arrows = new THREE.InstancedMesh(new THREE.ConeGeometry(0.16, 0.9, 8).rotateX(Math.PI / 2), new THREE.MeshBasicMaterial({ toneMapped: false }), GX * GZ);
+    arrows.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(GX * GZ * 3), 3);
+    lines = new THREE.Group();
+    probe = mesh(new THREE.SphereGeometry(0.25, 16, 12), std(0xfde047, { emissive: 0xfde047, emissiveIntensity: 0.6 }));
+    probeTr = ctx.trail(0xfde047, 800);
+    ctx.scene.add(arrows, lines, probe, probeTr);
+    ctx.label('test charge +q₀', () => (pv ? probe.position.clone().add(V3(0, 0.6, 0)) : null));
+  },
+  reset(ctx) {
+    charges.forEach((c) => ctx.scene.remove(c)); charges = [];
+    PRESETS[ctx.v.preset].forEach(([x, z, q], i) => {
+      const g = new THREE.Group();
+      const ball = mesh(new THREE.SphereGeometry(ctx.v.preset === 'plates' ? 0.45 : 0.7, 28, 20), std(0xffffff, { roughness: 0.25 }));
+      const glowS = ctx.glowSprite(0xffffff, 3); g.add(ball, glowS);
+      g.userData.pickId = i + 1; g.x = x; g.z = z; g.q = q;
+      g.paint = () => { const col = g.q > 0 ? 0xef4444 : 0x3b82f6; ball.material.color.setHex(col); ball.material.emissive = new THREE.Color(col); ball.material.emissiveIntensity = 0.35; glowS.material.color.setHex(col); };
+      g.paint(); charges.push(g); ctx.scene.add(g);
+    });
+    pv = null; probeTr.clear(); ctx.dirty = true;
+  },
+  step(ctx, dt) {
+    if (!pv) return;
+    const [ex, ez] = field(pv.x, pv.z), s = ctx.v.scale;
+    pv.vx += ex * s * 0.6 * dt; pv.vz += ez * s * 0.6 * dt;
+    const sp = Math.hypot(pv.vx, pv.vz); if (sp > 12) { pv.vx *= 12 / sp; pv.vz *= 12 / sp; }
+    pv.x += pv.vx * dt; pv.z += pv.vz * dt;
+    ctx.n = (ctx.n || 0) + 1; if (ctx.n % 6 === 0) probeTr.push(V3(pv.x, H + 0.1, pv.z));
+    if (Math.abs(pv.x) > 15 || Math.abs(pv.z) > 10 || charges.some((c) => c.q < 0 && Math.hypot(pv.x - c.x, pv.z - c.z) < 0.6)) { pv.vx = pv.vz = 0; ctx.pause(); }
+  },
+  onControl(ctx) { ctx.dirty = true; },
+  frame(ctx) {
+    charges.forEach((c) => { c.position.set(c.x, H + 0.4, c.z); c.scale.setScalar(0.7 + 0.3 * ctx.v.scale); });
+    probe.visible = !!pv; if (pv) probe.position.set(pv.x, H + 0.25, pv.z);
+    if (!ctx.dirty) return; ctx.dirty = false;
+    // arrow grid
+    arrows.visible = ctx.v.grid;
+    let i = 0; const c = new THREE.Color();
+    for (let gx = 0; gx < GX; gx++) for (let gz = 0; gz < GZ; gz++) {
+      const x = (gx - (GX - 1) / 2) * SP, z = (gz - (GZ - 1) / 2) * SP, [ex, ez] = field(x, z), m = Math.hypot(ex, ez) * ctx.v.scale;
+      const near = charges.some((q) => Math.hypot(x - q.x, z - q.z) < 0.8);
+      dummy.position.set(x, H + 0.15, z); dummy.lookAt(x + ex, H + 0.15, z + ez);
+      const s = near ? 0.001 : Math.min(1.2, 0.35 + Math.log10(1 + m) * 0.6); dummy.scale.set(s, s, s); dummy.updateMatrix();
+      arrows.setMatrixAt(i, dummy.matrix);
+      const t = Math.min(1, Math.log10(1 + m) / 1.6); c.setHSL(0.62 - t * 0.62, 0.9, 0.35 + t * 0.3); arrows.setColorAt(i, c); i++;
+    }
+    arrows.instanceMatrix.needsUpdate = true; arrows.instanceColor.needsUpdate = true;
+    // field lines from positive charges (or from negative ones, traced backwards, if there are no positives)
+    lines.clear();
+    if (!ctx.v.lines) return;
+    const pos = charges.filter((q) => q.q > 0), srcs = pos.length ? pos : charges, dirS = pos.length ? 1 : -1;
+    const mat = new THREE.LineBasicMaterial({ color: 0xfef3c7, transparent: true, opacity: 0.7 });
+    const nPer = ctx.v.preset === 'plates' ? 2 : 14;
+    for (const s of srcs) for (let k = 0; k < nPer; k++) {
+      const a = ctx.v.preset === 'plates' ? (k ? 0.25 : -0.25) : (k / nPer) * Math.PI * 2;
+      let x = s.x + Math.cos(a) * 0.75, z = s.z + Math.sin(a) * 0.75; const pts = [];
+      for (let st = 0; st < 600; st++) {
+        pts.push(V3(x, H + 0.05, z)); const [ex, ez] = field(x, z), m = Math.hypot(ex, ez) || 1;
+        x += dirS * ex / m * 0.12; z += dirS * ez / m * 0.12;
+        if (Math.abs(x) > 14.5 || Math.abs(z) > 9 || charges.some((q) => q !== s && Math.hypot(x - q.x, z - q.z) < 0.5)) { pts.push(V3(x, H + 0.05, z)); break; }
+      }
+      lines.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), mat));
+    }
+  },
+  ui(ctx) {
+    const p = pv || { x: 0, z: 0 }, [ex, ez] = field(p.x, p.z), m = Math.hypot(ex, ez) * ctx.v.scale;
+    ctx.readout('E', pv ? `${m.toFixed(2)} (arb.)` : '— release it'); ctx.readout('dir', pv ? `${((Math.atan2(-ez, ex) * 180) / Math.PI).toFixed(0)}°` : '—');
+    ctx.readout('n', String(charges.length)); const net = charges.reduce((s, c) => s + c.q, 0) * ctx.v.scale; ctx.readout('net', `${net > 0 ? '+' : ''}${net.toFixed(2)} q`);
+  },
+});
 </script>
 </body></html>

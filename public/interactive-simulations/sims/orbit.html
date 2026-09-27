@@ -1,108 +1,58 @@
 <!DOCTYPE html>
-<html lang="en"><head><meta charset="UTF-8"><title>Orbital Motion</title><link rel="stylesheet" href="../styles.css"></head>
-<body>
-<header><a href="../index.html"><h1>Orbital Motion</h1></a><p>Set initial speed; watch a planet orbit.</p></header>
-<main>
-<a class="back-link" href="../index.html">&larr; All simulations</a>
-<div class="sim-container">
-  <div>
-    <div class="canvas-wrap"><canvas id="cv" width="800" height="600"></canvas></div>
-    <div class="info-box">
-      <h3>The Physics</h3>
-      <p>Newton's law of gravitation creates an inverse-square attractive force. Orbits can be circular, elliptical, parabolic, or hyperbolic depending on energy.</p>
-      <div class="formula">F = G M m / r²</div>
-      <p>Circular orbit speed at radius r: <em>v = √(GM/r)</em>. Escape speed: <em>v_esc = √(2GM/r)</em>.</p>
-    </div>
-  </div>
-  <div class="controls">
-    <h3>Controls</h3>
-    <div class="control-row"><label>Initial speed (×v_circ) <span class="val" id="vS">1.00</span></label><input type="range" id="speed" min="20" max="180" value="100"></div>
-    <div class="control-row"><label>Initial radius <span class="val" id="vR">200</span></label><input type="range" id="rad" min="100" max="280" value="200"></div>
-    <div class="control-row"><label>Sun mass <span class="val" id="vM">1.0</span></label><input type="range" id="M" min="5" max="30" value="10"></div>
-    <div class="btn-row"><button id="run">Launch</button><button class="secondary" id="reset">Reset</button><button class="secondary" id="trail">Clear trail</button></div>
-    <div class="readouts">
-      <div>r: <span id="rR">0</span></div>
-      <div>v: <span id="rV">0</span></div>
-      <div>KE: <span id="rK">0</span></div>
-      <div>PE: <span id="rP">0</span></div>
-    </div>
-  </div>
-</div>
-</main>
-<script>
-const cv = document.getElementById('cv'), ctx = cv.getContext('2d');
-const cx = cv.width/2, cy = cv.height/2;
-let G = 4000, M = 1.0, m = 1;
-let rad = 200, vMul = 1.0;
-let p = {x: rad, y: 0, vx: 0, vy: Math.sqrt(G*M/rad)};
-let running = false, trail = [];
-
-function reset(){
-  rad = +document.getElementById('rad').value;
-  vMul = +document.getElementById('speed').value/100;
-  M = +document.getElementById('M').value/10;
-  const v = vMul*Math.sqrt(G*M/rad);
-  p = {x: rad, y: 0, vx: 0, vy: v};
-  trail = [];
-}
-
-function step(){
-  if(!running) return;
-  for(let k=0;k<3;k++){
-    const r2 = p.x*p.x + p.y*p.y, r = Math.sqrt(r2);
-    if(r < 30){ running=false; return;}
-    if(r > 4000){ running=false; return;}
-    const a = G*M/r2;
-    const ax = -a*p.x/r, ay = -a*p.y/r;
-    const dt = 0.05;
-    p.vx += ax*dt; p.vy += ay*dt;
-    p.x += p.vx*dt; p.y += p.vy*dt;
-  }
-  trail.push({x:p.x, y:p.y});
-  if(trail.length > 800) trail.shift();
-  draw();
-  const r = Math.hypot(p.x,p.y), v = Math.hypot(p.vx,p.vy);
-  document.getElementById('rR').textContent = r.toFixed(0);
-  document.getElementById('rV').textContent = v.toFixed(2);
-  document.getElementById('rK').textContent = (0.5*m*v*v).toFixed(1);
-  document.getElementById('rP').textContent = (-G*M*m/r).toFixed(1);
-  requestAnimationFrame(step);
-}
-
-function draw(){
-  ctx.fillStyle = '#000000'; ctx.fillRect(0,0,cv.width,cv.height);
-  // stars
-  ctx.fillStyle = '#fff';
-  for(let i=0;i<60;i++){
-    const sx = (i*97)%cv.width, sy = (i*61)%cv.height;
-    ctx.fillRect(sx, sy, 1, 1);
-  }
-  // trail
-  ctx.strokeStyle = 'rgba(220,220,220,0.6)'; ctx.lineWidth = 2;
-  ctx.beginPath();
-  trail.forEach((t,i)=>{ if(i===0) ctx.moveTo(cx+t.x, cy+t.y); else ctx.lineTo(cx+t.x, cy+t.y);});
-  ctx.stroke();
-  // sun
-  const grd = ctx.createRadialGradient(cx,cy,5,cx,cy,30);
-  grd.addColorStop(0,'#eeeeee'); grd.addColorStop(1,'#bbbbbb');
-  ctx.fillStyle = grd; ctx.beginPath(); ctx.arc(cx,cy,25,0,2*Math.PI); ctx.fill();
-  // planet
-  ctx.fillStyle = '#bbbbbb'; ctx.beginPath(); ctx.arc(cx+p.x, cy+p.y, 8, 0, 2*Math.PI); ctx.fill();
-  ctx.strokeStyle = '#fff'; ctx.lineWidth = 1; ctx.stroke();
-  // velocity vector
-  ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 2;
-  ctx.beginPath(); ctx.moveTo(cx+p.x, cy+p.y); ctx.lineTo(cx+p.x+p.vx*5, cy+p.y+p.vy*5); ctx.stroke();
-}
-
-['speed','rad','M'].forEach(id=>document.getElementById(id).oninput = ()=>{
-  document.getElementById('vS').textContent = (+document.getElementById('speed').value/100).toFixed(2);
-  document.getElementById('vR').textContent = document.getElementById('rad').value;
-  document.getElementById('vM').textContent = (+document.getElementById('M').value/10).toFixed(1);
-  if(!running){ reset(); draw(); }
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Orbital Motion</title>
+<link rel="stylesheet" href="../engine/concept.css">
+<script type="importmap">{"imports":{"three":"../../simulations/lib/three/three.module.min.js","three/addons/":"../../simulations/lib/three/addons/"}}</script>
+</head><body>
+<script type="module">
+import { runSim, V3, MAT, mesh, std, glow, glowSprite, THREE } from '../engine/concept.js';
+// Scaled units: distance in AU (1 unit = 10 scene units), time in years; GM_sun = 4π² AU³/yr².
+const S = 10;
+let star, planet, p, v, tr, aV, aF, rMin, rMax, tPrev, period, lastY;
+runSim({
+  title: 'Orbital Motion', subtitle: 'Give a planet a push and watch gravity bend its path into an ellipse.',
+  stage: 'space', camera: { pos: [0, 28, 26], target: [0, 0, 0] }, timeScale: 0.25, dt: 1 / 2000,
+  controls: [
+    { id: 'r0', label: 'Starting distance', min: 0.4, max: 2, step: 0.05, value: 1, unit: 'AU', reset: true },
+    { id: 'v0', label: 'Starting speed', min: 2, max: 10, step: 0.1, value: 6.28, unit: 'AU/yr', reset: true },
+    { id: 'M', label: 'Star mass', min: 0.3, max: 3, step: 0.05, value: 1, unit: 'M☉' },
+  ],
+  readouts: [{ id: 'r', label: 'Distance' }, { id: 'v', label: 'Speed' }, { id: 'T', label: 'Period (measured)' }, { id: 'e', label: 'Eccentricity' }, { id: 'E', label: 'Energy' }, { id: 'kind', label: 'Orbit' }],
+  graph: { title: 'Distance and speed', series: [{ name: 'r (AU)', color: '#22d3ee' }, { name: 'v (AU/yr)', color: '#f59e0b' }], max: 900 },
+  info: 'The star pulls the planet towards it with a force that falls off as 1/r². At exactly the circular speed the orbit is a circle (1 AU, 2π AU/yr for the Sun); slower gives an ellipse with the star at one focus; faster than escape speed (√2 times circular) and the planet never returns. The planet moves fastest nearest the star — Kepler’s second law.',
+  formulas: ['F = G M m / r²', 'v_circ = √(GM/r),  v_esc = √(2GM/r)', 'T² ∝ a³  (Kepler’s third law)'],
+  setup(ctx) {
+    star = mesh(new THREE.SphereGeometry(1.6, 40, 28), glow(0xffd166), false); ctx.scene.add(star);
+    const halo = glowSprite(0xffb703, 9); star.add(halo);
+    ctx.light = new THREE.PointLight(0xfff1c1, 1500, 0, 1.5); ctx.scene.add(ctx.light);
+    planet = mesh(new THREE.SphereGeometry(0.55, 32, 20), new THREE.MeshStandardMaterial({ map: ctx.canvasTex(256, 128, (g, w, h) => { g.fillStyle = '#1d4ed8'; g.fillRect(0, 0, w, h); for (let i = 0; i < 40; i++) { g.fillStyle = '#16a34a'; g.beginPath(); g.ellipse(Math.random() * w, 20 + Math.random() * (h - 40), 8 + Math.random() * 20, 4 + Math.random() * 10, Math.random(), 0, 7); g.fill(); } g.fillStyle = 'rgba(255,255,255,0.8)'; g.fillRect(0, 0, w, 10); g.fillRect(0, h - 10, w, 10); }), roughness: 0.7 }));
+    ctx.scene.add(planet);
+    tr = ctx.trail(0x93c5fd, 3000); ctx.scene.add(tr);
+    aV = ctx.arrow(0x22c55e, { radius: 0.08, head: 0.5 }); aF = ctx.arrow(0xef4444, { radius: 0.08, head: 0.5 }); ctx.scene.add(aV, aF);
+    ctx.label('velocity', () => planet.position.clone().add(v.clone().normalize().multiplyScalar(3)).add(V3(0, 1, 0)));
+    ctx.label('gravity', () => planet.position.clone().add(p.clone().normalize().multiplyScalar(-2.5 * S / 10)).add(V3(0, 1, 0)));
+    const grid = new THREE.PolarGridHelper(30, 12, 6, 64, 0x1e3a5f, 0x1e3a5f); grid.material.transparent = true; grid.material.opacity = 0.35; ctx.scene.add(grid);
+  },
+  reset(ctx) { p = V3(ctx.v.r0, 0, 0); v = V3(0, 0, -ctx.v.v0); tr.clear(); rMin = rMax = ctx.v.r0; period = null; tPrev = 0; lastY = 0; },
+  step(ctx, dt) {
+    const GM = 4 * Math.PI * Math.PI * ctx.v.M;
+    // velocity Verlet
+    const acc = (q) => q.clone().multiplyScalar(-GM / q.lengthSq() ** 1.5);
+    const a1 = acc(p);
+    p.addScaledVector(v, dt).addScaledVector(a1, 0.5 * dt * dt);
+    v.addScaledVector(a1.add(acc(p)), 0.5 * dt);
+    const r = p.length(); rMin = Math.min(rMin, r); rMax = Math.max(rMax, r);
+    if (lastY > 0 && p.z <= 0 && p.x > 0) { if (tPrev) period = ctx.t - tPrev; tPrev = ctx.t; }
+    lastY = p.z;
+    ctx.sc = (ctx.sc || 0) + 1; if (ctx.sc % 40 === 0) { tr.push(p.clone().multiplyScalar(S)); ctx.plot(ctx.t, [r, v.length()]); }
+  },
+  frame(ctx, dt) { planet.position.copy(p).multiplyScalar(S); planet.rotation.y += dt * 2; star.rotation.y += dt * 0.2; aV.set(planet.position, v, 0.35); aF.set(planet.position, p.clone().multiplyScalar(-1 / p.lengthSq()), 1.6); },
+  ui(ctx) {
+    const GM = 4 * Math.PI * Math.PI * ctx.v.M, E = 0.5 * v.lengthSq() - GM / p.length();
+    const e = (rMax - rMin) / (rMax + rMin);
+    ctx.readout('r', `${p.length().toFixed(3)} AU`); ctx.readout('v', `${v.length().toFixed(2)} AU/yr`);
+    ctx.readout('T', period ? `${period.toFixed(3)} yr` : '—'); ctx.readout('e', E < 0 ? e.toFixed(3) : '—');
+    ctx.readout('E', `${E.toFixed(2)} (per unit mass)`); ctx.readout('kind', E >= 0 ? 'escaping (unbound)' : e < 0.02 ? 'circle' : 'ellipse');
+  },
 });
-document.getElementById('run').onclick = ()=>{ if(!running){running=true; step();}};
-document.getElementById('reset').onclick = ()=>{ running=false; reset(); draw(); };
-document.getElementById('trail').onclick = ()=>{ trail = []; draw(); };
-reset(); draw();
 </script>
 </body></html>

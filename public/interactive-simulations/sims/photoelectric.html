@@ -1,118 +1,109 @@
 <!DOCTYPE html>
-<html lang="en"><head><meta charset="UTF-8"><title>Photoelectric Effect</title><link rel="stylesheet" href="../styles.css"></head>
-<body>
-<header><a href="../index.html"><h1>Photoelectric Effect</h1></a><p>Light ejects electrons — only above a threshold frequency.</p></header>
-<main>
-<a class="back-link" href="../index.html">&larr; All simulations</a>
-<div class="sim-container">
-  <div>
-    <div class="canvas-wrap"><canvas id="cv" width="800" height="500"></canvas></div>
-    <div class="info-box">
-      <h3>The Physics</h3>
-      <p>Einstein showed light comes in photons of energy <em>hf</em>. An electron is ejected only if a single photon has more energy than the metal's work function.</p>
-      <div class="formula">KE_max = h f − φ</div>
-      <p>Increasing intensity ejects more electrons but doesn't change KE. Increasing frequency increases KE.</p>
-    </div>
-  </div>
-  <div class="controls">
-    <h3>Controls</h3>
-    <div class="control-row"><label>Frequency (×10¹⁴ Hz) <span class="val" id="vF">7</span></label><input type="range" id="f" min="3" max="15" value="7"></div>
-    <div class="control-row"><label>Intensity <span class="val" id="vI">5</span></label><input type="range" id="i" min="1" max="10" value="5"></div>
-    <div class="control-row"><label>Metal: <select id="metal">
-      <option value="2.3">Sodium (φ=2.3 eV)</option>
-      <option value="4.5">Copper (φ=4.5 eV)</option>
-      <option value="2.1">Cesium (φ=2.1 eV)</option>
-      <option value="4.3">Iron (φ=4.3 eV)</option>
-    </select></label></div>
-    <div class="readouts">
-      <div>E_photon: <span id="rE">0 eV</span></div>
-      <div>f₀: <span id="rF0">0</span></div>
-      <div>KE_max: <span id="rK">0 eV</span></div>
-      <div>Status: <span id="rS">—</span></div>
-    </div>
-  </div>
-</div>
-</main>
-<script>
-const cv=document.getElementById('cv'), ctx=cv.getContext('2d');
-let f=7, intensity=5, phi=2.3;
-const h_eV = 4.136e-15; // h in eV·s
-let photons=[], electrons=[];
-
-function step(){
-  const E = h_eV*f*1e14;
-  const KE = Math.max(0, E - phi);
-  // emit photons
-  if(Math.random() < intensity*0.15){
-    const wl = 600/f; // visual wavelength
-    photons.push({x:50, y:100+Math.random()*300, wl, color: freqToColor(f)});
-  }
-  photons.forEach(p=>p.x += 8);
-  // hit metal at x=400
-  photons.filter(p=>p.x>=400).forEach(p=>{
-    if(KE>0){
-      electrons.push({x:400, y:p.y, vx: 2+KE*2, vy:(Math.random()-0.5)*1.5});
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Photoelectric Effect</title>
+<link rel="stylesheet" href="../engine/concept.css">
+<script type="importmap">{"imports":{"three":"../../simulations/lib/three/three.module.min.js","three/addons/":"../../simulations/lib/three/addons/"}}</script>
+</head><body>
+<script type="module">
+import { runSim, V3, MAT, mesh, std, glow, THREE } from '../engine/concept.js';
+// A vacuum photocell: light falls on the metal cathode (left); ejected electrons cross to the
+// collector (right) against or with the applied voltage. Energies in eV.
+const CX = -10, AX = 10, D = AX - CX, S = 4, NP = 60, NE = 160;
+const METALS = { potassium: 2.3, sodium: 2.28, calcium: 2.9, zinc: 4.3, copper: 4.7, platinum: 6.35 };
+let photons = [], electrons = [], lamp, beamMat, cath, meterTex, meterCanvas, spawnAcc = 0, eAcc = 0;
+const hc = 1240; // eV·nm
+function wlColor(nm) {
+  if (nm < 380) return [0.55, 0.3, 1]; if (nm > 750) return [0.6, 0.05, 0.05];
+  let r = 0, g = 0, b = 0;
+  if (nm < 440) { r = -(nm - 440) / 60; b = 1; } else if (nm < 490) { g = (nm - 440) / 50; b = 1; } else if (nm < 510) { g = 1; b = -(nm - 510) / 20; } else if (nm < 580) { r = (nm - 510) / 70; g = 1; } else if (nm < 645) { r = 1; g = -(nm - 645) / 65; } else r = 1;
+  return [r, g, b];
+}
+const Ephot = (ctx) => hc / ctx.v.lam, KEmax = (ctx) => Math.max(0, Ephot(ctx) - METALS[ctx.v.metal]);
+function currentAt(ctx, V) { // relative photocurrent (µA) for the ideal cell
+  const K = KEmax(ctx); if (K <= 0) return 0;
+  const frac = V >= 0 ? 1 : Math.max(0, (K + V) / K);
+  return ctx.v.I / 100 * 4 * frac;
+}
+runSim({
+  title: 'Photoelectric Effect', subtitle: 'Light comes in photons of energy hf: below the threshold frequency no electrons escape, however bright the light.',
+  stage: 'studio', camera: { pos: [6, 17, 52], target: [0, 5, 0] }, stageOpts: { floorSize: 30 },
+  autoplay: true, dt: 1 / 120,
+  controls: [
+    { id: 'metal', label: 'Cathode metal', type: 'select', value: 'sodium', options: Object.entries(METALS).map(([k, w]) => ({ value: k, label: `${k[0].toUpperCase() + k.slice(1)} (φ = ${w} eV)` })) },
+    { id: 'lam', label: 'Wavelength λ', min: 150, max: 750, step: 5, value: 400, unit: 'nm' },
+    { id: 'I', label: 'Light intensity', min: 0, max: 100, step: 1, value: 60, unit: '%' },
+    { id: 'V', label: 'Collector voltage V', min: -4, max: 4, step: 0.05, value: 1, unit: 'V' },
+  ],
+  buttons: [{ id: 'stop', label: 'Find stopping voltage', kind: 'ghost', run: (c) => c.setControl('V', -Math.min(4, Math.round(KEmax(c) * 20) / 20)) }],
+  readouts: [{ id: 'E', label: 'Photon energy hf' }, { id: 'phi', label: 'Work function φ' }, { id: 'K', label: 'KE max = hf − φ' }, { id: 'Vs', label: 'Stopping voltage' }, { id: 'I', label: 'Photocurrent' }, { id: 'l0', label: 'Threshold λ₀' }],
+  graph: { title: 'Current against voltage', series: [{ name: 'I (µA)', color: '#22d3ee' }], xlabel: 'V (volt)', xmin: -4, xmax: 4, ymin: 0, ymax: 4.4, max: 400 },
+  graphOverlay(ctx, g, { X, Y }) { g.fillStyle = '#f472b6'; g.beginPath(); g.arc(X(ctx.v.V), Y(currentAt(ctx, ctx.v.V)), 4.5, 0, 7); g.fill(); },
+  info: 'Each photon gives all its energy hf to one electron in the metal. The electron needs at least the work function φ to escape, and whatever is left over becomes kinetic energy. So red light may eject nothing from a metal while dim ultraviolet light ejects electrons at once. Brighter light means more photons and so more electrons (more current), but not faster ones. Make the collector negative and slow electrons are turned back; at the stopping voltage even the fastest ones cannot reach it.',
+  formulas: ['E = h f = h c / λ', 'KE_max = h f − φ', 'e V_s = KE_max'],
+  setup(ctx) {
+    const tube = new THREE.Mesh(new THREE.CylinderGeometry(6, 6, 26, 40, 1, true), new THREE.MeshPhysicalMaterial({ color: 0xe0f2fe, roughness: 0.05, transparent: true, opacity: 0.14, side: THREE.DoubleSide, depthWrite: false }));
+    tube.rotation.z = Math.PI / 2; tube.position.y = 5;
+    const caps = [-13, 13].map((x) => { const c = mesh(new THREE.CylinderGeometry(6.2, 6.2, 0.8, 40), MAT.darkSteel); c.rotation.z = Math.PI / 2; c.position.set(x, 5, 0); return c; });
+    cath = mesh(new THREE.BoxGeometry(0.6, 7, 7), std(0xd1d5db, { metalness: 1, roughness: 0.3 })); cath.position.set(CX, 5, 0);
+    const anode = mesh(new THREE.BoxGeometry(0.4, 7, 7), new THREE.MeshStandardMaterial({ color: 0x9ca3af, metalness: 1, roughness: 0.3, wireframe: false })); anode.position.set(AX, 5, 0);
+    const stand = mesh(new THREE.BoxGeometry(28, 1, 8), MAT.darkWood); stand.position.y = -0.5 + 0.5;
+    [-9, 9].forEach((x) => { const leg = mesh(new THREE.BoxGeometry(1.2, 1.6, 4), MAT.darkSteel); leg.position.set(x, 1.3, 0); ctx.scene.add(leg); });
+    lamp = new THREE.Group();
+    const house = mesh(new THREE.CylinderGeometry(2.2, 3, 5, 28), std(0x334155, { metalness: 0.6 })); house.rotation.x = Math.PI / 2;
+    const lens = new THREE.Mesh(new THREE.CircleGeometry(2.1, 28), new THREE.MeshBasicMaterial({ color: 0xffffff, toneMapped: false })); lens.position.z = 2.55; lamp.lens = lens;
+    lamp.add(house, lens); lamp.position.set(-8, 16, -11); lamp.lookAt(CX, 5, 0); ctx.scene.add(lamp);
+    beamMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.12, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, toneMapped: false });
+    const d = V3(CX, 5, 0).sub(lamp.position), L = d.length();
+    const beam = new THREE.Mesh(new THREE.CylinderGeometry(2.4, 2, L, 24, 1, true), beamMat); beam.position.copy(lamp.position).addScaledVector(d, 0.5); beam.quaternion.setFromUnitVectors(V3(0, 1, 0), d.clone().normalize());
+    ctx.scene.add(tube, ...caps, cath, anode, stand, beam);
+    ctx.beamDir = d.clone().normalize(); ctx.beamLen = L;
+    // meter box with a digital display
+    meterCanvas = document.createElement('canvas'); meterCanvas.width = 256; meterCanvas.height = 128; meterTex = new THREE.CanvasTexture(meterCanvas);
+    const meter = mesh(new THREE.BoxGeometry(8, 5, 3), std(0x111827)); meter.position.set(17, 2.5, 5);
+    const disp = new THREE.Mesh(new THREE.PlaneGeometry(6.8, 3.4), new THREE.MeshBasicMaterial({ map: meterTex, toneMapped: false })); disp.position.set(17, 2.9, 6.51);
+    ctx.scene.add(meter, disp);
+    for (let i = 0; i < NP; i++) { const p = ctx.glowSprite(0xffffff, 1.1); p.visible = false; ctx.scene.add(p); photons.push({ s: p, t: -1 }); }
+    const eg = new THREE.SphereGeometry(0.16, 10, 8), em = glow(0x7dd3fc);
+    for (let i = 0; i < NE; i++) { const m = new THREE.Mesh(eg, em); m.visible = false; ctx.scene.add(m); electrons.push({ m, on: false }); }
+    ctx.label('cathode (metal)', () => V3(CX, 9.5, 0)); ctx.label('collector', () => V3(AX, 9.5, 0)); ctx.label('light source', () => lamp.position.clone().add(V3(0, 3.2, 0)));
+    ctx.label('microammeter', () => V3(17, 5.6, 5));
+    ctx.graphKey = '';
+  },
+  step(ctx, dt) {
+    const rate = ctx.v.I / 100 * 30; // photons shown per second
+    spawnAcc += rate * dt;
+    while (spawnAcc >= 1) { spawnAcc -= 1; const p = photons.find((q) => q.t < 0); if (p) { p.t = 0; p.off = V3((Math.random() - 0.5) * 3, (Math.random() - 0.5) * 3, (Math.random() - 0.5) * 3); p.s.visible = true; } }
+    const K0 = KEmax(ctx);
+    for (const p of photons) {
+      if (p.t < 0) continue;
+      p.t += dt * 1.6;
+      if (p.t >= 1) {
+        p.t = -1; p.s.visible = false;
+        if (K0 > 0) { const e = electrons.find((q) => !q.on); if (e) { e.on = true; e.x = CX + 0.4; e.y = 5 + (Math.random() - 0.5) * 5.5; e.z = (Math.random() - 0.5) * 5.5; const K = Math.random() * K0; e.vx = S * Math.sqrt(2 * K); e.vy = (Math.random() - 0.5) * 0.6; e.vz = (Math.random() - 0.5) * 0.6; e.m.visible = true; } }
+      }
     }
-  });
-  photons = photons.filter(p=>p.x<400);
-  electrons.forEach(e=>{e.x += e.vx; e.y += e.vy;});
-  electrons = electrons.filter(e=>e.x<cv.width && e.x>0);
-  draw(E,KE);
-  requestAnimationFrame(step);
-}
-
-function freqToColor(f){
-  // f in 10^14 Hz; visible 4-7.5
-  if(f<4) return '#444444';
-  if(f<4.5) return '#888888';
-  if(f<5) return '#888888';
-  if(f<5.5) return '#cccccc';
-  if(f<6) return '#999999';
-  if(f<6.5) return '#aaaaaa';
-  if(f<7) return '#bbbbbb';
-  if(f<7.5) return '#666666';
-  if(f<10) return '#444444';
-  return '#aaaaaa';
-}
-
-function draw(E,KE){
-  ctx.clearRect(0,0,cv.width,cv.height);
-  ctx.fillStyle='#000000'; ctx.fillRect(0,0,cv.width,cv.height);
-  // metal plate
-  ctx.fillStyle='#888'; ctx.fillRect(400, 50, 25, 400);
-  ctx.strokeStyle='#fff'; ctx.strokeRect(400,50,25,400);
-  ctx.fillStyle='#fff'; ctx.font='14px sans-serif'; ctx.fillText('Metal', 405, 40);
-  // light source
-  ctx.fillStyle='#fff'; ctx.fillText('Light', 30, 40);
-  ctx.fillStyle='#444'; ctx.fillRect(20,80,40,300);
-  // detector
-  ctx.fillStyle='#444'; ctx.fillRect(720,180,40,140);
-  ctx.fillStyle='#fff'; ctx.fillText('Detector', 700, 170);
-  // photons
-  photons.forEach(p=>{
-    ctx.strokeStyle = p.color; ctx.lineWidth=2;
-    for(let dx=0; dx<25; dx+=4){
-      ctx.beginPath();
-      ctx.moveTo(p.x-dx, p.y + 4*Math.sin(dx*0.3));
-      ctx.lineTo(p.x-dx-3, p.y + 4*Math.sin((dx+3)*0.3));
-      ctx.stroke();
+    const ax = (ctx.v.V * S * S) / D;
+    for (const e of electrons) {
+      if (!e.on) continue;
+      e.vx += ax * dt; e.x += e.vx * dt; e.y += e.vy * dt; e.z += e.vz * dt;
+      if (e.x >= AX - 0.2 || e.x < CX + 0.3) { e.on = false; e.m.visible = false; if (e.x >= AX - 0.2) eAcc++; }
     }
-  });
-  // electrons
-  ctx.fillStyle='#dddddd';
-  electrons.forEach(e=>{
-    ctx.beginPath(); ctx.arc(e.x, e.y, 4, 0, 2*Math.PI); ctx.fill();
-  });
-  // info
-  document.getElementById('rE').textContent = E.toFixed(2)+' eV';
-  document.getElementById('rF0').textContent = (phi/h_eV/1e14).toFixed(2)+' ×10¹⁴ Hz';
-  document.getElementById('rK').textContent = KE.toFixed(2)+' eV';
-  document.getElementById('rS').textContent = KE>0 ? 'Electrons emitted' : 'No emission (E < φ)';
-}
-
-document.getElementById('f').oninput=e=>{f=+e.target.value; document.getElementById('vF').textContent=f;};
-document.getElementById('i').oninput=e=>{intensity=+e.target.value; document.getElementById('vI').textContent=intensity;};
-document.getElementById('metal').onchange=e=>{phi=+e.target.value;};
-step();
+  },
+  frame(ctx) {
+    const [r, g, b] = wlColor(ctx.v.lam);
+    beamMat.color.setRGB(r, g, b); beamMat.opacity = 0.03 + 0.14 * ctx.v.I / 100; lamp.lens.material.color.setRGB(r * (0.3 + ctx.v.I / 140), g * (0.3 + ctx.v.I / 140), b * (0.3 + ctx.v.I / 140));
+    for (const p of photons) if (p.t >= 0) { p.s.material.color.setRGB(r, g, b); p.s.position.copy(lamp.position).addScaledVector(ctx.beamDir, p.t * ctx.beamLen).add(p.off.clone().multiplyScalar(1 - p.t)); }
+    for (const e of electrons) if (e.on) e.m.position.set(e.x, e.y, e.z);
+    const I = currentAt(ctx, ctx.v.V), gx = meterCanvas.getContext('2d');
+    gx.fillStyle = '#0a1f0a'; gx.fillRect(0, 0, 256, 128); gx.fillStyle = '#4ade80'; gx.font = 'bold 64px monospace'; gx.textAlign = 'center'; gx.fillText(I.toFixed(2), 128, 78); gx.font = '22px monospace'; gx.fillText('µA', 128, 112); meterTex.needsUpdate = true;
+    const key = `${ctx.v.metal}|${ctx.v.lam}|${ctx.v.I}`;
+    if (key !== ctx.graphKey) { ctx.graphKey = key; ctx.clearGraph(); for (let V = -4; V <= 4.0001; V += 0.05) ctx.plot(V, [currentAt(ctx, V)]); }
+  },
+  ui(ctx) {
+    const E = Ephot(ctx), phi = METALS[ctx.v.metal], K = KEmax(ctx);
+    ctx.readout('E', `${E.toFixed(2)} eV`); ctx.readout('phi', `${phi} eV`); ctx.readout('K', K > 0 ? `${K.toFixed(2)} eV` : '0 — no emission');
+    ctx.readout('Vs', K > 0 ? `${K.toFixed(2)} V` : '—'); ctx.readout('I', `${currentAt(ctx, ctx.v.V).toFixed(2)} µA`);
+    ctx.readout('l0', `${(hc / phi).toFixed(0)} nm`);
+  },
+});
 </script>
 </body></html>

@@ -1,88 +1,78 @@
 <!DOCTYPE html>
-<html lang="en"><head><meta charset="UTF-8"><title>Simple Pendulum</title><link rel="stylesheet" href="../styles.css"></head>
-<body>
-<header><a href="../index.html"><h1>Simple Pendulum</h1></a><p>Length, gravity, and damping affect the period.</p></header>
-<main>
-<a class="back-link" href="../index.html">&larr; All simulations</a>
-<div class="sim-container">
-  <div>
-    <div class="canvas-wrap"><canvas id="cv" width="800" height="500"></canvas></div>
-    <div class="info-box">
-      <h3>The Physics</h3>
-      <p>For small angles, the period of a simple pendulum is independent of mass and amplitude.</p>
-      <div class="formula">T = 2π √(L/g)</div>
-      <p>Equation of motion: <em>θ̈ = −(g/L) sin θ − b·θ̇</em></p>
-    </div>
-  </div>
-  <div class="controls">
-    <h3>Controls</h3>
-    <div class="control-row"><label>Length <span class="val" id="vL">2.0 m</span></label><input type="range" id="L" min="5" max="50" value="20"></div>
-    <div class="control-row"><label>Gravity <span class="val" id="vG">9.8</span></label><input type="range" id="g" min="1" max="25" value="98"></div>
-    <div class="control-row"><label>Initial Angle <span class="val" id="vA">30°</span></label><input type="range" id="a0" min="-90" max="90" value="30"></div>
-    <div class="control-row"><label>Damping <span class="val" id="vB">0.05</span></label><input type="range" id="b" min="0" max="50" value="5"></div>
-    <div class="btn-row"><button id="run">Start</button><button class="secondary" id="pause">Pause</button><button class="danger" id="reset">Reset</button></div>
-    <div class="readouts">
-      <div>θ: <span id="rTh">0°</span></div>
-      <div>ω: <span id="rW">0</span></div>
-      <div>Period: <span id="rT">0 s</span></div>
-      <div>KE+PE: <span id="rE">0 J</span></div>
-    </div>
-  </div>
-</div>
-</main>
-<script>
-const cv = document.getElementById('cv'), ctx = cv.getContext('2d');
-let L = 2.0, g = 9.8, theta = 30*Math.PI/180, omega = 0, b = 0.05;
-let running = false;
-const px = 400, py = 80, scale = 100;
-const m = 1;
-
-function step(){
-  if(!running) return;
-  const dt = 0.02;
-  // RK4 would be nicer but Euler with small dt is fine
-  const alpha = -(g/L)*Math.sin(theta) - b*omega;
-  omega += alpha*dt;
-  theta += omega*dt;
-  draw();
-  document.getElementById('rTh').textContent = (theta*180/Math.PI).toFixed(1)+'°';
-  document.getElementById('rW').textContent = omega.toFixed(2)+' rad/s';
-  document.getElementById('rT').textContent = (2*Math.PI*Math.sqrt(L/g)).toFixed(2)+' s';
-  const h = L*(1-Math.cos(theta));
-  const E = 0.5*m*L*L*omega*omega + m*g*h;
-  document.getElementById('rE').textContent = E.toFixed(2)+' J';
-  requestAnimationFrame(step);
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Simple Pendulum</title>
+<link rel="stylesheet" href="../engine/concept.css">
+<script type="importmap">{"imports":{"three":"../../simulations/lib/three/three.module.min.js","three/addons/":"../../simulations/lib/three/addons/"}}</script>
+</head><body>
+<script type="module">
+import { runSim, V3, MAT, mesh, THREE } from '../engine/concept.js';
+// Units: cm on the lab bench (bench top at y = -3); physics in SI.
+const PIV = V3(0, 92, -10);
+let bob, rod, stand, theta, omega, lastSign, lastCross, period, tr, velArrow, gArrow;
+runSim({
+  title: 'Simple Pendulum', subtitle: 'Length, gravity and damping decide the period — mass and (small) amplitude do not.',
+  stage: 'bench', camera: { pos: [60, 70, 150], target: [0, 50, -10] },
+  controls: [
+    { id: 'L', label: 'Length', min: 20, max: 90, step: 1, value: 60, unit: 'cm', reset: true },
+    { id: 'g', label: 'Gravity', min: 1.6, max: 25, step: 0.1, value: 9.8, unit: 'm/s²' },
+    { id: 'a0', label: 'Release angle', min: 2, max: 80, step: 1, value: 25, unit: '°', reset: true },
+    { id: 'b', label: 'Damping', min: 0, max: 0.5, step: 0.01, value: 0.03, unit: '1/s' },
+    { id: 'm', label: 'Bob mass', min: 50, max: 500, step: 10, value: 200, unit: 'g' },
+  ],
+  readouts: [{ id: 'th', label: 'Angle θ' }, { id: 'w', label: 'ω' }, { id: 'T', label: 'Period (measured)' }, { id: 'Tt', label: 'T = 2π√(L/g)' }, { id: 'KE', label: 'Kinetic energy' }, { id: 'PE', label: 'Potential energy' }],
+  graph: { title: 'Angle and energy', series: [{ name: 'θ (°)', color: '#22d3ee' }, { name: 'KE (mJ)', color: '#f59e0b' }, { name: 'PE (mJ)', color: '#a78bfa' }], max: 900 },
+  info: 'The bob swings under gravity. The restoring torque is proportional to sin θ, so for small angles the motion is simple harmonic and the period depends only on L and g. Watch the energy swap between kinetic and potential while their sum slowly decays with damping.',
+  formulas: ['T = 2π √(L / g)', 'θ̈ = −(g/L) sin θ − b θ̇'],
+  formulasPlain: ['T = 2π √(L/g)', 'θ" = −(g/L) sin θ − b θ\''],
+  setup(ctx) {
+    const s = new THREE.Group();
+    const base = mesh(new THREE.BoxGeometry(24, 2, 30), MAT.darkSteel); base.position.set(0, -2, -18);
+    const pole = mesh(new THREE.CylinderGeometry(1, 1, 100, 16), MAT.steel); pole.position.set(0, 47, -30);
+    const arm = mesh(new THREE.CylinderGeometry(0.7, 0.7, 22, 12), MAT.steel); arm.rotation.x = Math.PI / 2; arm.position.set(0, 94, -20);
+    const clamp = mesh(new THREE.BoxGeometry(4, 3, 3), MAT.darkSteel); clamp.position.set(0, 93.5, -10);
+    const scale = mesh(new THREE.CircleGeometry(20, 64, Math.PI, Math.PI), protractor(), false);
+    scale.position.copy(PIV).add(V3(0, 0, -1.5));
+    s.add(base, pole, arm, clamp, scale);
+    ctx.scene.add(s);
+    rod = mesh(new THREE.CylinderGeometry(0.08, 0.08, 1, 6), new THREE.MeshStandardMaterial({ color: 0xe5e5e5 }), false);
+    bob = mesh(new THREE.SphereGeometry(3, 32, 20), MAT.brass);
+    ctx.scene.add(rod, bob);
+    tr = ctx.trail(0x22d3ee, 300); ctx.scene.add(tr);
+    velArrow = ctx.arrow(0xf59e0b, { radius: 0.35, head: 2.2 }); gArrow = ctx.arrow(0xef4444, { radius: 0.35, head: 2.2 });
+    ctx.scene.add(velArrow, gArrow);
+    ctx.label('velocity', () => velArrow.visible ? bob.position.clone().add(V3(0, 7, 0)) : null);
+    ctx.label('pivot', () => PIV.clone().add(V3(0, 4, 0)));
+    function protractor() { return new THREE.MeshStandardMaterial({ map: ctx.canvasTex(512, 512, (g, w) => { g.fillStyle = 'rgba(245,240,225,0.85)'; g.beginPath(); g.arc(256, 256, 250, 0, Math.PI); g.fill(); g.strokeStyle = '#333'; g.fillStyle = '#333'; g.font = 'bold 18px Arial'; g.textAlign = 'center'; for (let a = -90; a <= 90; a += 5) { const r = a * Math.PI / 180, L = a % 10 ? 18 : 30; g.lineWidth = a % 10 ? 1.5 : 3; g.beginPath(); g.moveTo(256 + Math.sin(r) * 248, 256 + Math.cos(r) * 248); g.lineTo(256 + Math.sin(r) * (248 - L), 256 + Math.cos(r) * (248 - L)); g.stroke(); if (a % 30 === 0) g.fillText(String(Math.abs(a)), 256 + Math.sin(r) * 200, 262 + Math.cos(r) * 200); } }), transparent: true, side: THREE.DoubleSide }); }
+  },
+  reset(ctx) { theta = ctx.v.a0 * Math.PI / 180; omega = 0; lastSign = 0; lastCross = null; period = null; tr.clear(); place(ctx); },
+  step(ctx, dt) {
+    const L = ctx.v.L / 100, g = ctx.v.g;
+    // RK4 on the full non-linear equation
+    const f = (th, w) => [w, -(g / L) * Math.sin(th) - ctx.v.b * w];
+    const [k1a, k1b] = f(theta, omega), [k2a, k2b] = f(theta + k1a * dt / 2, omega + k1b * dt / 2), [k3a, k3b] = f(theta + k2a * dt / 2, omega + k2b * dt / 2), [k4a, k4b] = f(theta + k3a * dt, omega + k3b * dt);
+    const prev = theta;
+    theta += (dt / 6) * (k1a + 2 * k2a + 2 * k3a + k4a); omega += (dt / 6) * (k1b + 2 * k2b + 2 * k3b + k4b);
+    if (prev < 0 && theta >= 0) { if (lastCross != null) period = ctx.t - lastCross; lastCross = ctx.t; }
+    ctx.stepCount = (ctx.stepCount || 0) + 1;
+    if (ctx.stepCount % 12 === 0) { const e = energies(ctx); ctx.plot(ctx.t, [theta * 180 / Math.PI, e.KE * 1000, e.PE * 1000]); tr.push(bob.position); }
+  },
+  frame(ctx) { place(ctx); },
+  ui(ctx) {
+    const e = energies(ctx), L = ctx.v.L / 100;
+    ctx.readout('th', `${(theta * 180 / Math.PI).toFixed(1)}°`); ctx.readout('w', `${omega.toFixed(2)} rad/s`);
+    ctx.readout('T', period ? `${period.toFixed(3)} s` : '—'); ctx.readout('Tt', `${(2 * Math.PI * Math.sqrt(L / ctx.v.g)).toFixed(3)} s`);
+    ctx.readout('KE', `${(e.KE * 1000).toFixed(1)} mJ`); ctx.readout('PE', `${(e.PE * 1000).toFixed(1)} mJ`);
+  },
+});
+function energies(ctx) { const m = ctx.v.m / 1000, L = ctx.v.L / 100; return { KE: 0.5 * m * (L * omega) ** 2, PE: m * ctx.v.g * L * (1 - Math.cos(theta)) }; }
+function place(ctx) {
+  const L = ctx.v.L;
+  const p = PIV.clone().add(V3(Math.sin(theta) * L, -Math.cos(theta) * L, 0));
+  bob.position.copy(p);
+  rod.position.copy(PIV).lerp(p, 0.5); rod.scale.y = L; rod.rotation.z = theta;
+  const s = Math.cbrt(ctx.v.m / 200); bob.scale.setScalar(s);
+  const v = V3(Math.cos(theta), Math.sin(theta), 0).multiplyScalar(omega * L / 100);
+  velArrow.set(p.clone().add(V3(0, 0, 4)), v, 18);
+  gArrow.set(p.clone().add(V3(0, 0, 4)), V3(0, -ctx.v.m / 1000 * ctx.v.g, 0), 8);
 }
-
-function draw(){
-  ctx.clearRect(0,0,cv.width,cv.height);
-  // ceiling
-  ctx.fillStyle = '#888'; ctx.fillRect(px-60, py-15, 120, 15);
-  for(let i=0;i<10;i++){
-    ctx.beginPath(); ctx.moveTo(px-60+i*12, py); ctx.lineTo(px-50+i*12, py-15); ctx.strokeStyle='#444'; ctx.stroke();
-  }
-  // string
-  const bx = px + L*scale*Math.sin(theta);
-  const by = py + L*scale*Math.cos(theta);
-  ctx.strokeStyle = '#888888'; ctx.lineWidth = 2;
-  ctx.beginPath(); ctx.moveTo(px,py); ctx.lineTo(bx,by); ctx.stroke();
-  // arc trace
-  ctx.strokeStyle = 'rgba(255,255,255,0.3)'; ctx.lineWidth = 1;
-  ctx.beginPath(); ctx.arc(px, py, L*scale, Math.PI/2-Math.abs(theta), Math.PI/2+Math.abs(theta)); ctx.stroke();
-  // bob
-  ctx.fillStyle = '#888888'; ctx.beginPath(); ctx.arc(bx, by, 18, 0, 2*Math.PI); ctx.fill();
-  ctx.strokeStyle = '#dddddd'; ctx.stroke();
-  // pivot
-  ctx.fillStyle = '#dddddd'; ctx.beginPath(); ctx.arc(px,py,4,0,2*Math.PI); ctx.fill();
-}
-
-document.getElementById('L').oninput = e=>{L=+e.target.value/10; document.getElementById('vL').textContent=L.toFixed(1)+' m'; if(!running) draw();};
-document.getElementById('g').oninput = e=>{g=+e.target.value/10; document.getElementById('vG').textContent=g.toFixed(1);};
-document.getElementById('a0').oninput = e=>{ theta = +e.target.value*Math.PI/180; document.getElementById('vA').textContent=e.target.value+'°'; if(!running){omega=0; draw();}};
-document.getElementById('b').oninput = e=>{b=+e.target.value/100; document.getElementById('vB').textContent=b.toFixed(2);};
-document.getElementById('run').onclick = ()=>{ if(!running){running=true; step();}};
-document.getElementById('pause').onclick = ()=>{ running=false; };
-document.getElementById('reset').onclick = ()=>{ running=false; theta=+document.getElementById('a0').value*Math.PI/180; omega=0; draw(); };
-draw();
 </script>
 </body></html>

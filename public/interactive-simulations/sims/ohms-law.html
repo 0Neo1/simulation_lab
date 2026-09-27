@@ -1,92 +1,126 @@
 <!DOCTYPE html>
-<html lang="en"><head><meta charset="UTF-8"><title>Ohm's Law</title><link rel="stylesheet" href="../styles.css"></head>
-<body>
-<header><a href="../index.html"><h1>Ohm's Law Circuit</h1></a><p>Voltage, current, and resistance.</p></header>
-<main>
-<a class="back-link" href="../index.html">&larr; All simulations</a>
-<div class="sim-container">
-  <div>
-    <div class="canvas-wrap"><canvas id="cv" width="800" height="500"></canvas></div>
-    <div class="info-box">
-      <h3>The Physics</h3>
-      <p>Current is proportional to voltage and inversely proportional to resistance.</p>
-      <div class="formula">V = I R &nbsp;&nbsp; P = VI = I²R</div>
-      <p>Watch electrons flow faster when V increases or R decreases.</p>
-    </div>
-  </div>
-  <div class="controls">
-    <h3>Controls</h3>
-    <div class="control-row"><label>Voltage <span class="val" id="vV">9 V</span></label><input type="range" id="v" min="0" max="24" value="9"></div>
-    <div class="control-row"><label>Resistance <span class="val" id="vR">3 Ω</span></label><input type="range" id="r" min="1" max="20" value="3"></div>
-    <div class="readouts">
-      <div>I: <span id="rI">0 A</span></div>
-      <div>P: <span id="rP">0 W</span></div>
-    </div>
-  </div>
-</div>
-</main>
-<script>
-const cv=document.getElementById('cv'), ctx=cv.getContext('2d');
-let V=9, R=3, t=0;
-let electrons = [];
-const path = [
-  {x:150,y:400},{x:150,y:150},{x:650,y:150},{x:650,y:400}
-];
-const totalLen = 250+500+250;
-for(let i=0;i<30;i++) electrons.push({s:i/30 * totalLen});
-
-function pos(s){
-  s = ((s%totalLen)+totalLen)%totalLen;
-  if(s<250) return {x:150, y:400-s};
-  if(s<750) return {x:150 + (s-250), y:150};
-  return {x:650, y:150 + (s-750)};
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Ohm's Law</title>
+<link rel="stylesheet" href="../engine/concept.css">
+<script type="importmap">{"imports":{"three":"../../simulations/lib/three/three.module.min.js","three/addons/":"../../simulations/lib/three/addons/"}}</script>
+</head><body>
+<script type="module">
+import { runSim, V3, MAT, mesh, std, glow, THREE } from '../engine/concept.js';
+// A series circuit on the bench: variable DC supply, ammeter, resistor (or lamp) and a
+// voltmeter across it. Electrons drift round the loop at a rate proportional to the current.
+const WY = 1.2, NE = 90;
+const LOOP = [V3(-34, WY, 12), V3(34, WY, 12), V3(34, WY, -12), V3(-34, WY, -12)];
+let path, electrons, eS = [], amm, volt, resistor, bulb, bulbMat, bulbLight, rMat, recorded = [];
+function dial(title, unit) {
+  const g = new THREE.Group();
+  const box = mesh(new THREE.BoxGeometry(12, 9, 5), std(0x111827, { roughness: 0.5 })); box.position.y = 4.5;
+  const c = document.createElement('canvas'); c.width = 512; c.height = 320;
+  const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace;
+  const face = new THREE.Mesh(new THREE.PlaneGeometry(10.4, 6.5), new THREE.MeshStandardMaterial({ map: tex, roughness: 0.6 })); face.position.set(0, 5.2, 2.51);
+  const needle = new THREE.Mesh(new THREE.BoxGeometry(0.12, 4.6, 0.05), new THREE.MeshBasicMaterial({ color: 0xb91c1c })); needle.geometry.translate(0, 2.3, 0); needle.position.set(0, 2.36, 2.6);
+  const glass = new THREE.Mesh(new THREE.PlaneGeometry(10.4, 6.5), MAT.glass); glass.position.set(0, 5.2, 2.7);
+  [-3, 3].forEach((x, i) => { const t = mesh(new THREE.CylinderGeometry(0.6, 0.6, 1.2, 16), i ? MAT.red : MAT.black); t.position.set(x, 9.5, 1); g.add(t); });
+  g.add(box, face, needle, glass);
+  g.draw = (max) => {
+    const gx = c.getContext('2d'); gx.fillStyle = '#f8f5ea'; gx.fillRect(0, 0, 512, 320); gx.strokeStyle = '#111'; gx.fillStyle = '#111'; gx.textAlign = 'center';
+    for (let i = 0; i <= 50; i++) { const a = Math.PI * (0.8 - 0.6 * i / 50), L = i % 5 ? 14 : 28; gx.lineWidth = i % 5 ? 2 : 3.5; gx.beginPath(); gx.moveTo(256 + Math.cos(a) * 250, 300 - Math.sin(a) * 250); gx.lineTo(256 + Math.cos(a) * (250 - L), 300 - Math.sin(a) * (250 - L)); gx.stroke(); if (i % 10 === 0) { gx.font = 'bold 26px Arial'; gx.fillText(String(+(max * i / 50).toFixed(2)), 256 + Math.cos(a) * 196, 312 - Math.sin(a) * 196); } }
+    gx.font = 'bold 64px Georgia'; gx.fillText(title, 256, 215); gx.font = '24px Arial'; gx.fillText(unit, 256, 250);
+    tex.needsUpdate = true; g.max = max;
+  };
+  g.val = 0;
+  g.set = (v) => { g.val += (v - g.val) * 0.12; const f = Math.max(-0.02, Math.min(1.03, g.val / g.max)); needle.rotation.z = Math.PI * (0.8 - 0.6 * f) - Math.PI / 2; };
+  return g;
 }
-
-function draw(){
-  ctx.clearRect(0,0,cv.width,cv.height);
-  ctx.fillStyle='#0a0a0a'; ctx.fillRect(0,0,cv.width,cv.height);
-  // wires
-  ctx.strokeStyle='#888888'; ctx.lineWidth=4;
-  ctx.beginPath();
-  ctx.moveTo(150,400); ctx.lineTo(150,150); ctx.lineTo(650,150); ctx.lineTo(650,400);
-  ctx.lineTo(450, 400); ctx.moveTo(350, 400); ctx.lineTo(150,400);
-  ctx.stroke();
-  // battery
-  ctx.fillStyle='#fff'; ctx.fillRect(370, 380, 60, 40); ctx.strokeRect(370,380,60,40);
-  ctx.beginPath(); ctx.moveTo(360, 390); ctx.lineTo(360, 410); ctx.lineWidth=4; ctx.stroke();
-  ctx.beginPath(); ctx.moveTo(440, 395); ctx.lineTo(440, 405); ctx.stroke();
-  ctx.fillStyle='#dddddd'; ctx.font='14px sans-serif'; ctx.fillText(V+'V', 385, 405);
-  // resistor (zigzag) on top wire
-  ctx.strokeStyle='#888888'; ctx.lineWidth=3;
-  ctx.beginPath();
-  ctx.moveTo(350,150);
-  for(let i=0;i<10;i++){
-    ctx.lineTo(350+i*10+5, 150+(i%2===0?-12:12));
-  }
-  ctx.lineTo(450,150);
-  ctx.stroke();
-  ctx.fillStyle='#dddddd'; ctx.fillText(R+'Ω', 390, 130);
-  // electrons
-  const I = V/R;
-  electrons.forEach(e=>{
-    e.s += I*1.5;
-    const p = pos(e.s);
-    ctx.fillStyle='#ffffff'; ctx.beginPath(); ctx.arc(p.x,p.y,5,0,2*Math.PI); ctx.fill();
-    ctx.fillStyle='#fff'; ctx.font='bold 9px sans-serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
-    ctx.fillText('-', p.x, p.y); ctx.textAlign='left'; ctx.textBaseline='alphabetic';
-  });
-  // bulb glow proportional to power
-  const P = V*I;
-  const glow = Math.min(1, P/50);
-  ctx.fillStyle = `rgba(255,200,0,${glow})`;
-  ctx.beginPath(); ctx.arc(400, 150, 30+glow*10, 0, 2*Math.PI); ctx.fill();
-  document.getElementById('rI').textContent = I.toFixed(2)+' A';
-  document.getElementById('rP').textContent = P.toFixed(1)+' W';
+function bandTex(R) {
+  const cols = ['#111', '#7a4a1f', '#d62828', '#f77f00', '#f5d000', '#2a9d3a', '#1d4ed8', '#7c3aed', '#6b7280', '#f8f8f8'];
+  const e = Math.floor(Math.log10(R)) - 1, sig = Math.round(R / 10 ** e), d1 = Math.floor(sig / 10) % 10, d2 = sig % 10;
+  // capsule UVs run v along its length, so the bands are horizontal stripes in the texture
+  const c = document.createElement('canvas'); c.width = 64; c.height = 256; const g = c.getContext('2d');
+  g.fillStyle = '#d9c7a0'; g.fillRect(0, 0, 64, 256);
+  [[62, cols[d1]], [92, cols[d2]], [122, cols[Math.max(0, e)]], [178, '#c9a227']].forEach(([y, col]) => { g.fillStyle = col; g.fillRect(0, y, 64, 16); });
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
 }
-
-document.getElementById('v').oninput=e=>{V=+e.target.value; document.getElementById('vV').textContent=V+' V';};
-document.getElementById('r').oninput=e=>{R=+e.target.value; document.getElementById('vR').textContent=R+' Ω';};
-function loop(){ draw(); requestAnimationFrame(loop); }
-loop();
+function lampR(ctx, V) { return ctx.v.R * (1 + 1.6 * Math.sqrt(Math.max(0, V) / 12)); } // filament heats up
+function current(ctx) { const V = ctx.v.V; return ctx.v.comp === 'lamp' ? V / lampR(ctx, V) : V / ctx.v.R; }
+runSim({
+  title: "Ohm's Law", subtitle: 'For a metallic resistor at constant temperature, current is proportional to voltage: V = IR.',
+  stage: 'bench', camera: { pos: [0, 62, 78], target: [0, 4, 0] },
+  autoplay: true, dt: 1 / 60,
+  controls: [
+    { id: 'V', label: 'Supply voltage V', min: 0, max: 12, step: 0.1, value: 6, unit: 'V' },
+    { id: 'R', label: 'Resistance R', min: 10, max: 100, step: 1, value: 47, unit: 'Ω' },
+    { id: 'comp', label: 'Component', type: 'select', value: 'res', options: [{ value: 'res', label: 'Resistor (ohmic)' }, { value: 'lamp', label: 'Filament lamp (non-ohmic)' }] },
+  ],
+  buttons: [
+    { id: 'rec', label: '● Record reading', run: (c) => { recorded.push([c.v.V, current(c) * 1000]); c.redraw(); } },
+    { id: 'sweep', label: 'Sweep 0 → 12 V', kind: 'ghost', run: (c) => { recorded = []; for (let v = 0; v <= 12.001; v += 1) { c.v.V = v; recorded.push([v, current(c) * 1000]); } c.setControl('V', 12); c.redraw(); } },
+    { id: 'clr', label: 'Clear graph', kind: 'ghost', run: (c) => { recorded = []; c.redraw(); } },
+  ],
+  readouts: [{ id: 'V', label: 'Voltmeter V' }, { id: 'I', label: 'Ammeter I' }, { id: 'R', label: 'V / I' }, { id: 'P', label: 'Power P = VI' }, { id: 'e', label: 'Electrons per second' }, { id: 'n', label: 'Readings recorded' }],
+  graph: { title: 'V–I characteristic', series: [{ name: 'I (mA) — recorded', color: '#22d3ee' }], xlabel: 'V (volt)', xmin: 0, xmax: 12, ymin: 0, ymax: (c) => Math.max(12 / c.v.R * 1000, ...recorded.map((r) => r[1])) * 1.1, dots: true, max: 200 },
+  info: 'The ammeter is in series, so the same current flows through it and the component; the voltmeter is connected across the component. Record readings at several voltages. For the resistor, V/I stays the same and the graph is a straight line through the origin: Ohm\'s law. The lamp filament gets hotter as the current grows, its resistance rises, and the graph curves over, so it does not obey Ohm\'s law.',
+  formulas: ['V = I R', 'P = V I = I² R = V² / R'],
+  formulasPlain: ['V = IR', 'P = VI = I²R'],
+  setup(ctx) {
+    path = new THREE.CatmullRomCurve3(LOOP, true, 'catmullrom', 0.02);
+    const wire = mesh(new THREE.TubeGeometry(path, 240, 0.35, 8, true), std(0xb45309, { roughness: 0.5 }), false); ctx.scene.add(wire);
+    electrons = new THREE.InstancedMesh(new THREE.SphereGeometry(0.4, 10, 8), glow(0x7dd3fc), NE); ctx.scene.add(electrons);
+    for (let i = 0; i < NE; i++) eS.push(i / NE);
+    // supply on the left edge
+    const psu = new THREE.Group(); const body = mesh(new THREE.BoxGeometry(14, 10, 16), std(0x1e3a8a, { metalness: 0.2 })); body.position.y = 5;
+    const disp = new THREE.Mesh(new THREE.PlaneGeometry(8, 3), new THREE.MeshBasicMaterial({ color: 0x111111 })); disp.position.set(0, 7, 8.01);
+    psu.add(body, disp); psu.position.set(-38, -3, 0); ctx.scene.add(psu);
+    const dc = document.createElement('canvas'); dc.width = 256; dc.height = 96; ctx.psuTex = new THREE.CanvasTexture(dc); ctx.psuCanvas = dc; disp.material = new THREE.MeshBasicMaterial({ map: ctx.psuTex, toneMapped: false });
+    amm = dial('A', 'milliamperes'); amm.position.set(0, -3, 16); amm.scale.setScalar(1.2); ctx.scene.add(amm);
+    volt = dial('V', 'volts'); volt.position.set(0, -3, -26); ctx.scene.add(volt); volt.draw(15);
+    // voltmeter leads to the component ends
+    [-8, 8].forEach((x, i) => { const c = new THREE.CatmullRomCurve3([V3(i ? 3 : -3, 6.5, -25), V3(x * 0.8, 9, -20), V3(x, WY + 1.5, -13), V3(x, WY, -12)]); ctx.scene.add(mesh(new THREE.TubeGeometry(c, 30, 0.25, 6), i ? MAT.red : MAT.black, false)); });
+    // resistor
+    rMat = new THREE.MeshStandardMaterial({ map: bandTex(47), roughness: 0.5 });
+    resistor = new THREE.Group(); const rb = mesh(new THREE.CapsuleGeometry(1.3, 6, 6, 16), rMat); rb.rotation.z = Math.PI / 2; resistor.add(rb); resistor.position.set(0, WY, -12); ctx.scene.add(resistor);
+    // lamp on a holder
+    bulb = new THREE.Group();
+    const holder = mesh(new THREE.CylinderGeometry(2, 2.3, 3, 20), MAT.darkSteel); holder.position.y = 1.5;
+    bulbMat = new THREE.MeshPhysicalMaterial({ color: 0xffffff, roughness: 0.05, transparent: true, opacity: 0.35, emissive: 0xffc46b, emissiveIntensity: 0 });
+    const glass = new THREE.Mesh(new THREE.SphereGeometry(3, 28, 20), bulbMat); glass.position.y = 5.8;
+    const fil = new THREE.Mesh(new THREE.TorusGeometry(0.8, 0.08, 6, 20, Math.PI), new THREE.MeshBasicMaterial({ color: 0x552200, toneMapped: false })); fil.position.y = 5.8; bulb.fil = fil;
+    bulbLight = new THREE.PointLight(0xffc46b, 0, 120, 2); bulbLight.position.y = 5.8;
+    bulb.add(holder, glass, fil, bulbLight); bulb.position.set(0, WY - 1.5, -12); ctx.scene.add(bulb);
+    ctx.label('ammeter (in series)', () => V3(0, 11, 16)); ctx.label('voltmeter (in parallel)', () => V3(0, 9, -26));
+    ctx.label('power supply', () => V3(-38, 10, 0));
+    ctx.eTag = ctx.label('electron flow →', () => path.getPointAt(0.12).add(V3(0, 2.5, 0)));
+    ctx.redraw = () => { ctx.clearGraph(); recorded.slice().sort((a, b) => a[0] - b[0]).forEach(([v, i]) => ctx.plot(v, [i])); };
+    ctx.lastR = 47; amm.lastMax = 0;
+  },
+  graphOverlay(ctx, g, { X, Y }) {
+    // live operating point and the ideal ohmic line for this R
+    g.strokeStyle = 'rgba(250,204,21,0.5)'; g.setLineDash([4, 4]); g.beginPath(); g.moveTo(X(0), Y(0)); g.lineTo(X(12), Y(12 / ctx.v.R * 1000)); g.stroke(); g.setLineDash([]);
+    g.fillStyle = '#f472b6'; g.beginPath(); g.arc(X(ctx.v.V), Y(current(ctx) * 1000), 4.5, 0, 7); g.fill();
+  },
+  step(ctx, dt) {
+    const I = current(ctx), sp = I * 0.25; // loop fractions per second (drift shown greatly sped up)
+    for (let i = 0; i < NE; i++) eS[i] = (eS[i] - sp * dt + 1) % 1; // electrons flow from − to + (against conventional current)
+  },
+  frame(ctx) {
+    const m = new THREE.Matrix4();
+    eS.forEach((u, i) => { m.setPosition(path.getPointAt(u)); electrons.setMatrixAt(i, m); }); electrons.instanceMatrix.needsUpdate = true;
+    const I = current(ctx), lamp = ctx.v.comp === 'lamp';
+    const amax = [10, 50, 100, 250, 500, 1000, 1500].find((x) => x >= 12 / ctx.v.R * 1000 * 1.02) || 1500;
+    if (amm.lastMax !== amax) { amm.draw(amax); amm.lastMax = amax; }
+    amm.set(I * 1000); volt.set(ctx.v.V);
+    if (ctx.lastR !== ctx.v.R) { rMat.map.dispose(); rMat.map = bandTex(ctx.v.R); rMat.needsUpdate = true; ctx.lastR = ctx.v.R; }
+    resistor.visible = !lamp; bulb.visible = lamp;
+    const P = ctx.v.V * I, glowK = Math.min(1, P / 1.5);
+    bulbMat.emissiveIntensity = glowK * 2.2; bulbLight.intensity = glowK * 1500; bulb.fil.material.color.setRGB(0.3 + glowK, 0.15 + glowK * 0.8, glowK * 0.4);
+    // resistor warms slightly with power
+    rMat.emissive = new THREE.Color(0xff3300); rMat.emissiveIntensity = lamp ? 0 : Math.min(0.4, P / 8);
+    const g = ctx.psuCanvas.getContext('2d'); g.fillStyle = '#081208'; g.fillRect(0, 0, 256, 96); g.fillStyle = '#4ade80'; g.font = 'bold 64px monospace'; g.textAlign = 'center'; g.fillText(`${ctx.v.V.toFixed(1)}V`, 128, 72); ctx.psuTex.needsUpdate = true;
+  },
+  ui(ctx) {
+    const I = current(ctx), V = ctx.v.V;
+    ctx.readout('V', `${V.toFixed(2)} V`); ctx.readout('I', `${(I * 1000).toFixed(1)} mA`);
+    ctx.readout('R', I > 0 ? `${(V / I).toFixed(1)} Ω` : '—'); ctx.readout('P', `${(V * I * 1000).toFixed(0)} mW`);
+    ctx.readout('e', `${(I / 1.602e-19).toExponential(2)}`); ctx.readout('n', String(recorded.length));
+  },
+});
 </script>
 </body></html>

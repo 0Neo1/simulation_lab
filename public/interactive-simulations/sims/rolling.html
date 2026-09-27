@@ -1,104 +1,92 @@
 <!DOCTYPE html>
-<html lang="en"><head><meta charset="UTF-8"><title>Rolling Motion</title><link rel="stylesheet" href="../styles.css"></head>
-<body>
-<header><a href="../index.html"><h1>Rolling Motion Race</h1></a><p>Different shapes, different rolling acceleration.</p></header>
-<main>
-<a class="back-link" href="../index.html">&larr; All simulations</a>
-<div class="sim-container">
-  <div>
-    <div class="canvas-wrap"><canvas id="cv" width="800" height="500"></canvas></div>
-    <div class="info-box">
-      <h3>The Physics</h3>
-      <p>For a body rolling without slipping down an incline, acceleration depends on the moment of inertia ratio <em>β = I/(mR²)</em>:</p>
-      <div class="formula">a = g sin θ / (1 + β)</div>
-      <p>Solid sphere β=2/5, hollow sphere 2/3, solid cylinder 1/2, hoop 1.</p>
-    </div>
-  </div>
-  <div class="controls">
-    <h3>Controls</h3>
-    <div class="control-row"><label>Incline angle <span class="val" id="vA">25°</span></label><input type="range" id="ang" min="5" max="45" value="25"></div>
-    <div class="btn-row"><button id="run">Race!</button><button class="danger" id="reset">Reset</button></div>
-    <div class="readouts" style="grid-template-columns:1fr;">
-      <div>Solid sphere: <span id="r1">—</span></div>
-      <div>Solid cylinder: <span id="r2">—</span></div>
-      <div>Hollow sphere: <span id="r3">—</span></div>
-      <div>Hoop: <span id="r4">—</span></div>
-    </div>
-  </div>
-</div>
-</main>
-<script>
-const cv=document.getElementById('cv'), ctx=cv.getContext('2d');
-let ang=25;
-const objects = [
-  {name:'Solid sphere', beta:2/5, color:'#888888', s:0, v:0, finT:null, label:'r1'},
-  {name:'Solid cylinder', beta:1/2, color:'#ffffff', s:0, v:0, finT:null, label:'r2'},
-  {name:'Hollow sphere', beta:2/3, color:'#aaaaaa', s:0, v:0, finT:null, label:'r3'},
-  {name:'Hoop', beta:1, color:'#888888', s:0, v:0, finT:null, label:'r4'},
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Rolling Motion</title>
+<link rel="stylesheet" href="../engine/concept.css">
+<script type="importmap">{"imports":{"three":"../../simulations/lib/three/three.module.min.js","three/addons/":"../../simulations/lib/three/addons/"}}</script>
+</head><body>
+<script type="module">
+import { runSim, V3, MAT, mesh, std, THREE } from '../engine/concept.js';
+// Five objects race down a ramp: rolling without slipping, a = g sin θ / (1 + I/mr²).
+const R = 3, LANE = 8.5, g = 9.8;
+const BODIES = [
+  { id: 'block', name: 'Sliding block (no friction)', beta: 0, color: 0x9ca3af },
+  { id: 'sphere', name: 'Solid sphere', beta: 2 / 5, color: 0xef4444 },
+  { id: 'cyl', name: 'Solid cylinder', beta: 1 / 2, color: 0x22c55e },
+  { id: 'shell', name: 'Hollow sphere', beta: 2 / 3, color: 0xf59e0b },
+  { id: 'ring', name: 'Ring (hoop)', beta: 1, color: 0x3b82f6 },
 ];
-let t=0, running=false;
-const ox=80, oy=460, L=600, R=22;
-
-function reset(){ objects.forEach(o=>{o.s=0; o.v=0; o.finT=null;}); t=0; }
-
-function step(){
-  if(!running) return;
-  const dt = 0.03; t += dt;
-  const a = ang*Math.PI/180;
-  const maxS = (L-100)/5;
-  objects.forEach(o=>{
-    if(o.finT) return;
-    const acc = 9.8*Math.sin(a)/(1+o.beta);
-    o.v += acc*dt;
-    o.s += o.v*dt;
-    if(o.s >= maxS){ o.finT = t; document.getElementById(o.label).textContent = t.toFixed(2)+' s'; }
-  });
-  if(objects.every(o=>o.finT)) running = false;
-  draw();
-  requestAnimationFrame(step);
+let ramp, objs = [], finishLine, startT, times;
+function makeBody(b) {
+  let m;
+  if (b.id === 'block') m = mesh(new THREE.BoxGeometry(5, 4, 5), std(b.color, { metalness: 0.4 }));
+  else if (b.id === 'sphere') m = mesh(new THREE.SphereGeometry(R, 32, 20), new THREE.MeshStandardMaterial({ map: stripe(b.color), roughness: 0.4 }));
+  else if (b.id === 'shell') m = mesh(new THREE.SphereGeometry(R, 32, 20), new THREE.MeshStandardMaterial({ map: stripe(b.color), roughness: 0.2, metalness: 0.6 }));
+  else if (b.id === 'cyl') { m = mesh(new THREE.CylinderGeometry(R, R, 4, 32), [new THREE.MeshStandardMaterial({ color: b.color }), new THREE.MeshStandardMaterial({ map: spoke(b.color) }), new THREE.MeshStandardMaterial({ map: spoke(b.color) })]); m.geometry.rotateX(Math.PI / 2); }
+  else { m = mesh(new THREE.TorusGeometry(R - 0.5, 0.5, 14, 40), std(b.color, { metalness: 0.7, roughness: 0.3 })); const bar = mesh(new THREE.BoxGeometry(2 * R - 1, 0.3, 0.3), MAT.steel); m.add(bar); }
+  const g0 = new THREE.Group(); g0.add(m); g0.body = m; return g0;
 }
-
-function draw(){
-  ctx.clearRect(0,0,cv.width,cv.height);
-  ctx.fillStyle='#1a1a1a'; ctx.fillRect(0,0,cv.width,oy);
-  ctx.fillStyle='#1f1f1f'; ctx.fillRect(0,oy,cv.width,cv.height-oy);
-  // ramp
-  const a = ang*Math.PI/180;
-  const tx = ox + L*Math.cos(a), ty = oy - L*Math.sin(a);
-  ctx.fillStyle='#888';
-  ctx.beginPath(); ctx.moveTo(ox,oy); ctx.lineTo(tx,oy); ctx.lineTo(tx,ty); ctx.closePath(); ctx.fill();
-  ctx.strokeStyle='#dddddd'; ctx.stroke();
-  // objects (stacked along ramp)
-  objects.forEach((o,i)=>{
-    const sx = ox + (o.s*5)*Math.cos(a) + (i*2*R+R)*Math.sin(a);
-    const sy = oy - (o.s*5)*Math.sin(a) - (i*2*R+R)*Math.cos(a);
-    ctx.save();
-    ctx.translate(sx, sy);
-    ctx.rotate(-a);
-    if(o.name==='Hoop'){
-      ctx.strokeStyle = o.color; ctx.lineWidth = 5;
-      ctx.beginPath(); ctx.arc(0,0,R,0,2*Math.PI); ctx.stroke();
-    } else {
-      ctx.fillStyle = o.color; ctx.beginPath(); ctx.arc(0,0,R,0,2*Math.PI); ctx.fill();
-      ctx.strokeStyle='#dddddd'; ctx.stroke();
-    }
-    // rotation indicator
-    const theta = o.s/0.22; // arbitrary
-    ctx.strokeStyle='#dddddd'; ctx.lineWidth=2;
-    ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(R*Math.cos(theta), R*Math.sin(theta)); ctx.stroke();
-    ctx.restore();
-  });
-  // legend
-  ctx.font='14px sans-serif';
-  objects.forEach((o,i)=>{
-    ctx.fillStyle = o.color; ctx.fillRect(620, 30+i*22, 18, 14);
-    ctx.fillStyle='#dddddd'; ctx.fillText(o.name, 645, 42+i*22);
+function stripe(c) { const cv = document.createElement('canvas'); cv.width = 128; cv.height = 64; const gx = cv.getContext('2d'); gx.fillStyle = '#' + c.toString(16).padStart(6, '0'); gx.fillRect(0, 0, 128, 64); gx.fillStyle = '#fff'; gx.fillRect(0, 0, 16, 64); gx.fillRect(64, 0, 16, 64); const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace; return t; }
+function spoke(c) { const cv = document.createElement('canvas'); cv.width = cv.height = 128; const gx = cv.getContext('2d'); gx.fillStyle = '#' + c.toString(16).padStart(6, '0'); gx.fillRect(0, 0, 128, 128); gx.strokeStyle = '#fff'; gx.lineWidth = 10; gx.beginPath(); gx.moveTo(64, 4); gx.lineTo(64, 124); gx.moveTo(4, 64); gx.lineTo(124, 64); gx.stroke(); const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace; return t; }
+runSim({
+  title: 'Rolling Motion', subtitle: 'Shape matters: the more mass far from the axis, the slower an object rolls downhill.',
+  stage: 'bench', camera: { pos: [25, 100, 90], target: [0, 5, 0] },
+  controls: [
+    { id: 'ang', label: 'Ramp angle θ', min: 5, max: 40, step: 0.5, value: 18, unit: '°', reset: true },
+    { id: 'L', label: 'Ramp length', min: 60, max: 110, step: 1, value: 100, unit: 'cm', reset: true },
+  ],
+  buttons: [{ id: 'go', label: '🏁 Start the race', kind: 'warn', run: (c) => { c.reset(); c.play(); } }],
+  readouts: BODIES.map((b) => ({ id: b.id, label: b.name })).concat([{ id: 'w', label: 'Winner so far' }]),
+  graph: { title: 'Distance down the ramp', series: BODIES.map((b) => ({ name: b.name.split(' (')[0], color: '#' + b.color.toString(16).padStart(6, '0') })), max: 600, ymin: 0 },
+  info: 'All the objects have the same mass and radius and start together. Going downhill, the lost potential energy turns into both straight-line kinetic energy and spinning energy. An object with more of its mass far from the axis (a large moment of inertia, like the ring) spends more energy on spinning, so it speeds up less. The result does not depend on mass or radius, only on shape. The frictionless block does not spin at all, so it wins.',
+  formulas: ['a = g sin θ / (1 + I / m r²)', 'mgh = ½mv² + ½Iω²', 'I/mr²: sphere 2/5, cylinder 1/2, shell 2/3, ring 1'],
+  formulasPlain: ['a = g sin θ / (1 + I/mr²)', 'mgh = ½mv² + ½Iω²'],
+  setup(ctx) {
+    ramp = new THREE.Group(); ctx.scene.add(ramp);
+    const board = mesh(new THREE.BoxGeometry(1, 2, LANE * 5 + 2), MAT.wood); board.geometry.translate(0.5, -1, 0); ramp.add(board); ramp.board = board;
+    for (let i = 0; i <= 5; i++) { const rail = mesh(new THREE.BoxGeometry(1, 1.2, 0.4), MAT.darkWood); rail.geometry.translate(0.5, 0.6, 0); rail.position.z = (i - 2.5) * LANE; ramp.add(rail); rail.userData.rail = true; }
+    finishLine = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.1, LANE * 5), new THREE.MeshBasicMaterial({ color: 0xffffff })); ctx.scene.add(finishLine);
+    ctx.support = mesh(new THREE.BoxGeometry(4, 1, LANE * 5), MAT.darkSteel); ctx.support.geometry.translate(0, -0.5, 0); ctx.scene.add(ctx.support);
+    BODIES.forEach((b, i) => { const o = makeBody(b); o.b = b; o.lane = (i - 2) * LANE; ctx.scene.add(o); objs.push(o); o.tag = ctx.label(b.name.split(' (')[0], () => o.position.clone().add(V3(0, 6, 0))); });
+  },
+  reset(ctx) {
+    const th = ctx.v.ang * Math.PI / 180, L = ctx.v.L;
+    // ramp from the top (x0, h) down to the bench (x1, 0)
+    const x0 = -L * Math.cos(th) / 2, h = L * Math.sin(th) - 3;
+    ctx.geo = { th, L, x0, h };
+    ramp.position.set(x0, h, 0); ramp.rotation.z = -th;
+    ramp.children.forEach((c) => { c.scale.x = L; });
+    ctx.support.position.set(x0 + 2, h - 1.5, 0); ctx.support.scale.y = Math.max(0.1, h + 1.5);
+    const fx = x0 + L * Math.cos(th) - 6 * Math.cos(th); finishLine.position.set(fx, h - (L - 6) * Math.sin(th) + 0.1, 0); finishLine.rotation.z = -th;
+    objs.forEach((o) => { o.s = 0; o.v = 0; o.done = null; });
+    times = {}; place(ctx);
+  },
+  step(ctx, dt) {
+    const { th, L } = ctx.geo;
+    objs.forEach((o) => {
+      if (o.done != null) return;
+      const a = g * Math.sin(th) / (1 + o.b.beta);
+      o.v += a * dt; o.s += o.v * dt * 100; // cm
+      if (o.s >= L - 6 - 3) { o.s = L - 9; o.done = ctx.t; times[o.b.id] = ctx.t; }
+    });
+    ctx.n = (ctx.n || 0) + 1; if (ctx.n % 8 === 0) ctx.plot(ctx.t, objs.map((o) => o.s));
+    if (objs.every((o) => o.done != null)) ctx.pause();
+  },
+  frame(ctx) { place(ctx); },
+  ui(ctx) {
+    const { th, L } = ctx.geo, d = (L - 9) / 100;
+    objs.forEach((o) => { const tp = Math.sqrt(2 * d * (1 + o.b.beta) / (g * Math.sin(th))); ctx.readout(o.b.id, o.done != null ? `${o.done.toFixed(3)} s ✓` : `${tp.toFixed(3)} s (predicted)`); });
+    const first = objs.filter((o) => o.done != null).sort((a, b) => a.done - b.done)[0];
+    ctx.readout('w', first ? first.b.name.split(' (')[0] : '—');
+  },
+});
+function place(ctx) {
+  const { th, x0, h } = ctx.geo, dir = V3(Math.cos(th), -Math.sin(th), 0), nrm = V3(Math.sin(th), Math.cos(th), 0);
+  objs.forEach((o) => {
+    const up = o.b.id === 'block' ? 2 : R;
+    const p = V3(x0, h, o.lane).addScaledVector(dir, o.s + 4).addScaledVector(nrm, up);
+    o.position.copy(p);
+    o.rotation.z = -th;
+    if (o.b.id !== 'block') o.body.rotation.z = -(o.s + 4) / R; // rolls without slipping
   });
 }
-
-document.getElementById('ang').oninput=e=>{ang=+e.target.value; document.getElementById('vA').textContent=ang+'°'; if(!running) draw();};
-document.getElementById('run').onclick=()=>{ if(!running){ reset(); running=true; step(); } };
-document.getElementById('reset').onclick=()=>{ running=false; reset(); ['r1','r2','r3','r4'].forEach(id=>document.getElementById(id).textContent='—'); draw(); };
-draw();
 </script>
 </body></html>

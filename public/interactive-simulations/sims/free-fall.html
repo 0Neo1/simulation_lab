@@ -1,90 +1,64 @@
 <!DOCTYPE html>
-<html lang="en"><head><meta charset="UTF-8"><title>Free Fall</title><link rel="stylesheet" href="../styles.css"></head>
-<body>
-<header><a href="../index.html"><h1>Free Fall — With and Without Air</h1></a><p>Drop a feather and a ball side by side.</p></header>
-<main>
-<a class="back-link" href="../index.html">&larr; All simulations</a>
-<div class="sim-container">
-  <div>
-    <div class="canvas-wrap"><canvas id="cv" width="800" height="500"></canvas></div>
-    <div class="info-box">
-      <h3>The Physics</h3>
-      <p>In a vacuum, all objects fall at the same rate. Air resistance is proportional to v² and depends on cross-sectional area, so light objects with large area (like feathers) reach terminal velocity quickly.</p>
-      <div class="formula">F_drag = ½ ρ C_d A v²<br>m·a = m·g − F_drag</div>
-    </div>
-  </div>
-  <div class="controls">
-    <h3>Controls</h3>
-    <div class="control-row"><label>Air density <span class="val" id="vR">1.2</span></label><input type="range" id="rho" min="0" max="20" value="12"></div>
-    <div class="control-row"><label>Drop height <span class="val" id="vH">80 m</span></label><input type="range" id="h" min="20" max="200" value="80"></div>
-    <div class="btn-row"><button id="drop">Drop</button><button class="secondary" id="reset">Reset</button></div>
-    <div class="readouts">
-      <div>Ball: <span id="rB">0 m</span></div>
-      <div>Feather: <span id="rF">0 m</span></div>
-      <div>v_ball: <span id="rVB">0</span></div>
-      <div>v_feather: <span id="rVF">0</span></div>
-    </div>
-  </div>
-</div>
-</main>
-<script>
-const cv = document.getElementById('cv'), ctx = cv.getContext('2d');
-let rho = 1.2, H = 80, t = 0, running = false;
-let ball = {y:0,v:0, m:1, A:0.01, Cd:0.47}, feather = {y:0,v:0, m:0.005, A:0.05, Cd:1.2};
-const g = 9.8, scale = 4;
-
-function reset(){ t=0; ball.y=0; ball.v=0; feather.y=0; feather.v=0; }
-
-function step(){
-  if(!running) return;
-  const dt = 0.02; t += dt;
-  [ball, feather].forEach(o=>{
-    const Fd = 0.5*rho*o.Cd*o.A*o.v*o.v;
-    const a = g - Fd/o.m;
-    o.v += a*dt;
-    o.y += o.v*dt;
-    if(o.y >= H){ o.y = H; o.v = 0; }
-  });
-  document.getElementById('rB').textContent = ball.y.toFixed(2)+' m';
-  document.getElementById('rF').textContent = feather.y.toFixed(2)+' m';
-  document.getElementById('rVB').textContent = ball.v.toFixed(2)+' m/s';
-  document.getElementById('rVF').textContent = feather.v.toFixed(2)+' m/s';
-  draw();
-  if(ball.y < H || feather.y < H) requestAnimationFrame(step); else running = false;
-}
-
-function draw(){
-  ctx.clearRect(0,0,cv.width,cv.height);
-  ctx.fillStyle = '#1a1a1a'; ctx.fillRect(0,0,cv.width,cv.height-30);
-  ctx.fillStyle = '#1f1f1f'; ctx.fillRect(0,cv.height-30,cv.width,30);
-  // markers
-  const groundY = cv.height - 30;
-  for(let i=0;i<=H;i+=10){
-    const y = groundY - (H-i)*scale;
-    ctx.strokeStyle = 'rgba(255,255,255,0.1)';
-    ctx.beginPath(); ctx.moveTo(50,y); ctx.lineTo(750,y); ctx.stroke();
-    ctx.fillStyle = '#999999'; ctx.font='10px sans-serif';
-    ctx.fillText(i+'m', 5, y);
-  }
-  // ball (left)
-  const by = groundY - (H - ball.y)*scale;
-  ctx.fillStyle = '#888888'; ctx.beginPath(); ctx.arc(250, by, 14, 0, 2*Math.PI); ctx.fill();
-  ctx.strokeStyle='#dddddd'; ctx.stroke();
-  ctx.fillStyle = '#dddddd'; ctx.font='14px sans-serif'; ctx.fillText('Ball', 230, 30);
-  // feather (right)
-  const fy = groundY - (H - feather.y)*scale;
-  ctx.fillStyle = '#fff'; ctx.strokeStyle='#aaaaaa'; ctx.lineWidth = 2;
-  ctx.beginPath();
-  ctx.moveTo(550, fy-15); ctx.quadraticCurveTo(560, fy, 555, fy+15);
-  ctx.quadraticCurveTo(545, fy, 550, fy-15);
-  ctx.fill(); ctx.stroke();
-  ctx.fillStyle = '#dddddd'; ctx.fillText('Feather', 525, 30);
-}
-
-document.getElementById('rho').oninput = e=>{rho=+e.target.value/10; document.getElementById('vR').textContent=rho.toFixed(1);};
-document.getElementById('h').oninput = e=>{H=+e.target.value; document.getElementById('vH').textContent=H+' m'; reset(); draw();};
-document.getElementById('drop').onclick = ()=>{ if(!running){ reset(); running=true; step();} };
-document.getElementById('reset').onclick = ()=>{ running=false; reset(); draw(); };
-draw();
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Free Fall</title>
+<link rel="stylesheet" href="../engine/concept.css">
+<script type="importmap">{"imports":{"three":"../../simulations/lib/three/three.module.min.js","three/addons/":"../../simulations/lib/three/addons/"}}</script>
+</head><body>
+<script type="module">
+import { runSim, V3, MAT, mesh, std, THREE } from '../engine/concept.js';
+// Two objects dropped from a tower (metres). Quadratic air drag optional.
+const OBJ = { ball: { name: 'Steel ball', m: 1.0, r: 0.08, cd: 0.47, col: 0x9ca3af }, basket: { name: 'Basketball', m: 0.6, r: 0.12, cd: 0.47, col: 0xea580c }, paper: { name: 'Crumpled paper', m: 0.01, r: 0.05, cd: 0.8, col: 0xf5f5f4 }, feather: { name: 'Feather (flat card)', m: 0.004, r: 0.07, cd: 1.3, col: 0xfde68a } };
+let tower, bodies;
+runSim({
+  title: 'Free Fall', subtitle: 'Drop two objects together — with air they fall differently, without air they land together.',
+  stage: 'field', camera: { pos: [22, 20, 38], target: [0, 16, 0] }, sun: { pos: [20, 60, 20], size: 40, far: 200 },
+  controls: [
+    { id: 'h', label: 'Drop height', min: 5, max: 45, step: 1, value: 30, unit: 'm', reset: true },
+    { id: 'a', label: 'Object A', type: 'select', value: 'ball', options: Object.entries(OBJ).map(([value, o]) => ({ value, label: o.name })), reset: true },
+    { id: 'b', label: 'Object B', type: 'select', value: 'paper', options: Object.entries(OBJ).map(([value, o]) => ({ value, label: o.name })), reset: true },
+    { id: 'air', label: 'Air resistance', type: 'check', value: true },
+    { id: 'g', label: 'Gravity', min: 1.6, max: 25, step: 0.1, value: 9.8, unit: 'm/s²' },
+  ],
+  readouts: [{ id: 'va', label: 'Speed A' }, { id: 'vb', label: 'Speed B' }, { id: 'ta', label: 'A lands at' }, { id: 'tb', label: 'B lands at' }, { id: 'vta', label: 'Terminal speed A' }, { id: 'vtb', label: 'Terminal speed B' }],
+  graph: { title: 'Speed against time', series: [{ name: 'A (m/s)', color: '#22d3ee' }, { name: 'B (m/s)', color: '#f59e0b' }], max: 900 },
+  info: 'Without air, every object falls with the same acceleration g — Galileo’s result — so both land together whatever their mass. Air drag grows with speed squared and with the object’s area; a light, wide object quickly reaches terminal speed, where drag balances its weight.',
+  formulas: ['F_drag = ½ ρ C_d A v²', 'v_t = √(2 m g / (ρ C_d A))', 'h = ½ g t²  (no air)'],
+  setup(ctx) {
+    tower = new THREE.Group();
+    const conc = std(0xb8b2a6, { roughness: 0.9 });
+    [[-2, -2], [2, -2], [-2, 2], [2, 2]].forEach(([x, z]) => { const p = mesh(new THREE.BoxGeometry(0.5, 1, 0.5), conc); p.position.set(x - 3, 0, z); tower.add(p); });
+    ctx.plat = mesh(new THREE.BoxGeometry(6, 0.4, 5.5), conc); tower.add(ctx.plat);
+    const rail = mesh(new THREE.BoxGeometry(6, 1, 0.1), MAT.steel); rail.position.set(0, 0.7, 2.7); ctx.rail = rail; tower.add(rail);
+    ctx.scene.add(tower);
+    for (let y = 5; y <= 45; y += 5) { const m = mesh(new THREE.BoxGeometry(0.6, 0.04, 0.04), MAT.white, false); m.position.set(1.2, y, 2.8); ctx.scene.add(m); ctx.label(`${y} m`, () => V3(1.9, y + 0.3, 2.8)); }
+    const mat = mesh(new THREE.BoxGeometry(6, 0.15, 5), std(0x1e3a8a)); mat.position.set(1.2, 0.08, 0); ctx.scene.add(mat);
+    bodies = ['a', 'b'].map((k, i) => { const m = mesh(new THREE.SphereGeometry(1, 20, 14), std(0xffffff)); ctx.scene.add(m); const t = ctx.trail(i ? 0xf59e0b : 0x22d3ee, 800); ctx.scene.add(t); return { k, m, t, y: 0, v: 0, land: null, x: i ? 2.2 : 0.2 }; });
+    bodies.forEach((b) => ctx.label(b.k.toUpperCase(), () => b.m.position.clone().add(V3(0, 0.8, 0))));
+  },
+  reset(ctx) {
+    const h = ctx.v.h;
+    tower.children.slice(0, 4).forEach((p) => { p.scale.y = h; p.position.y = h / 2; });
+    ctx.plat.position.set(-0.8, h + 0.2, 0); ctx.rail.position.set(-0.8, h + 0.9, 2.7);
+    bodies.forEach((b) => { const o = OBJ[ctx.v[b.k]]; b.o = o; b.y = h + 0.4 + o.r * 3; b.v = 0; b.land = null; b.t.clear(); b.m.material.color.set(o.col); b.m.scale.setScalar(o.r * 3); place(b); });
+  },
+  step(ctx, dt) {
+    const rho = 1.2, g = ctx.v.g;
+    bodies.forEach((b) => {
+      if (b.land != null) return;
+      const A = Math.PI * b.o.r * b.o.r, k = ctx.v.air ? 0.5 * rho * b.o.cd * A / b.o.m : 0;
+      b.v += (g - k * b.v * b.v) * dt; b.y -= b.v * dt;
+      if (b.y <= b.o.r * 3 + 0.15) { b.y = b.o.r * 3 + 0.15; b.land = ctx.t; b.v = 0; }
+    });
+    ctx.sc = (ctx.sc || 0) + 1; if (ctx.sc % 12 === 0) { ctx.plot(ctx.t, bodies.map((b) => b.v)); bodies.forEach((b) => b.t.push(b.m.position)); }
+    if (bodies.every((b) => b.land != null)) ctx.pause();
+  },
+  frame() { bodies.forEach(place); },
+  ui(ctx) {
+    const [a, b] = bodies, vt = (q) => (ctx.v.air ? Math.sqrt(2 * q.o.m * ctx.v.g / (1.2 * q.o.cd * Math.PI * q.o.r * q.o.r)) : Infinity);
+    ctx.readout('va', `${a.v.toFixed(2)} m/s`); ctx.readout('vb', `${b.v.toFixed(2)} m/s`);
+    ctx.readout('ta', a.land != null ? `${a.land.toFixed(2)} s` : '—'); ctx.readout('tb', b.land != null ? `${b.land.toFixed(2)} s` : '—');
+    ctx.readout('vta', Number.isFinite(vt(a)) ? `${vt(a).toFixed(1)} m/s` : 'none (no air)'); ctx.readout('vtb', Number.isFinite(vt(b)) ? `${vt(b).toFixed(1)} m/s` : 'none (no air)');
+  },
+});
+function place(b) { b.m.position.set(b.x - 1, b.y, 1.4); }
 </script>
 </body></html>

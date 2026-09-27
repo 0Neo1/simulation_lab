@@ -1,72 +1,75 @@
 <!DOCTYPE html>
-<html lang="en"><head><meta charset="UTF-8"><title>Traveling Wave</title><link rel="stylesheet" href="../styles.css"></head>
-<body>
-<header><a href="../index.html"><h1>Traveling Wave</h1></a><p>See amplitude, wavelength, and frequency in action.</p></header>
-<main>
-<a class="back-link" href="../index.html">&larr; All simulations</a>
-<div class="sim-container">
-  <div>
-    <div class="canvas-wrap"><canvas id="cv" width="800" height="400"></canvas></div>
-    <div class="info-box">
-      <h3>The Physics</h3>
-      <p>A traveling wave: <em>y(x,t) = A sin(kx − ωt)</em>. Wave speed <em>v = ω/k = λf</em>.</p>
-      <div class="formula">v = f λ &nbsp;&nbsp; T = 1/f &nbsp;&nbsp; k = 2π/λ &nbsp;&nbsp; ω = 2πf</div>
-    </div>
-  </div>
-  <div class="controls">
-    <h3>Controls</h3>
-    <div class="control-row"><label>Amplitude <span class="val" id="vA">60</span></label><input type="range" id="A" min="10" max="100" value="60"></div>
-    <div class="control-row"><label>Wavelength <span class="val" id="vL">200</span></label><input type="range" id="L" min="50" max="400" value="200"></div>
-    <div class="control-row"><label>Frequency <span class="val" id="vF">1.0 Hz</span></label><input type="range" id="f" min="2" max="40" value="10"></div>
-    <div class="control-row"><label>Direction
-      <select id="dir"><option value="1">Right</option><option value="-1">Left</option></select></label></div>
-    <div class="btn-row"><button id="run">Start</button><button class="secondary" id="pause">Pause</button></div>
-    <div class="readouts">
-      <div>v: <span id="rV">0</span></div>
-      <div>T: <span id="rT">0</span></div>
-    </div>
-  </div>
-</div>
-</main>
-<script>
-const cv=document.getElementById('cv'), ctx=cv.getContext('2d');
-let A=60, L=200, f=1.0, dir=1, t=0, running=false;
-function draw(){
-  ctx.clearRect(0,0,cv.width,cv.height);
-  ctx.fillStyle='#0a0a0a'; ctx.fillRect(0,0,cv.width,cv.height);
-  // axis
-  const midY = 200;
-  ctx.strokeStyle='#bbbbbb'; ctx.beginPath(); ctx.moveTo(0,midY); ctx.lineTo(cv.width,midY); ctx.stroke();
-  // wave
-  ctx.strokeStyle='#ffffff'; ctx.lineWidth=3;
-  ctx.beginPath();
-  const k = 2*Math.PI/L, w = 2*Math.PI*f;
-  for(let x=0;x<=cv.width;x++){
-    const y = midY - A*Math.sin(k*x - dir*w*t);
-    if(x===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
-  }
-  ctx.stroke();
-  // crest markers
-  for(let x=0;x<=cv.width;x++){
-    const phase = k*x - dir*w*t;
-    if(Math.abs(((phase%(2*Math.PI))+2*Math.PI)%(2*Math.PI) - Math.PI/2) < 0.05){
-      ctx.fillStyle='#888888'; ctx.beginPath(); ctx.arc(x, midY-A, 5, 0, 2*Math.PI); ctx.fill();
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Wave Properties</title>
+<link rel="stylesheet" href="../engine/concept.css">
+<script type="importmap">{"imports":{"three":"../../simulations/lib/three/three.module.min.js","three/addons/":"../../simulations/lib/three/addons/"}}</script>
+</head><body>
+<script type="module">
+import { runSim, V3, MAT, mesh, std, glow, THREE } from '../engine/concept.js';
+// A travelling wave on a row of beads (transverse) or a stretched slinky (longitudinal).
+const N = 90, X0 = -9, X1 = 9;
+let beads, rings, cord, tracer, marks, lamArrow, lamTag;
+const bx = (i) => X0 + (i / (N - 1)) * (X1 - X0);
+runSim({
+  title: 'Wave Properties', subtitle: 'Particles only oscillate in place — the wave pattern is what travels, at v = fλ.',
+  stage: 'studio', camera: { pos: [0, 6.5, 23], target: [0, 2.3, 0] }, stageOpts: { floorSize: 22, gridDiv: 22 },
+  autoplay: true,
+  controls: [
+    { id: 'type', label: 'Wave type', type: 'select', value: 'trans', options: [{ value: 'trans', label: 'Transverse (beads on a string)' }, { value: 'long', label: 'Longitudinal (slinky)' }] },
+    { id: 'A', label: 'Amplitude', min: 0.1, max: 1.5, step: 0.05, value: 0.8, unit: 'm' },
+    { id: 'lam', label: 'Wavelength λ', min: 2, max: 12, step: 0.1, value: 6, unit: 'm' },
+    { id: 'f', label: 'Frequency f', min: 0.1, max: 2, step: 0.05, value: 0.5, unit: 'Hz' },
+    { id: 'dir', label: 'Direction', type: 'select', value: 1, options: [{ value: 1, label: 'Travels right →' }, { value: -1, label: '← Travels left' }] },
+  ],
+  readouts: [{ id: 'v', label: 'Wave speed v = fλ' }, { id: 'T', label: 'Period T = 1/f' }, { id: 'k', label: 'Wave number k' }, { id: 'w', label: 'ω = 2πf' }, { id: 'y', label: 'Red bead displacement' }, { id: 'vy', label: 'Red bead velocity' }],
+  graph: { title: 'Red bead displacement vs time', series: [{ name: 'y (m)', color: '#ef4444' }], max: 600, window: 8 },
+  info: 'Follow the red bead: it just moves up and down (or back and forth for a longitudinal wave) around its own rest position, while the crests march along. In one period T the wave moves forward exactly one wavelength, which is why v = λ / T = fλ. Doubling the frequency with the same speed would halve the wavelength.',
+  formulas: ['y(x, t) = A sin(kx − ωt)', 'v = f λ', 'k = 2π / λ,  ω = 2π f'],
+  setup(ctx) {
+    beads = new THREE.InstancedMesh(new THREE.SphereGeometry(0.16, 16, 10), std(0x38bdf8, { metalness: 0.2 }), N);
+    beads.castShadow = true;
+    cord = new THREE.Line(new THREE.BufferGeometry().setFromPoints(Array.from({ length: N }, () => V3())), new THREE.LineBasicMaterial({ color: 0x94a3b8 }));
+    rings = new THREE.InstancedMesh(new THREE.TorusGeometry(0.7, 0.05, 8, 28), std(0xcbd5e1, { metalness: 0.9, roughness: 0.3 }), N);
+    tracer = mesh(new THREE.SphereGeometry(0.24, 20, 14), std(0xef4444, { emissive: 0xef4444, emissiveIntensity: 0.4 }));
+    [X0 - 0.4, X1 + 0.4].forEach((x) => { const p = mesh(new THREE.CylinderGeometry(0.1, 0.1, 5, 12), MAT.steel); p.position.set(x, 2.5, 0); ctx.scene.add(p); });
+    const rest = mesh(new THREE.BoxGeometry(X1 - X0, 0.02, 0.02), glow(0x475569)); rest.position.set(0, 2.5, 0);
+    lamArrow = new THREE.Group();
+    const lm = glow(0xfde68a); const bar = mesh(new THREE.BoxGeometry(1, 0.04, 0.04), lm); const c1 = mesh(new THREE.BoxGeometry(0.04, 0.4, 0.04), lm), c2 = c1.clone();
+    lamArrow.add(bar, c1, c2); lamArrow.bar = bar; lamArrow.c = [c1, c2];
+    ctx.scene.add(beads, cord, rings, tracer, rest, lamArrow);
+    lamTag = ctx.label('λ', () => lamArrow.visible ? lamArrow.position.clone().add(V3(0, 0.25, 0)) : null, 'big');
+    ctx.label('red bead', () => tracer.position.clone().add(V3(0, 0.45, 0)));
+  },
+  step(ctx) { ctx.n = (ctx.n || 0) + 1; if (ctx.n % 10 === 0) ctx.plot(ctx.t, [disp(ctx, bx(Math.round(N / 2)))]); },
+  frame(ctx) {
+    const m = new THREE.Matrix4(), q = new THREE.Quaternion().setFromAxisAngle(V3(0, 1, 0), Math.PI / 2), one = V3(1, 1, 1);
+    const trans = ctx.v.type === 'trans';
+    beads.visible = cord.visible = trans; rings.visible = !trans;
+    const pts = [];
+    for (let i = 0; i < N; i++) {
+      const x = bx(i), d = disp(ctx, x);
+      const p = trans ? V3(x, 2.5 + d, 0) : V3(x + d * 0.5, 2.5, 0);
+      pts.push(p);
+      m.compose(p, trans ? new THREE.Quaternion() : q, one);
+      (trans ? beads : rings).setMatrixAt(i, m);
     }
-  }
-  document.getElementById('rV').textContent=(L*f).toFixed(1)+' px/s';
-  document.getElementById('rT').textContent=(1/f).toFixed(2)+' s';
-}
-function step(){ if(!running)return; t+=0.02; draw(); requestAnimationFrame(step); }
-['A','L','f','dir'].forEach(id=>document.getElementById(id).oninput=()=>{
-  A=+document.getElementById('A').value; L=+document.getElementById('L').value;
-  f=+document.getElementById('f').value/10; dir=+document.getElementById('dir').value;
-  document.getElementById('vA').textContent=A;
-  document.getElementById('vL').textContent=L;
-  document.getElementById('vF').textContent=f.toFixed(1)+' Hz';
-  if(!running) draw();
+    beads.instanceMatrix.needsUpdate = true; rings.instanceMatrix.needsUpdate = true;
+    cord.geometry.setFromPoints(pts);
+    const mid = Math.round(N / 2); tracer.position.copy(pts[mid]); if (!trans) tracer.position.y = 3.3;
+    // mark one wavelength between two neighbouring crests (or compressions)
+    const k = 2 * Math.PI / ctx.v.lam, w = 2 * Math.PI * ctx.v.f * ctx.v.dir;
+    let xc = (Math.PI / 2 + w * ctx.t) / k; xc = X0 + ((((xc - X0) % ctx.v.lam) + ctx.v.lam) % ctx.v.lam);
+    const L = ctx.v.lam;
+    lamArrow.visible = xc + L <= X1;
+    if (lamArrow.visible) { lamArrow.position.set(xc + L / 2, 2.5 + ctx.v.A + 0.5, 0); lamArrow.bar.scale.x = L; lamArrow.c[0].position.x = -L / 2; lamArrow.c[1].position.x = L / 2; }
+  },
+  ui(ctx) {
+    const { f, lam } = ctx.v, x = bx(Math.round(N / 2));
+    ctx.readout('v', `${(f * lam).toFixed(2)} m/s`); ctx.readout('T', `${(1 / f).toFixed(2)} s`);
+    ctx.readout('k', `${(2 * Math.PI / lam).toFixed(3)} rad/m`); ctx.readout('w', `${(2 * Math.PI * f).toFixed(3)} rad/s`);
+    ctx.readout('y', `${disp(ctx, x).toFixed(2)} m`);
+    const e = 1e-3; ctx.readout('vy', `${((disp(ctx, x, ctx.t + e) - disp(ctx, x)) / e).toFixed(2)} m/s`);
+  },
 });
-document.getElementById('run').onclick=()=>{if(!running){running=true; step();}};
-document.getElementById('pause').onclick=()=>running=false;
-draw();
+function disp(ctx, x, t = ctx.t) { const k = 2 * Math.PI / ctx.v.lam, w = 2 * Math.PI * ctx.v.f; return ctx.v.A * Math.sin(k * x - ctx.v.dir * w * t); }
 </script>
 </body></html>

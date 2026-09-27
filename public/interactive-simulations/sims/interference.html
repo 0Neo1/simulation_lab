@@ -1,64 +1,90 @@
 <!DOCTYPE html>
-<html lang="en"><head><meta charset="UTF-8"><title>Two-Source Interference</title><link rel="stylesheet" href="../styles.css"></head>
-<body>
-<header><a href="../index.html"><h1>Two-Source Interference</h1></a><p>Watch waves combine in 2D.</p></header>
-<main>
-<a class="back-link" href="../index.html">&larr; All simulations</a>
-<div class="sim-container">
-  <div>
-    <div class="canvas-wrap"><canvas id="cv" width="800" height="500"></canvas></div>
-    <div class="info-box">
-      <h3>The Physics</h3>
-      <p>Two coherent sources produce alternating regions of constructive (bright) and destructive (dark) interference.</p>
-      <div class="formula">Constructive: Δr = nλ<br>Destructive: Δr = (n+½)λ</div>
-    </div>
-  </div>
-  <div class="controls">
-    <h3>Controls</h3>
-    <div class="control-row"><label>Wavelength λ <span class="val" id="vL">40</span></label><input type="range" id="L" min="20" max="100" value="40"></div>
-    <div class="control-row"><label>Source separation <span class="val" id="vD">120</span></label><input type="range" id="D" min="40" max="300" value="120"></div>
-    <div class="btn-row"><button id="run">Start</button><button class="secondary" id="pause">Pause</button></div>
-  </div>
-</div>
-</main>
-<script>
-const cv=document.getElementById('cv'), ctx=cv.getContext('2d');
-let L=40, D=120, t=0, running=false;
-const W=cv.width, H=cv.height;
-const img = ctx.createImageData(W, H);
-
-function draw(){
-  const w = 2*Math.PI/L;
-  const s1x = W/2, s1y = H/2 - D/2;
-  const s2x = W/2, s2y = H/2 + D/2;
-  const data = img.data;
-  for(let y=0; y<H; y+=2){
-    for(let x=0; x<W; x+=2){
-      const r1 = Math.hypot(x-s1x, y-s1y);
-      const r2 = Math.hypot(x-s2x, y-s2y);
-      const v = Math.sin(w*r1 - 5*t) + Math.sin(w*r2 - 5*t);
-      // map v ∈ [-2, 2] to greyscale 0–255
-      const g = Math.floor(((v + 2) / 4) * 255);
-      for(let dy=0;dy<2;dy++) for(let dx=0;dx<2;dx++){
-        const idx = ((y+dy)*W + (x+dx))*4;
-        data[idx]   = g;
-        data[idx+1] = g;
-        data[idx+2] = g;
-        data[idx+3] = 255;
-      }
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Wave Interference</title>
+<link rel="stylesheet" href="../engine/concept.css">
+<script type="importmap">{"imports":{"three":"../../simulations/lib/three/three.module.min.js","three/addons/":"../../simulations/lib/three/addons/"}}</script>
+</head><body>
+<script type="module">
+import { runSim, V3, MAT, mesh, std, THREE } from '../engine/concept.js';
+// A ripple tank: two dippers make circular waves that add up on the water surface.
+const S = 20, SEG = 150;
+let water, pos, col, dip = [], probe, lines = [], base;
+runSim({
+  title: 'Wave Interference', subtitle: 'Two coherent sources: crests meeting crests build up, crests meeting troughs cancel.',
+  stage: 'studio', camera: { pos: [0, 17, 17], target: [0, 0, 1] }, stageOpts: { floorY: -1.2, floorSize: 26 },
+  autoplay: true, dt: 1 / 60,
+  controls: [
+    { id: 'd', label: 'Source separation d', min: 1, max: 10, step: 0.1, value: 4, unit: 'cm' },
+    { id: 'lam', label: 'Wavelength λ', min: 0.8, max: 4, step: 0.05, value: 1.6, unit: 'cm' },
+    { id: 'phase', label: 'Phase difference', min: 0, max: 360, step: 15, value: 0, unit: '°' },
+    { id: 'px', label: 'Probe x', min: -9, max: 9, step: 0.1, value: 3, unit: 'cm' },
+    { id: 'py', label: 'Probe distance', min: 1, max: 18, step: 0.1, value: 12, unit: 'cm' },
+    { id: 'nodal', label: 'Show nodal lines (destructive)', type: 'check', value: true },
+  ],
+  readouts: [{ id: 'r1', label: 'Path from S₁' }, { id: 'r2', label: 'Path from S₂' }, { id: 'dp', label: 'Path difference Δ' }, { id: 'dl', label: 'Δ / λ' }, { id: 'amp', label: 'Resulting amplitude' }, { id: 'kind', label: 'At the probe' }],
+  graph: { title: 'Surface height at the probe', series: [{ name: 'S₁ alone', color: '#60a5fa' }, { name: 'S₂ alone', color: '#f472b6' }, { name: 'sum', color: '#fde047' }], max: 360, window: 6, ymin: -2.2, ymax: 2.2 },
+  info: 'Each dipper sends out circular ripples of the same wavelength. At any point the water height is the sum of the two ripples (superposition). Where the path difference is a whole number of wavelengths the crests arrive together and the water heaves strongly (constructive). Where it is a half-number of wavelengths a crest always meets a trough and the water stays nearly still (destructive). Move the probe to test it.',
+  formulas: ['Constructive:  Δ = nλ', 'Destructive:  Δ = (n + ½)λ', 'Nodal lines:  d sin θ = (n + ½)λ'],
+  setup(ctx) {
+    base = mesh(new THREE.BoxGeometry(S + 1.2, 1, S + 1.2), std(0x1e3a5f, { roughness: 0.3 })); base.position.y = -0.9;
+    const rim = new THREE.Group();
+    [[0, S / 2 + 0.3, S + 1.2, 0.6], [0, -S / 2 - 0.3, S + 1.2, 0.6], [S / 2 + 0.3, 0, 0.6, S], [-S / 2 - 0.3, 0, 0.6, S]].forEach(([x, z, w, dd]) => { const b = mesh(new THREE.BoxGeometry(w, 1.1, dd), MAT.darkWood); b.position.set(x, -0.05, z); rim.add(b); });
+    const geo = new THREE.PlaneGeometry(S, S, SEG, SEG); geo.rotateX(-Math.PI / 2);
+    pos = geo.attributes.position; col = new Float32Array(pos.count * 3); geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
+    water = mesh(geo, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.15, metalness: 0.1 }), false);
+    ctx.scene.add(base, rim, water);
+    for (let i = 0; i < 2; i++) {
+      const g = new THREE.Group();
+      const rod = mesh(new THREE.CylinderGeometry(0.06, 0.06, 3, 8), MAT.steel); rod.position.y = 1.5;
+      const tip = mesh(new THREE.SphereGeometry(0.28, 20, 14), i ? std(0xf472b6) : std(0x60a5fa));
+      g.add(rod, tip); ctx.scene.add(g); dip.push(g);
     }
-  }
-  ctx.putImageData(img,0,0);
-  // sources
-  ctx.fillStyle='#fff'; ctx.strokeStyle='#000'; ctx.lineWidth=2;
-  ctx.beginPath(); ctx.arc(s1x,s1y,7,0,2*Math.PI); ctx.fill(); ctx.stroke();
-  ctx.beginPath(); ctx.arc(s2x,s2y,7,0,2*Math.PI); ctx.fill(); ctx.stroke();
+    const bar = mesh(new THREE.BoxGeometry(12, 0.25, 0.4), MAT.darkSteel); bar.position.set(0, 3.1, -S / 2 + 1); ctx.scene.add(bar);
+    probe = mesh(new THREE.ConeGeometry(0.3, 1, 16), std(0xfde047, { emissive: 0xfde047, emissiveIntensity: 0.4 })); probe.rotation.x = Math.PI; ctx.scene.add(probe);
+    for (let i = 0; i < 2; i++) { const l = new THREE.Line(new THREE.BufferGeometry().setFromPoints([V3(), V3()]), new THREE.LineDashedMaterial({ color: i ? 0xf472b6 : 0x60a5fa, dashSize: 0.3, gapSize: 0.2 })); ctx.scene.add(l); lines.push(l); }
+    ctx.label('S₁', () => dip[0].position.clone().add(V3(0, 0.8, 0)));
+    ctx.label('S₂', () => dip[1].position.clone().add(V3(0, 0.8, 0)));
+    ctx.label('probe', () => probe.position.clone().add(V3(0, 1, 0)));
+  },
+  step(ctx) {
+    const h = heights(ctx, ctx.v.px, -S / 2 + 1 + ctx.v.py);
+    ctx.plot(ctx.t, [h.a, h.b, h.a + h.b]);
+  },
+  frame(ctx) {
+    const { d, lam } = ctx.v, zs = -S / 2 + 1;
+    dip[0].position.set(-d / 2, 0, zs); dip[1].position.set(d / 2, 0, zs);
+    const k = 2 * Math.PI / lam, w = 2 * Math.PI * 1.0, ph = ctx.v.phase * Math.PI / 180, t = ctx.t;
+    const c = new THREE.Color();
+    for (let i = 0; i < pos.count; i++) {
+      const x = pos.getX(i), z = pos.getZ(i);
+      const r1 = Math.hypot(x + d / 2, z - zs), r2 = Math.hypot(x - d / 2, z - zs);
+      const a1 = 1 / Math.sqrt(1 + r1 * 0.35), a2 = 1 / Math.sqrt(1 + r2 * 0.35);
+      const y = a1 * Math.sin(w * t - k * r1) + a2 * Math.sin(w * t - k * r2 - ph);
+      pos.setY(i, y * 0.2);
+      // colour: deep blue troughs, bright crests; nodal lines highlighted
+      const env = Math.abs(Math.cos((k * (r2 - r1) + ph) / 2));
+      c.setHSL(0.56, 0.75, 0.22 + 0.22 * (y + 1.4) / 2.8);
+      if (ctx.v.nodal && env < 0.07) c.lerp(new THREE.Color(0xff5b5b), 0.75 * (1 - env / 0.07));
+      col[i * 3] = c.r; col[i * 3 + 1] = c.g; col[i * 3 + 2] = c.b;
+    }
+    pos.needsUpdate = true; water.geometry.attributes.color.needsUpdate = true; water.geometry.computeVertexNormals();
+    const pz = zs + ctx.v.py, ph0 = heights(ctx, ctx.v.px, pz);
+    probe.position.set(ctx.v.px, (ph0.a + ph0.b) * 0.2 + 0.8, pz);
+    lines[0].geometry.setFromPoints([V3(-d / 2, 0.3, zs), V3(ctx.v.px, 0.3, pz)]); lines[1].geometry.setFromPoints([V3(d / 2, 0.3, zs), V3(ctx.v.px, 0.3, pz)]);
+    lines.forEach((l) => l.computeLineDistances());
+  },
+  ui(ctx) {
+    const { d, lam, px, py } = ctx.v, ph = ctx.v.phase / 360;
+    const r1 = Math.hypot(px + d / 2, py), r2 = Math.hypot(px - d / 2, py), D = r2 - r1, n = D / lam + ph;
+    const amp = 2 * Math.abs(Math.cos(Math.PI * n));
+    ctx.readout('r1', `${r1.toFixed(2)} cm`); ctx.readout('r2', `${r2.toFixed(2)} cm`); ctx.readout('dp', `${Math.abs(D).toFixed(2)} cm`);
+    ctx.readout('dl', `${(Math.abs(D) / lam).toFixed(2)}`); ctx.readout('amp', `${(amp / 2 * 100).toFixed(0)} % of max`);
+    ctx.readout('kind', amp > 1.7 ? 'Constructive' : amp < 0.3 ? 'Destructive' : 'Partial');
+  },
+});
+function heights(ctx, x, z) {
+  const { d, lam } = ctx.v, zs = -S / 2 + 1, k = 2 * Math.PI / lam, w = 2 * Math.PI, ph = ctx.v.phase * Math.PI / 180;
+  const r1 = Math.hypot(x + d / 2, z - zs), r2 = Math.hypot(x - d / 2, z - zs);
+  return { a: Math.sin(w * ctx.t - k * r1), b: Math.sin(w * ctx.t - k * r2 - ph) };
 }
-function step(){ if(!running) return; t+=0.05; draw(); requestAnimationFrame(step); }
-document.getElementById('L').oninput=e=>{L=+e.target.value; document.getElementById('vL').textContent=L; if(!running)draw();};
-document.getElementById('D').oninput=e=>{D=+e.target.value; document.getElementById('vD').textContent=D; if(!running)draw();};
-document.getElementById('run').onclick=()=>{if(!running){running=true; step();}};
-document.getElementById('pause').onclick=()=>running=false;
-draw();
 </script>
 </body></html>

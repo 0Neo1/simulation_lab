@@ -1,92 +1,99 @@
 <!DOCTYPE html>
-<html lang="en"><head><meta charset="UTF-8"><title>Reflection &amp; Refraction</title><link rel="stylesheet" href="../styles.css"></head>
-<body>
-<header><a href="../index.html"><h1>Reflection &amp; Refraction</h1></a><p>Snell's law and total internal reflection.</p></header>
-<main>
-<a class="back-link" href="../index.html">&larr; All simulations</a>
-<div class="sim-container">
-  <div>
-    <div class="canvas-wrap"><canvas id="cv" width="800" height="500"></canvas></div>
-    <div class="info-box">
-      <h3>The Physics</h3>
-      <p>Light bends when it crosses between media of different refractive index. The reflected ray makes an equal angle to the normal.</p>
-      <div class="formula">n₁ sin θ₁ = n₂ sin θ₂</div>
-      <p>If n₁ &gt; n₂ and θ₁ &gt; θ_c = arcsin(n₂/n₁), all light reflects (TIR).</p>
-    </div>
-  </div>
-  <div class="controls">
-    <h3>Controls</h3>
-    <div class="control-row"><label>Angle of incidence <span class="val" id="vT">30°</span></label><input type="range" id="theta" min="0" max="89" value="30"></div>
-    <div class="control-row"><label>n₁ (top) <span class="val" id="vN1">1.00</span></label><input type="range" id="n1" min="100" max="250" value="100"></div>
-    <div class="control-row"><label>n₂ (bottom) <span class="val" id="vN2">1.50</span></label><input type="range" id="n2" min="100" max="250" value="150"></div>
-    <div class="readouts">
-      <div>θ_refracted: <span id="rR">0°</span></div>
-      <div>Critical θ: <span id="rC">—</span></div>
-    </div>
-  </div>
-</div>
-</main>
-<script>
-const cv=document.getElementById('cv'), ctx=cv.getContext('2d');
-const cx=400, cy=250;
-let theta=30, n1=1.0, n2=1.5;
-
-function draw(){
-  ctx.clearRect(0,0,cv.width,cv.height);
-  // top medium
-  ctx.fillStyle = '#1a1a1a'; ctx.fillRect(0,0,cv.width,cy);
-  ctx.fillStyle = '#ffffff44'; ctx.fillRect(0,cy,cv.width,cv.height-cy);
-  ctx.strokeStyle='#dddddd'; ctx.beginPath(); ctx.moveTo(0,cy); ctx.lineTo(cv.width,cy); ctx.stroke();
-  // labels
-  ctx.fillStyle='#dddddd'; ctx.font='14px sans-serif';
-  ctx.fillText(`n₁ = ${n1.toFixed(2)}`, 20, 30);
-  ctx.fillText(`n₂ = ${n2.toFixed(2)}`, 20, cy+25);
-  // normal
-  ctx.strokeStyle='#888'; ctx.setLineDash([4,4]);
-  ctx.beginPath(); ctx.moveTo(cx, 50); ctx.lineTo(cx, 450); ctx.stroke();
-  ctx.setLineDash([]);
-  // incident ray
-  const t = theta*Math.PI/180;
-  const ix = cx - 200*Math.sin(t), iy = cy - 200*Math.cos(t);
-  drawRay(ix, iy, cx, cy, '#888888');
-  // reflected
-  const rx = cx + 200*Math.sin(t), ry = cy - 200*Math.cos(t);
-  drawRay(cx, cy, rx, ry, '#aaaaaa');
-  // refracted (Snell)
-  const sin2 = n1*Math.sin(t)/n2;
-  if(Math.abs(sin2) <= 1){
-    const t2 = Math.asin(sin2);
-    const ex = cx + 250*Math.sin(t2), ey = cy + 250*Math.cos(t2);
-    drawRay(cx, cy, ex, ey, '#ffffff');
-    document.getElementById('rR').textContent = (t2*180/Math.PI).toFixed(1)+'°';
-  } else {
-    document.getElementById('rR').textContent = 'TIR';
-    ctx.fillStyle = '#888888'; ctx.font='bold 16px sans-serif';
-    ctx.fillText('Total Internal Reflection', 500, 480);
-  }
-  document.getElementById('rC').textContent = n1>n2 ? (Math.asin(n2/n1)*180/Math.PI).toFixed(1)+'°' : '—';
-  // angles
-  ctx.strokeStyle='#888888'; ctx.beginPath(); ctx.arc(cx,cy,40, -Math.PI/2-t, -Math.PI/2); ctx.stroke();
-  ctx.strokeStyle='#aaaaaa'; ctx.beginPath(); ctx.arc(cx,cy,55, -Math.PI/2, -Math.PI/2+t); ctx.stroke();
-  ctx.fillStyle='#888888'; ctx.font='12px sans-serif'; ctx.fillText(`θ₁=${theta}°`, cx-80, cy-20);
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Refraction of Light</title>
+<link rel="stylesheet" href="../engine/concept.css">
+<script type="importmap">{"imports":{"three":"../../simulations/lib/three/three.module.min.js","three/addons/":"../../simulations/lib/three/addons/"}}</script>
+</head><body>
+<script type="module">
+import { runSim, V3, MAT, mesh, std, glow, THREE } from '../engine/concept.js';
+// A laser and a semicircular (D-shaped) block on a protractor. The flat face lies along x
+// through the centre; the block fills z > 0. Angles are measured from the normal (the z axis).
+const BY = -1.5, R = 15;
+let laser, beams = {}, block, blockMat, arcs = [];
+const deg = (r) => (r * 180) / Math.PI, rad = (d) => (d * Math.PI) / 180;
+function beam() {
+  const m = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.22, 1, 10), new THREE.MeshBasicMaterial({ color: 0xff2020, transparent: true, toneMapped: false, depthWrite: false }));
+  const halo = new THREE.Mesh(new THREE.CylinderGeometry(0.6, 0.6, 1, 10), new THREE.MeshBasicMaterial({ color: 0xff4040, transparent: true, opacity: 0.18, toneMapped: false, depthWrite: false, blending: THREE.AdditiveBlending }));
+  m.add(halo); m.halo = halo;
+  m.set = (a, b, I = 1) => { const d = b.clone().sub(a), L = d.length(); m.visible = I > 0.01 && L > 0.01; if (!m.visible) return; m.position.copy(a).add(d.multiplyScalar(0.5)); m.scale.set(1, L, 1); m.quaternion.setFromUnitVectors(V3(0, 1, 0), b.clone().sub(a).normalize()); m.material.opacity = Math.min(1, 0.25 + I); m.halo.material.opacity = 0.18 * I; };
+  return m;
 }
-
-function drawRay(x1,y1,x2,y2,color){
-  ctx.strokeStyle=color; ctx.fillStyle=color; ctx.lineWidth=3;
-  ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(x2,y2); ctx.stroke();
-  // arrow halfway
-  const mx = (x1+x2)/2, my = (y1+y2)/2;
-  const a = Math.atan2(y2-y1,x2-x1);
-  ctx.beginPath();
-  ctx.moveTo(mx+8*Math.cos(a),my+8*Math.sin(a));
-  ctx.lineTo(mx-4*Math.cos(a-0.4),my-4*Math.sin(a-0.4));
-  ctx.lineTo(mx-4*Math.cos(a+0.4),my-4*Math.sin(a+0.4));
-  ctx.closePath(); ctx.fill();
+function fresnel(n1, n2, ti) {
+  const s = (n1 / n2) * Math.sin(ti); if (s >= 1) return 1;
+  const tt = Math.asin(s), ci = Math.cos(ti), ct = Math.cos(tt);
+  const rs = ((n1 * ci - n2 * ct) / (n1 * ci + n2 * ct)) ** 2, rp = ((n1 * ct - n2 * ci) / (n1 * ct + n2 * ci)) ** 2;
+  return (rs + rp) / 2;
 }
-
-document.getElementById('theta').oninput=e=>{theta=+e.target.value; document.getElementById('vT').textContent=theta+'°'; draw();};
-document.getElementById('n1').oninput=e=>{n1=+e.target.value/100; document.getElementById('vN1').textContent=n1.toFixed(2); draw();};
-document.getElementById('n2').oninput=e=>{n2=+e.target.value/100; document.getElementById('vN2').textContent=n2.toFixed(2); draw();};
-draw();
+runSim({
+  title: 'Refraction of Light', subtitle: "Snell's law, partial reflection and total internal reflection with a D-shaped block.",
+  stage: 'bench', camera: { pos: [0, 70, 55], target: [0, -3, 2] },
+  controls: [
+    { id: 'dir', label: 'Laser shines', type: 'select', value: 'in', options: [{ value: 'in', label: 'From air into the block' }, { value: 'out', label: 'From inside the block out into air' }] },
+    { id: 'mat', label: 'Block material', type: 'select', value: 1.5, options: [{ value: 1.33, label: 'Water (n = 1.33)' }, { value: 1.49, label: 'Acrylic (n = 1.49)' }, { value: 1.5, label: 'Crown glass (n = 1.50)' }, { value: 1.65, label: 'Flint glass (n = 1.65)' }, { value: 2.42, label: 'Diamond (n = 2.42)' }] },
+    { id: 'ang', label: 'Angle of incidence', min: 0, max: 89, step: 0.5, value: 35, unit: '°' },
+  ],
+  readouts: [{ id: 'i', label: 'Incidence θ₁' }, { id: 'r', label: 'Refraction θ₂' }, { id: 'c', label: 'Critical angle' }, { id: 'R', label: 'Reflected' }, { id: 'T', label: 'Transmitted' }, { id: 'st', label: 'What happens' }],
+  info: 'Light slows down in glass (v = c / n), so it bends where it crosses the flat face. Going into a denser material it bends towards the normal; coming out it bends away. Some light is always reflected. Shine from inside the block and increase the angle: beyond the critical angle no light can get out and all of it is reflected. This is total internal reflection, the effect optical fibres rely on. The curved face is always met along a radius, so the beam crosses it without bending.',
+  formulas: ['n₁ sin θ₁ = n₂ sin θ₂', 'sin θc = n₂ / n₁  (n₁ > n₂)', 'n = c / v'],
+  formulasPlain: ['n1 sin θ1 = n2 sin θ2', 'sin θc = n2 / n1', 'n = c / v'],
+  setup(ctx) {
+    const disc = mesh(new THREE.CylinderGeometry(28, 28, 0.3, 96), new THREE.MeshStandardMaterial({ map: ctx.canvasTex(1024, 1024, (g) => {
+      g.fillStyle = '#f8f5ea'; g.beginPath(); g.arc(512, 512, 510, 0, 7); g.fill(); g.strokeStyle = '#333'; g.fillStyle = '#333'; g.font = 'bold 26px Arial'; g.textAlign = 'center';
+      for (let a = 0; a < 360; a += 2) { const r = rad(a), L = a % 10 ? 18 : 40; g.lineWidth = a % 10 ? 1.5 : 3; g.beginPath(); g.moveTo(512 + Math.sin(r) * 505, 512 + Math.cos(r) * 505); g.lineTo(512 + Math.sin(r) * (505 - L), 512 + Math.cos(r) * (505 - L)); g.stroke(); if (a % 30 === 0) { const lab = a <= 90 ? a : a <= 180 ? 180 - a : a <= 270 ? a - 180 : 360 - a; g.fillText(String(90 - lab), 512 + Math.sin(r) * 440, 520 + Math.cos(r) * 440); } }
+      g.setLineDash([12, 10]); g.lineWidth = 2; g.beginPath(); g.moveTo(512, 10); g.lineTo(512, 1014); g.stroke(); g.beginPath(); g.moveTo(10, 512); g.lineTo(1014, 512); g.stroke();
+    }), roughness: 0.8 }), false);
+    disc.position.y = -2.85; ctx.scene.add(disc);
+    const shape = new THREE.Shape(); shape.absarc(0, 0, R, 0, Math.PI, false); shape.lineTo(R, 0);
+    const geo = new THREE.ExtrudeGeometry(shape, { depth: 3, bevelEnabled: false, curveSegments: 64 }); geo.rotateX(Math.PI / 2);
+    blockMat = new THREE.MeshPhysicalMaterial({ color: 0xcfe8f5, roughness: 0.05, clearcoat: 1, transparent: true, opacity: 0.4, ior: 1.5, side: THREE.DoubleSide, depthWrite: false });
+    block = new THREE.Mesh(geo, blockMat); block.add(new THREE.LineSegments(new THREE.EdgesGeometry(geo, 30), new THREE.LineBasicMaterial({ color: 0x7dd3fc, transparent: true, opacity: 0.8 }))); ctx.scene.add(block);
+    laser = new THREE.Group();
+    const body = mesh(new THREE.CylinderGeometry(1.1, 1.1, 10, 24), std(0x1e293b, { metalness: 0.7 })); body.rotation.x = Math.PI / 2; body.position.z = -5;
+    const tip = mesh(new THREE.CylinderGeometry(0.6, 1.1, 1.2, 24), MAT.steel); tip.rotation.x = Math.PI / 2; tip.position.z = 0.4;
+    const led = mesh(new THREE.SphereGeometry(0.3, 12, 8), glow(0xff3030)); led.position.set(0, 1.1, -7);
+    laser.add(body, tip, led); ctx.scene.add(laser);
+    ['inc', 'refl', 'refr', 'exitIn'].forEach((k) => { beams[k] = beam(); ctx.scene.add(beams[k]); });
+    for (let i = 0; i < 2; i++) { const a = new THREE.Line(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ color: i ? 0x22d3ee : 0xfbbf24 })); arcs.push(a); ctx.scene.add(a); }
+    ctx.label('normal', () => V3(0, BY, -26));
+    ctx.label('laser', () => laser.position.clone().add(V3(0, 3, 0)));
+    ctx.tagI = ctx.label('θ₁', () => ctx.pI); ctx.tagR = ctx.label('θ₂', () => ctx.pR);
+  },
+  frame(ctx) {
+    const n = +ctx.v.mat, into = ctx.v.dir === 'in', t1 = rad(ctx.v.ang);
+    const n1 = into ? 1 : n, n2 = into ? n : 1, O = V3(0, BY, 0);
+    blockMat.ior = n; blockMat.color.setHSL(0.55, 0.4, 0.92 - (n - 1.3) * 0.15);
+    // medium 1 is z < 0 (air) when shining in, z > 0 (the block) when shining out
+    const s1 = into ? -1 : 1;
+    const src = V3(-Math.sin(t1) * 30, BY, s1 * Math.cos(t1) * 30);
+    laser.position.copy(src); laser.lookAt(O);
+    const Rf = fresnel(n1, n2, t1), sin2 = (n1 / n2) * Math.sin(t1), tir = sin2 >= 1;
+    if (into) {
+      beams.inc.set(src.clone().add(V3(Math.sin(t1), 0, -s1 * Math.cos(t1)).multiplyScalar(0.8)), O, 1);
+      beams.refl.set(O, V3(Math.sin(t1) * 24, BY, -Math.cos(t1) * 24), Rf);
+      const t2 = Math.asin(sin2);
+      beams.refr.set(O, V3(Math.sin(t2) * R, BY, Math.cos(t2) * R), 1 - Rf);
+      beams.exitIn.set(V3(Math.sin(t2) * R, BY, Math.cos(t2) * R), V3(Math.sin(t2) * 30, BY, Math.cos(t2) * 30), 1 - Rf);
+      ctx.t2 = t2;
+    } else {
+      beams.inc.set(src, O, 1);
+      beams.refl.set(O, V3(Math.sin(t1) * R, BY, Math.cos(t1) * R), Rf);
+      beams.exitIn.set(V3(Math.sin(t1) * R, BY, Math.cos(t1) * R), V3(Math.sin(t1) * 30, BY, Math.cos(t1) * 30), Rf);
+      if (tir) { beams.refr.visible = false; ctx.t2 = null; }
+      else { const t2 = Math.asin(sin2); beams.refr.set(O, V3(Math.sin(t2) * 24, BY, -Math.cos(t2) * 24), 1 - Rf); ctx.t2 = t2; }
+    }
+    // angle arcs from the normal
+    const arc = (from, a, sgn, r) => Array.from({ length: 24 }, (_, i) => { const u = (a * i) / 23; return V3(Math.sin(u) * r * from, BY + 0.3, sgn * Math.cos(u) * r); });
+    arcs[0].geometry.setFromPoints(arc(-1, t1, s1, 8));
+    if (ctx.t2 != null) { arcs[1].visible = true; arcs[1].geometry.setFromPoints(arc(1, ctx.t2, -s1, 10)); } else arcs[1].visible = false;
+    ctx.pI = V3(-Math.sin(t1 / 2) * 9.5, BY, s1 * Math.cos(t1 / 2) * 9.5);
+    ctx.pR = ctx.t2 != null ? V3(Math.sin(ctx.t2 / 2) * 11.5, BY, -s1 * Math.cos(ctx.t2 / 2) * 11.5) : null;
+  },
+  ui(ctx) {
+    const n = +ctx.v.mat, into = ctx.v.dir === 'in', n1 = into ? 1 : n, n2 = into ? n : 1, t1 = rad(ctx.v.ang), Rf = fresnel(n1, n2, t1);
+    ctx.readout('i', `${ctx.v.ang.toFixed(1)}°`); ctx.readout('r', ctx.t2 != null ? `${deg(ctx.t2).toFixed(1)}°` : 'none');
+    ctx.readout('c', into ? 'n/a (into denser)' : `${deg(Math.asin(1 / n)).toFixed(1)}°`);
+    ctx.readout('R', `${(Rf * 100).toFixed(1)} %`); ctx.readout('T', `${((1 - Rf) * 100).toFixed(1)} %`);
+    ctx.readout('st', ctx.t2 == null ? 'Total internal reflection' : into ? 'Bends towards the normal' : 'Bends away from the normal');
+  },
+});
 </script>
 </body></html>

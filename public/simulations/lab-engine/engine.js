@@ -233,7 +233,12 @@ export function runLab(spec) {
     const it = { key, ...def };
     const built = def.build(lab);
     // builders return either { group, size, grip, … } or { …, app: { group, size, grip } }
-    it.app = built.app && built.app.grip ? Object.assign(built.app, { api: built }) : built;
+    if (built.app && built.app.grip) {
+      // keep the builder's extra properties (top, holes, clampAt, …) reachable from it.app
+      for (const [k, v] of Object.entries(built)) if (k !== 'app' && !(k in built.app)) built.app[k] = v;
+      built.app.api = built;
+      it.app = built.app;
+    } else it.app = built;
     it.group = it.app.group;
     it.pose = def.pose || it.app.pose || built.pose;
     it.home = def.home || autoHome(movable.indexOf(key), movable.length);
@@ -659,6 +664,7 @@ export function runLab(spec) {
   const vclock = { now: 0, scale: 1, paused: false };
   const tweens = new Set();
   function tween(dur, fn) {
+    if (!Number.isFinite(dur)) { console.error('lab: motion with an invalid duration (a target position is not a number)'); dur = 0.3; }
     return new Promise((resolve) => { tweens.add({ t0: vclock.now, dur: Math.max(1, dur * 1000), fn, resolve }); });
   }
   function runTweens(dt = 0) {

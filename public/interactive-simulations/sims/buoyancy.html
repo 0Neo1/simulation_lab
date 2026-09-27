@@ -1,95 +1,112 @@
 <!DOCTYPE html>
-<html lang="en"><head><meta charset="UTF-8"><title>Buoyancy</title><link rel="stylesheet" href="../styles.css"></head>
-<body>
-<header><a href="../index.html"><h1>Buoyancy — Archimedes' Principle</h1></a><p>Will it float?</p></header>
-<main>
-<a class="back-link" href="../index.html">&larr; All simulations</a>
-<div class="sim-container">
-  <div>
-    <div class="canvas-wrap"><canvas id="cv" width="800" height="500"></canvas></div>
-    <div class="info-box">
-      <h3>The Physics</h3>
-      <p>An object submerged in a fluid experiences a buoyant force equal to the weight of the displaced fluid. It floats if its average density is less than the fluid's.</p>
-      <div class="formula">F_b = ρ_fluid · V_displaced · g</div>
-    </div>
-  </div>
-  <div class="controls">
-    <h3>Controls</h3>
-    <div class="control-row"><label>Object density <span class="val" id="vRO">800 kg/m³</span></label><input type="range" id="ro" min="100" max="3000" value="800"></div>
-    <div class="control-row"><label>Fluid density <span class="val" id="vRF">1000 kg/m³</span></label><input type="range" id="rf" min="500" max="2000" value="1000"></div>
-    <div class="control-row"><label>Object size <span class="val" id="vS">60</span></label><input type="range" id="s" min="20" max="100" value="60"></div>
-    <div class="btn-row"><button id="reset">Reset</button></div>
-    <div class="readouts">
-      <div>Weight: <span id="rW">0</span></div>
-      <div>Buoyant: <span id="rB">0</span></div>
-      <div>State: <span id="rS">—</span></div>
-      <div>Submerged: <span id="rSu">0%</span></div>
-    </div>
-  </div>
-</div>
-</main>
-<script>
-const cv=document.getElementById('cv'), ctx=cv.getContext('2d');
-let rho_o=800, rho_f=1000, size=60;
-let y=100, vy=0;
-const surfaceY = 200;
-const g=9.8;
-
-function step(){
-  const dt = 0.02;
-  const V = (size/100)**3; // m³ approx
-  const m = rho_o*V;
-  const W = m*g;
-  // submerged depth
-  const objTop = y - size/2, objBot = y + size/2;
-  let submergedH = 0;
-  if(objBot < surfaceY) submergedH = 0;
-  else if(objTop > surfaceY) submergedH = size;
-  else submergedH = objBot - surfaceY;
-  const Vsub = (submergedH/100)*(size/100)*(size/100);
-  const Fb = rho_f*Vsub*g;
-  const a = (Fb - W)/m - 0.3*vy; // damping
-  vy += a*dt*30;
-  y += vy*dt*30;
-  if(y > 480-size/2){ y=480-size/2; vy=0; }
-  if(y < size/2){ y = size/2; vy = 0;}
-
-  draw(submergedH/size);
-  document.getElementById('rW').textContent = W.toFixed(2)+' N';
-  document.getElementById('rB').textContent = Fb.toFixed(2)+' N';
-  document.getElementById('rS').textContent = rho_o<rho_f ? 'Floats' : (rho_o>rho_f?'Sinks':'Neutral');
-  document.getElementById('rSu').textContent = (submergedH/size*100).toFixed(0)+'%';
-  requestAnimationFrame(step);
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Buoyancy</title>
+<link rel="stylesheet" href="../engine/concept.css">
+<script type="importmap">{"imports":{"three":"../../simulations/lib/three/three.module.min.js","three/addons/":"../../simulations/lib/three/addons/"}}</script>
+</head><body>
+<script type="module">
+import { runSim, V3, MAT, mesh, std, THREE } from '../engine/concept.js';
+// A block hangs from a spring balance and is lowered into a tank of liquid.
+// Units: cm, g/cm³, grams-force for the balance (g = 9.8 m/s² for newtons).
+const TW = 24, TD = 18, TH = 30, BASE = -3 + 1, V_LIQ = TW * TD * 16, HOOK_TOP = 72;
+let tank, liquid, liqMat, block, blockMat, thread, balance, pointer, spr, bFA, wA, state = {};
+const MATS = { cork: [0.24, 0xc49a6c], wood: [0.6, 0x9b6b3d], ice: [0.92, 0xdff3ff], plastic: [1.05, 0x22c55e], aluminium: [2.7, 0xb8c0c8], iron: [7.87, 0x6b7280], gold: [19.3, 0xd4a017] };
+const LIQ = { water: [1.0, 0x3b82f6], salt: [1.2, 0x60a5fa], oil: [0.9, 0xeab308], alcohol: [0.79, 0xa5f3fc], mercury: [13.6, 0xcbd5e1] };
+function solve(ctx) {
+  const rb = MATS[ctx.v.mat][0], rl = LIQ[ctx.v.liq][0], a = Math.cbrt(ctx.v.V), W = rb * ctx.v.V;
+  const hangBottom = HOOK_TOP - 14 - a - ctx.v.lower * 50; // where the block bottom would be on a taut thread
+  let level = BASE + V_LIQ / (TW * TD), d = 0, floating = false, bottom = hangBottom;
+  for (let it = 0; it < 30; it++) {
+    d = Math.max(0, Math.min(a, level - bottom));
+    const Fb = rl * a * a * d;
+    if (Fb >= W - 1e-9 && rb < rl) { floating = true; d = (rb / rl) * a; bottom = level - d; } else { floating = false; bottom = Math.max(hangBottom, BASE); }
+    if (bottom <= BASE) { bottom = BASE; d = Math.min(a, level - BASE); }
+    const newLevel = BASE + (V_LIQ + a * a * Math.max(0, Math.min(a, level - bottom))) / (TW * TD);
+    if (Math.abs(newLevel - level) < 1e-6) break;
+    level = newLevel;
+  }
+  d = Math.max(0, Math.min(a, level - bottom));
+  const Fb = rl * a * a * d, onFloor = bottom <= BASE + 1e-6 && !floating;
+  let T = floating ? 0 : W - Fb; if (onFloor && hangBottom < BASE) T = Math.max(0, W - Fb - (BASE - hangBottom) * 40); // the floor takes some weight
+  return { a, W, Fb, T: Math.max(0, T), level, bottom, d, floating, onFloor, rb, rl, disp: a * a * d };
 }
-
-function draw(){
-  ctx.clearRect(0,0,cv.width,cv.height);
-  ctx.fillStyle='#1a1a1a'; ctx.fillRect(0,0,cv.width,surfaceY);
-  // water
-  const grd = ctx.createLinearGradient(0,surfaceY,0,cv.height);
-  grd.addColorStop(0,'#3a3a3a'); grd.addColorStop(1,'#1a1a1a');
-  ctx.fillStyle = grd; ctx.fillRect(0,surfaceY,cv.width,cv.height-surfaceY);
-  // surface line
-  ctx.strokeStyle='#fff'; ctx.lineWidth=2;
-  ctx.beginPath();
-  for(let x=0;x<=cv.width;x++) ctx.lineTo(x, surfaceY + Math.sin(x/30+performance.now()/300)*2);
-  ctx.stroke();
-  // object
-  ctx.fillStyle='#3a3a3a'; ctx.fillRect(400-size/2, y-size/2, size, size);
-  ctx.strokeStyle='#dddddd'; ctx.lineWidth=2; ctx.strokeRect(400-size/2, y-size/2, size, size);
-  ctx.fillStyle='#fff'; ctx.font='bold 12px sans-serif'; ctx.textAlign='center';
-  ctx.fillText(rho_o, 400, y); ctx.textAlign='left';
-}
-
-['ro','rf','s'].forEach(id=>document.getElementById(id).oninput=()=>{
-  rho_o=+document.getElementById('ro').value;
-  rho_f=+document.getElementById('rf').value;
-  size=+document.getElementById('s').value;
-  document.getElementById('vRO').textContent=rho_o+' kg/m³';
-  document.getElementById('vRF').textContent=rho_f+' kg/m³';
-  document.getElementById('vS').textContent=size;
+runSim({
+  title: 'Buoyancy', subtitle: "Archimedes' principle: the upthrust equals the weight of liquid displaced.",
+  stage: 'bench', camera: { pos: [48, 72, 138], target: [0, 44, 0] },
+  controls: [
+    { id: 'mat', label: 'Block material', type: 'select', value: 'aluminium', options: Object.entries(MATS).map(([k, [r]]) => ({ value: k, label: `${k[0].toUpperCase() + k.slice(1)} (ρ = ${r} g/cm³)` })) },
+    { id: 'liq', label: 'Liquid', type: 'select', value: 'water', options: Object.entries(LIQ).map(([k, [r]]) => ({ value: k, label: `${{ water: 'Water', salt: 'Salt water', oil: 'Olive oil', alcohol: 'Alcohol', mercury: 'Mercury' }[k]} (ρ = ${r} g/cm³)` })) },
+    { id: 'V', label: 'Block volume', min: 64, max: 512, step: 8, value: 216, unit: 'cm³' },
+    { id: 'lower', label: 'Lower the block', min: 0, max: 1, step: 0.005, value: 0, fmt: (v) => `${Math.round(v * 100)} %` },
+  ],
+  buttons: [{ id: 'dip', label: 'Lower it all the way', kind: 'ghost', run: (c) => { c.anim = 1; c.play(); } }, { id: 'up', label: 'Lift out', kind: 'ghost', run: (c) => { c.anim = -1; c.play(); } }],
+  readouts: [{ id: 'W', label: 'Weight in air' }, { id: 'T', label: 'Balance reading' }, { id: 'Fb', label: 'Upthrust (buoyant force)' }, { id: 'disp', label: 'Liquid displaced' }, { id: 'sub', label: 'Submerged' }, { id: 'st', label: 'Sinks or floats?' }],
+  graph: { title: 'Forces while lowering', series: [{ name: 'balance (N)', color: '#22d3ee' }, { name: 'upthrust (N)', color: '#f472b6' }], xlabel: 'lowered (%)', xmin: 0, xmax: 100, ymin: 0, max: 400 },
+  info: 'As the block goes into the liquid it pushes some liquid aside and the level rises. The liquid pushes up on the block with a force equal to the weight of the liquid displaced, so the spring balance reads less. Once the block is completely under the surface the upthrust stops growing. If the block is less dense than the liquid, the upthrust can match its whole weight before it is fully under. It then floats and the thread goes slack.',
+  formulas: ['F_b = ρ_liquid · V_displaced · g', 'Apparent weight = W − F_b', 'Floats if ρ_object < ρ_liquid'],
+  formulasPlain: ['F = ρ V g', 'W_app = W - F', 'floats if ρ < ρ_liquid'],
+  setup(ctx) {
+    // glass tank
+    tank = new THREE.Group();
+    const glass = new THREE.Mesh(new THREE.BoxGeometry(TW + 0.8, TH, TD + 0.8), new THREE.MeshPhysicalMaterial({ color: 0xe0f2fe, roughness: 0.05, transparent: true, opacity: 0.16, side: THREE.DoubleSide, depthWrite: false }));
+    glass.position.y = BASE - 1 + TH / 2; tank.add(glass);
+    tank.add(new THREE.LineSegments(new THREE.EdgesGeometry(glass.geometry), new THREE.LineBasicMaterial({ color: 0xbae6fd })).translateY(glass.position.y));
+    const floor = mesh(new THREE.BoxGeometry(TW + 0.8, 1, TD + 0.8), MAT.glass); floor.position.y = BASE - 0.5; tank.add(floor);
+    liqMat = new THREE.MeshPhysicalMaterial({ color: 0x3b82f6, roughness: 0.1, transparent: true, opacity: 0.45, depthWrite: false });
+    liquid = new THREE.Mesh(new THREE.BoxGeometry(TW, 1, TD), liqMat); liquid.geometry.translate(0, 0.5, 0); liquid.position.y = BASE; tank.add(liquid);
+    // scale on the tank wall for the level
+    const sc = new THREE.Mesh(new THREE.PlaneGeometry(2.5, TH - 2), new THREE.MeshBasicMaterial({ map: ctx.canvasTex(64, 700, (g, w, h) => { g.fillStyle = 'rgba(255,255,255,0.8)'; g.fillRect(0, 0, w, h); g.fillStyle = '#111'; for (let i = 0; i <= 28; i++) { const y = h - (i / 28) * h; g.fillRect(0, y - 1, i % 5 ? 20 : 40, 2); } }), transparent: true }));
+    sc.position.set(TW / 2 - 2, BASE - 1 + TH / 2, TD / 2 + 0.45); tank.add(sc);
+    ctx.scene.add(tank);
+    // stand and spring balance
+    const pole = mesh(new THREE.CylinderGeometry(0.8, 0.8, 95, 14), MAT.steel); pole.position.set(-22, 44.5, -12);
+    const base = mesh(new THREE.BoxGeometry(14, 2, 20), MAT.darkSteel); base.position.set(-22, -2, -8);
+    const arm = mesh(new THREE.CylinderGeometry(0.6, 0.6, 26, 12), MAT.steel); arm.rotation.z = Math.PI / 2; arm.position.set(-9, 90, -12);
+    const arm2 = mesh(new THREE.CylinderGeometry(0.6, 0.6, 12, 12), MAT.steel); arm2.rotation.x = Math.PI / 2; arm2.position.set(4, 90, -6);
+    balance = new THREE.Group();
+    const tube = mesh(new THREE.CylinderGeometry(2, 2, 18, 24), new THREE.MeshPhysicalMaterial({ color: 0xffffff, transparent: true, opacity: 0.35, roughness: 0.1 })); tube.position.y = -9;
+    const face = new THREE.Mesh(new THREE.PlaneGeometry(2.4, 17), new THREE.MeshBasicMaterial({ map: ctx.canvasTex(64, 512, (g, w, h) => { g.fillStyle = '#fef9c3'; g.fillRect(0, 0, w, h); g.fillStyle = '#111'; g.font = 'bold 14px Arial'; for (let i = 0; i <= 50; i++) { const y = 10 + (i / 50) * (h - 20); g.fillRect(0, y - 1, i % 5 ? 14 : 28, 2); if (i % 10 === 0) g.fillText(String(i / 10), 34, y + 5); } }) }));
+    face.position.set(0, -9, 2.05); spr = ctx.spring(0xcbd5e1, { r: 1.2, turns: 18, wire: 0.12 });
+    pointer = mesh(new THREE.BoxGeometry(3, 0.3, 0.3), MAT.red);
+    const cap = mesh(new THREE.CylinderGeometry(2.1, 2.1, 1, 24), MAT.darkSteel);
+    balance.add(tube, face, spr, pointer, cap); balance.position.set(4, 89, 0);
+    ctx.scene.add(pole, base, arm, arm2, balance);
+    blockMat = std(0xb8c0c8, { metalness: 0.6, roughness: 0.35 });
+    block = mesh(new THREE.BoxGeometry(1, 1, 1), blockMat); block.position.x = 4; ctx.scene.add(block);
+    thread = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 1, 6), new THREE.MeshBasicMaterial({ color: 0xe5e7eb })); thread.geometry.translate(0, -0.5, 0); ctx.scene.add(thread);
+    bFA = ctx.arrow(0xf472b6, { radius: 0.35, head: 2 }); wA = ctx.arrow(0xef4444, { radius: 0.35, head: 2 }); ctx.scene.add(bFA, wA);
+    ctx.label('upthrust', () => (bFA.visible ? block.position.clone().add(V3(-6, 0, 6)) : null));
+    ctx.label('weight', () => block.position.clone().add(V3(6, -Math.cbrt(ctx.v.V) / 2 - 3, 6)));
+    ctx.label('spring balance', () => V3(4, 92, 0));
+    ctx.graphKey = '';
+  },
+  step(ctx, dt) {
+    if (ctx.anim) { const v = Math.max(0, Math.min(1, ctx.v.lower + ctx.anim * dt * 0.25)); ctx.setControl('lower', v); if (v === 0 || v === 1) { ctx.anim = 0; ctx.pause(); } }
+  },
+  frame(ctx) {
+    const s = state = solve(ctx), [, bc] = MATS[ctx.v.mat], [, lc] = LIQ[ctx.v.liq];
+    blockMat.color.setHex(bc); blockMat.metalness = ['aluminium', 'iron', 'gold'].includes(ctx.v.mat) ? 0.8 : 0.05;
+    blockMat.transparent = ctx.v.mat === 'ice'; blockMat.opacity = ctx.v.mat === 'ice' ? 0.75 : 1;
+    liqMat.color.setHex(lc); liqMat.opacity = ctx.v.liq === 'mercury' ? 0.9 : 0.45; liqMat.metalness = ctx.v.liq === 'mercury' ? 1 : 0;
+    liquid.scale.y = s.level - BASE;
+    block.scale.setScalar(s.a); block.position.set(4, s.bottom + s.a / 2, 0);
+    // spring stretch ∝ tension (0–500 gf over the scale)
+    const ext = Math.min(1, s.T / 500) * 14;
+    spr.set(V3(0, -0.5, 0), V3(0, -2 - ext, 0)); pointer.position.set(0, -2 - ext, 2.1);
+    const hookY = 89 - 2.5 - ext, top = s.bottom + s.a;
+    thread.position.set(4, hookY, 0); thread.scale.y = Math.max(0.1, hookY - top); thread.material.color.setHex(s.T > 0.5 ? 0xe5e7eb : 0x9ca3af);
+    const k = 0.035;
+    wA.set(block.position.clone().add(V3(0, 0, s.a / 2 + 0.6)), V3(0, -s.W, 0), k);
+    bFA.set(block.position.clone().add(V3(0, -s.a / 4, s.a / 2 + 0.6)), V3(0, s.Fb, 0), k);
+    const key = `${ctx.v.mat}|${ctx.v.liq}|${ctx.v.V}`;
+    if (key !== ctx.graphKey) { ctx.graphKey = key; ctx.clearGraph(); const cur = ctx.v.lower; for (let l = 0; l <= 1.0001; l += 0.02) { ctx.v.lower = l; const q = solve(ctx); ctx.plot(l * 100, [q.T * 0.0098, q.Fb * 0.0098]); } ctx.v.lower = cur; }
+  },
+  graphOverlay(ctx, g, { X, Y }) { g.fillStyle = '#fde047'; g.beginPath(); g.arc(X(ctx.v.lower * 100), Y(state.T * 0.0098), 4.5, 0, 7); g.fill(); },
+  ui(ctx) {
+    const s = state, N = (gf) => `${(gf * 0.0098).toFixed(3)} N`;
+    ctx.readout('W', `${N(s.W)} (${s.W.toFixed(0)} g)`); ctx.readout('T', N(s.T)); ctx.readout('Fb', N(s.Fb));
+    ctx.readout('disp', `${s.disp.toFixed(0)} cm³ = ${(s.disp * s.rl).toFixed(0)} g`); ctx.readout('sub', `${(s.d / s.a * 100).toFixed(0)} %`);
+    ctx.readout('st', s.rb < s.rl ? `Floats (${(s.rb / s.rl * 100).toFixed(0)} % under)` : 'Sinks');
+  },
 });
-document.getElementById('reset').onclick=()=>{y=100; vy=0;};
-step();
 </script>
 </body></html>

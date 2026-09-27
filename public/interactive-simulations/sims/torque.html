@@ -1,103 +1,92 @@
 <!DOCTYPE html>
-<html lang="en"><head><meta charset="UTF-8"><title>Torque &amp; Equilibrium</title><link rel="stylesheet" href="../styles.css"></head>
-<body>
-<header><a href="../index.html"><h1>Torque &amp; Equilibrium</h1></a><p>Balance the seesaw.</p></header>
-<main>
-<a class="back-link" href="../index.html">&larr; All simulations</a>
-<div class="sim-container">
-  <div>
-    <div class="canvas-wrap"><canvas id="cv" width="800" height="500"></canvas></div>
-    <div class="info-box">
-      <h3>The Physics</h3>
-      <p>For static equilibrium, both the net force and net torque must be zero. Torque is force × lever arm.</p>
-      <div class="formula">Στ = 0 &nbsp;⇒&nbsp; m₁ x₁ = m₂ x₂</div>
-    </div>
-  </div>
-  <div class="controls">
-    <h3>Controls</h3>
-    <div class="control-row"><label>Mass 1 <span class="val" id="vM1">5 kg</span></label><input type="range" id="m1" min="1" max="20" value="5"></div>
-    <div class="control-row"><label>Position 1 <span class="val" id="vX1">-2 m</span></label><input type="range" id="x1" min="-30" max="-5" value="-20"></div>
-    <div class="control-row"><label>Mass 2 <span class="val" id="vM2">8 kg</span></label><input type="range" id="m2" min="1" max="20" value="8"></div>
-    <div class="control-row"><label>Position 2 <span class="val" id="vX2">1.25 m</span></label><input type="range" id="x2" min="5" max="30" value="13"></div>
-    <div class="readouts">
-      <div>τ₁: <span id="rT1">0</span></div>
-      <div>τ₂: <span id="rT2">0</span></div>
-      <div>Net τ: <span id="rN">0</span></div>
-      <div>State: <span id="rS">—</span></div>
-    </div>
-  </div>
-</div>
-</main>
-<script>
-const cv=document.getElementById('cv'), ctx=cv.getContext('2d');
-let m1=5,x1=-20,m2=8,x2=13;
-let theta=0, omega=0, running=true;
-const cx=400, cy=300, scale=10;
-
-function step(){
-  // tilt based on net torque
-  const t1 = m1*x1/10, t2 = m2*x2/10;
-  const net = t1+t2;
-  // physical seesaw: a = -k*theta - net/I (treat as simple driven oscillator with damping)
-  const I = m1*x1*x1/100 + m2*x2*x2/100 + 5;
-  const a = (-net*9.8 - 5*omega - 30*theta)/I;
-  omega += a*0.02;
-  theta += omega*0.02;
-  draw();
-  requestAnimationFrame(step);
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Torque and Balance</title>
+<link rel="stylesheet" href="../engine/concept.css">
+<script type="importmap">{"imports":{"three":"../../simulations/lib/three/three.module.min.js","three/addons/":"../../simulations/lib/three/addons/"}}</script>
+</head><body>
+<script type="module">
+import { runSim, V3, MAT, mesh, std, THREE } from '../engine/concept.js';
+// A metre rule on a knife edge with slotted masses hanging from loops. Drag the masses or use
+// the sliders. Positions are measured from the pivot (the 50 cm mark).
+const PY = 38, MAXT = 0.2;
+let beam, th = 0, om = 0, hangers = [];
+const g = 9.8;
+function hanger(color) {
+  const grp = new THREE.Group();
+  const loop = mesh(new THREE.TorusGeometry(1.1, 0.15, 8, 20), MAT.steel);
+  const thread = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 1, 6), new THREE.MeshBasicMaterial({ color: 0xdddddd })); thread.geometry.translate(0, -0.5, 0);
+  const stack = new THREE.Group();
+  grp.add(loop, thread, stack); grp.loop = loop; grp.thread = thread; grp.stack = stack; grp.color = color;
+  grp.setMass = (m) => {
+    stack.clear();
+    const n = Math.round(m / 50); // 50 g slotted discs on a hanger
+    const hook = mesh(new THREE.CylinderGeometry(0.2, 0.2, 5, 8), MAT.steel); hook.position.y = -2.5; stack.add(hook);
+    for (let i = 0; i < n; i++) { const d = mesh(new THREE.CylinderGeometry(2.6, 2.6, 0.9, 28), std(color, { metalness: 0.7, roughness: 0.3 })); d.position.y = -4.6 + i * 0.95; stack.add(d); }
+    stack.position.y = -8;
+  };
+  return grp;
 }
-
-function draw(){
-  ctx.clearRect(0,0,cv.width,cv.height);
-  ctx.fillStyle='#0a0a0a'; ctx.fillRect(0,0,cv.width,cv.height);
-  // ground
-  ctx.fillStyle='#1f1f1f'; ctx.fillRect(0, 380, cv.width, 120);
-  // pivot
-  ctx.fillStyle='#444'; ctx.beginPath(); ctx.moveTo(cx-30, 380); ctx.lineTo(cx, 300); ctx.lineTo(cx+30, 380); ctx.closePath(); ctx.fill();
-  // beam
-  ctx.save(); ctx.translate(cx, 300); ctx.rotate(theta);
-  ctx.fillStyle='#3a3a3a';
-  const beamLen = 600;
-  ctx.fillRect(-beamLen/2, -8, beamLen, 16);
-  ctx.strokeStyle='#dddddd'; ctx.strokeRect(-beamLen/2, -8, beamLen, 16);
-  // tick marks
-  for(let i=-30;i<=30;i+=5){
-    const xx = i*scale;
-    ctx.strokeStyle='#dddddd';
-    ctx.beginPath(); ctx.moveTo(xx, -8); ctx.lineTo(xx, -14); ctx.stroke();
-  }
-  // mass 1
-  const w1 = 20+m1*3;
-  ctx.fillStyle='#888888'; ctx.fillRect(x1*scale-w1/2, -8-w1, w1, w1);
-  ctx.strokeStyle='#dddddd'; ctx.strokeRect(x1*scale-w1/2, -8-w1, w1, w1);
-  ctx.fillStyle='#fff'; ctx.font='bold 12px sans-serif'; ctx.textAlign='center';
-  ctx.fillText(m1+'kg', x1*scale, -8-w1/2);
-  // mass 2
-  const w2 = 20+m2*3;
-  ctx.fillStyle='#ffffff'; ctx.fillRect(x2*scale-w2/2, -8-w2, w2, w2);
-  ctx.strokeRect(x2*scale-w2/2, -8-w2, w2, w2);
-  ctx.fillStyle='#fff'; ctx.fillText(m2+'kg', x2*scale, -8-w2/2);
-  ctx.textAlign='left';
-  ctx.restore();
-  const t1 = m1*Math.abs(x1)/10*9.8;
-  const t2 = m2*Math.abs(x2)/10*9.8;
-  document.getElementById('rT1').textContent = t1.toFixed(1)+' N·m';
-  document.getElementById('rT2').textContent = t2.toFixed(1)+' N·m';
-  const net = m1*x1/10*9.8 + m2*x2/10*9.8;
-  document.getElementById('rN').textContent = net.toFixed(2);
-  document.getElementById('rS').textContent = Math.abs(net) < 0.5 ? 'Balanced ✓' : (net>0 ? 'Tips right' : 'Tips left');
-}
-
-['m1','x1','m2','x2'].forEach(id=>document.getElementById(id).oninput=()=>{
-  m1=+document.getElementById('m1').value;
-  x1=+document.getElementById('x1').value/10;
-  m2=+document.getElementById('m2').value;
-  x2=+document.getElementById('x2').value/10;
-  document.getElementById('vM1').textContent=m1+' kg';
-  document.getElementById('vX1').textContent=x1.toFixed(2)+' m';
-  document.getElementById('vM2').textContent=m2+' kg';
-  document.getElementById('vX2').textContent=x2.toFixed(2)+' m';
+runSim({
+  title: 'Torque and Balance', subtitle: 'A beam balances when the clockwise and anticlockwise moments are equal.',
+  stage: 'bench', camera: { pos: [0, 50, 105], target: [0, 28, 0] },
+  autoplay: true, dt: 1 / 240, hint: 'drag the masses along the rule', dragPlaneNormal: [0, 0, 1],
+  controls: [
+    { id: 'm1', label: 'Left mass m₁', min: 50, max: 500, step: 50, value: 200, unit: 'g' },
+    { id: 'x1', label: 'Left distance d₁', min: 2, max: 48, step: 0.5, value: 30, unit: 'cm' },
+    { id: 'm2', label: 'Right mass m₂', min: 50, max: 500, step: 50, value: 300, unit: 'g' },
+    { id: 'x2', label: 'Right distance d₂', min: 2, max: 48, step: 0.5, value: 15, unit: 'cm' },
+    { id: 'm3', label: 'Extra mass m₃ (right)', min: 0, max: 300, step: 50, value: 0, unit: 'g' },
+    { id: 'x3', label: 'Extra mass distance d₃', min: 2, max: 48, step: 0.5, value: 40, unit: 'cm' },
+  ],
+  buttons: [{ id: 'bal', label: 'Balance it (move m₂)', kind: 'ghost', run: (c) => { const need = (c.v.m1 * c.v.x1 - c.v.m3 * c.v.x3) / c.v.m2; if (need >= 2 && need <= 48) c.setControl('x2', Math.round(need * 2) / 2); } }],
+  readouts: [{ id: 'tl', label: 'Anticlockwise τ (left)' }, { id: 'tr', label: 'Clockwise τ (right)' }, { id: 'net', label: 'Net torque' }, { id: 'st', label: 'State' }, { id: 'ang', label: 'Tilt' }, { id: 'R', label: 'Pivot force' }],
+  info: 'A force turns the rule about the pivot with a moment (torque) equal to force × perpendicular distance from the pivot. The masses on the left try to turn it anticlockwise and those on the right clockwise. When the two moments are equal the net torque is zero and the rule stays level. This is the principle of moments. A small mass far out can balance a large mass close in.',
+  formulas: ['τ = F × d = m g d', 'Balance:  Σ τ(anticlockwise) = Σ τ(clockwise)', 'm₁ d₁ = m₂ d₂'],
+  formulasPlain: ['τ = F d', 'm1 d1 = m2 d2'],
+  pickables: () => hangers.map((h) => h.stack),
+  onDrag(ctx, id, p) { const i = +id; const x = Math.max(2, Math.min(48, Math.abs(p.x))); ctx.setControl(['x1', 'x2', 'x3'][i], Math.round(x * 2) / 2); },
+  setup(ctx) {
+    const stand = mesh(new THREE.BoxGeometry(22, 2, 14), MAT.darkSteel); stand.position.set(0, -2, 0);
+    const post = mesh(new THREE.BoxGeometry(2, PY - 3, 2), MAT.steel); post.position.set(0, (PY - 3) / 2 - 1, -3);
+    const tri = new THREE.Shape([new THREE.Vector2(-1.5, -3), new THREE.Vector2(1.5, -3), new THREE.Vector2(0, 0)]); const eg = new THREE.ExtrudeGeometry(tri, { depth: 5, bevelEnabled: false }); eg.translate(0, 0, -2.5);
+    const edge = mesh(eg, MAT.steel); edge.position.set(0, PY, 0);
+    const edgeBase = mesh(new THREE.BoxGeometry(4, 1.5, 6), MAT.steel); edgeBase.position.set(0, PY - 3.6, -1);
+    ctx.scene.add(stand, post, edge, edgeBase);
+    beam = new THREE.Group(); beam.position.set(0, PY, 0);
+    const rule = mesh(new THREE.BoxGeometry(100, 0.6, 3), new THREE.MeshStandardMaterial({ map: ctx.canvasTex(2048, 64, (gx, w, h) => { gx.fillStyle = '#f2d99a'; gx.fillRect(0, 0, w, h); gx.fillStyle = '#222'; gx.font = 'bold 22px Arial'; gx.textAlign = 'center'; for (let mm = 0; mm <= 1000; mm += 5) { const x = mm / 1000 * w; gx.fillRect(x - 1, 0, 2, mm % 100 === 0 ? 30 : mm % 50 === 0 ? 20 : 11); if (mm % 100 === 0 && mm > 0 && mm < 1000) gx.fillText(String(mm / 10), x, 54); } }), roughness: 0.6 }));
+    rule.position.y = 0.3; beam.add(rule);
+    ctx.scene.add(beam);
+    [0xef4444, 0x3b82f6, 0x22c55e].forEach((c, i) => { const h = hanger(c); h.stack.userData.pickId = String(i); beam.add(h); hangers.push(h); });
+    // tilt stops
+    [-44, 44].forEach((x) => { const hS = PY - 44 * Math.sin(MAXT) - 0.2 + 3; const s = mesh(new THREE.BoxGeometry(2, hS, 2), MAT.darkWood); s.position.set(x, hS / 2 - 3, 0); ctx.scene.add(s); });
+    ctx.label('m₁', () => hangers[0].stack.getWorldPosition(V3()).add(V3(0, -8, 0)));
+    ctx.label('m₂', () => hangers[1].stack.getWorldPosition(V3()).add(V3(0, -8, 0)));
+    ctx.label('m₃', () => (ctx.v.m3 > 0 ? hangers[2].stack.getWorldPosition(V3()).add(V3(0, -8, 0)) : null));
+    ctx.label('pivot', () => V3(0, PY - 6, 3));
+    ctx.lastM = [];
+  },
+  step(ctx, dt) {
+    const net = torque(ctx).net; // N·m, positive = anticlockwise
+    const I = 0.08 + (ctx.v.m1 * ctx.v.x1 ** 2 + ctx.v.m2 * ctx.v.x2 ** 2 + ctx.v.m3 * ctx.v.x3 ** 2) * 1e-7;
+    om += ((net * Math.cos(th)) / I - 3 * om) * dt; th += om * dt;
+    if (th > MAXT) { th = MAXT; om = -om * 0.2; } if (th < -MAXT) { th = -MAXT; om = -om * 0.2; }
+  },
+  frame(ctx) {
+    beam.rotation.z = th;
+    const xs = [-ctx.v.x1, ctx.v.x2, ctx.v.x3], ms = [ctx.v.m1, ctx.v.m2, ctx.v.m3];
+    hangers.forEach((h, i) => {
+      h.visible = ms[i] > 0; if (ctx.lastM[i] !== ms[i]) { h.setMass(ms[i]); ctx.lastM[i] = ms[i]; }
+      h.position.set(xs[i], 0.3, i === 2 ? 1.2 : 0);
+      h.rotation.z = -th; // threads hang straight down
+      h.thread.scale.y = 8;
+    });
+  },
+  ui(ctx) {
+    const t = torque(ctx);
+    ctx.readout('tl', `${t.acw.toFixed(3)} N·m`); ctx.readout('tr', `${t.cw.toFixed(3)} N·m`); ctx.readout('net', `${Math.abs(t.net).toFixed(3)} N·m ${Math.abs(t.net) < 1e-4 ? '' : t.net > 0 ? '↺' : '↻'}`);
+    ctx.readout('st', Math.abs(t.net) < 1e-4 ? 'Balanced ✓' : t.net > 0 ? 'Left side goes down' : 'Right side goes down');
+    ctx.readout('ang', `${(th * 180 / Math.PI).toFixed(1)}°`); ctx.readout('R', `${((ctx.v.m1 + ctx.v.m2 + ctx.v.m3) / 1000 * g).toFixed(2)} N up`);
+  },
 });
-step();
+function torque(ctx) { const acw = ctx.v.m1 / 1000 * g * ctx.v.x1 / 100, cw = (ctx.v.m2 * ctx.v.x2 + ctx.v.m3 * ctx.v.x3) / 1000 * g / 100; return { acw, cw, net: acw - cw }; }
 </script>
 </body></html>

@@ -1,105 +1,86 @@
 <!DOCTYPE html>
-<html lang="en"><head><meta charset="UTF-8"><title>1D Collisions</title><link rel="stylesheet" href="../styles.css"></head>
-<body>
-<header><a href="../index.html"><h1>1D Collisions</h1></a><p>Elastic, inelastic, and perfectly inelastic.</p></header>
-<main>
-<a class="back-link" href="../index.html">&larr; All simulations</a>
-<div class="sim-container">
-  <div>
-    <div class="canvas-wrap"><canvas id="cv" width="800" height="400"></canvas></div>
-    <div class="info-box">
-      <h3>The Physics</h3>
-      <p>Momentum is conserved in all collisions. Kinetic energy is conserved only in elastic collisions.</p>
-      <div class="formula">m₁v₁ + m₂v₂ = m₁v₁' + m₂v₂'<br>e = (v₂' − v₁') / (v₁ − v₂)</div>
-      <p>Coefficient of restitution: <em>e=1</em> (elastic), <em>e=0</em> (perfectly inelastic).</p>
-    </div>
-  </div>
-  <div class="controls">
-    <h3>Controls</h3>
-    <div class="control-row"><label>Mass 1 <span class="val" id="vM1">2 kg</span></label><input type="range" id="m1" min="1" max="10" value="2"></div>
-    <div class="control-row"><label>Mass 2 <span class="val" id="vM2">3 kg</span></label><input type="range" id="m2" min="1" max="10" value="3"></div>
-    <div class="control-row"><label>v₁ initial <span class="val" id="vV1">5</span></label><input type="range" id="v1" min="-10" max="10" value="5"></div>
-    <div class="control-row"><label>v₂ initial <span class="val" id="vV2">-2</span></label><input type="range" id="v2" min="-10" max="10" value="-2"></div>
-    <div class="control-row"><label>Restitution e <span class="val" id="vE">1.0</span></label><input type="range" id="e" min="0" max="100" value="100"></div>
-    <div class="btn-row"><button id="run">Start</button><button class="danger" id="reset">Reset</button></div>
-    <div class="readouts">
-      <div>p_total: <span id="rP">0</span></div>
-      <div>KE_total: <span id="rK">0</span></div>
-      <div>v₁': <span id="rV1">0</span></div>
-      <div>v₂': <span id="rV2">0</span></div>
-    </div>
-  </div>
-</div>
-</main>
-<script>
-const cv=document.getElementById('cv'), ctx=cv.getContext('2d');
-let m1=2, m2=3, v1=5, v2=-2, e=1.0;
-let x1=200, x2=600, running=false;
-const y=250, w=60;
-
-function reset(){
-  m1=+document.getElementById('m1').value;
-  m2=+document.getElementById('m2').value;
-  v1=+document.getElementById('v1').value;
-  v2=+document.getElementById('v2').value;
-  e=+document.getElementById('e').value/100;
-  x1=200; x2=600;
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>1D Collisions</title>
+<link rel="stylesheet" href="../engine/concept.css">
+<script type="importmap">{"imports":{"three":"../../simulations/lib/three/three.module.min.js","three/addons/":"../../simulations/lib/three/addons/"}}</script>
+</head><body>
+<script type="module">
+import { runSim, V3, MAT, mesh, std, THREE } from '../engine/concept.js';
+// Two gliders on an air track (positions in cm, speeds in m/s)
+const HALF = 60, Y = 3.5;
+let g1, g2, a1, a2, x1, x2, v1, v2, hit, flash, p0, ke0;
+function glider(color) {
+  const g = new THREE.Group();
+  const body = mesh(new THREE.BoxGeometry(12, 5, 8), std(color, { metalness: 0.3, roughness: 0.3 }));
+  const fin = mesh(new THREE.BoxGeometry(1, 5, 0.4), MAT.black); fin.position.set(0, 4.5, 0);
+  const bumper = mesh(new THREE.TorusGeometry(1.4, 0.25, 8, 20), MAT.steel);
+  g.add(body, fin, bumper); g.bumper = bumper;
+  return g;
 }
-
-function step(){
-  if(!running) return;
-  const dt = 0.03;
-  x1 += v1*8*dt; x2 += v2*8*dt;
-  // collision
-  if(x2-x1 < w){
-    const u1 = (m1*v1 + m2*v2 + m2*e*(v2-v1))/(m1+m2);
-    const u2 = (m1*v1 + m2*v2 + m1*e*(v1-v2))/(m1+m2);
-    v1 = u1; v2 = u2;
-    // separate
-    const overlap = w - (x2-x1);
-    x1 -= overlap/2; x2 += overlap/2;
-  }
-  // walls
-  if(x1 < w/2){ x1 = w/2; v1 = -v1; }
-  if(x2 > cv.width-w/2){ x2 = cv.width-w/2; v2 = -v2; }
-  draw();
-  document.getElementById('rP').textContent = (m1*v1+m2*v2).toFixed(2);
-  document.getElementById('rK').textContent = (0.5*m1*v1*v1+0.5*m2*v2*v2).toFixed(2);
-  document.getElementById('rV1').textContent = v1.toFixed(2);
-  document.getElementById('rV2').textContent = v2.toFixed(2);
-  requestAnimationFrame(step);
-}
-
-function draw(){
-  ctx.clearRect(0,0,cv.width,cv.height);
-  ctx.fillStyle='#0a0a0a'; ctx.fillRect(0,0,cv.width,cv.height);
-  // track
-  ctx.fillStyle='#444'; ctx.fillRect(0, y+30, cv.width, 5);
-  // walls
-  ctx.fillStyle='#888'; ctx.fillRect(0,150,15,150); ctx.fillRect(cv.width-15,150,15,150);
-  // cart 1
-  drawCart(x1, '#ffffff', m1);
-  drawCart(x2, '#888888', m2);
-}
-function drawCart(cx, color, mass){
-  const ww = 30 + mass*8, hh = 40;
-  ctx.fillStyle = color; ctx.fillRect(cx-ww/2, y-hh/2, ww, hh);
-  ctx.strokeStyle='#dddddd'; ctx.strokeRect(cx-ww/2, y-hh/2, ww, hh);
-  ctx.fillStyle='#888888'; ctx.beginPath(); ctx.arc(cx-ww/3, y+hh/2+5, 6, 0, 2*Math.PI); ctx.fill();
-  ctx.beginPath(); ctx.arc(cx+ww/3, y+hh/2+5, 6, 0, 2*Math.PI); ctx.fill();
-  ctx.fillStyle='#fff'; ctx.font='bold 14px sans-serif'; ctx.fillText(mass+'kg', cx-15, y+5);
-}
-
-['m1','m2','v1','v2','e'].forEach(id=>document.getElementById(id).oninput=()=>{
-  document.getElementById('vM1').textContent=document.getElementById('m1').value+' kg';
-  document.getElementById('vM2').textContent=document.getElementById('m2').value+' kg';
-  document.getElementById('vV1').textContent=document.getElementById('v1').value;
-  document.getElementById('vV2').textContent=document.getElementById('v2').value;
-  document.getElementById('vE').textContent=(+document.getElementById('e').value/100).toFixed(2);
-  if(!running){ reset(); draw(); }
+runSim({
+  title: '1D Collisions', subtitle: 'Momentum is always conserved; kinetic energy only when the collision is perfectly elastic.',
+  stage: 'bench', camera: { pos: [10, 60, 125], target: [0, 5, 0] },
+  controls: [
+    { id: 'm1', label: 'Mass 1 (blue)', min: 0.1, max: 3, step: 0.1, value: 1, unit: 'kg', reset: true },
+    { id: 'm2', label: 'Mass 2 (red)', min: 0.1, max: 3, step: 0.1, value: 1, unit: 'kg', reset: true },
+    { id: 'u1', label: 'v₁ initial', min: -1, max: 1, step: 0.05, value: 0.6, unit: 'm/s', reset: true },
+    { id: 'u2', label: 'v₂ initial', min: -1, max: 1, step: 0.05, value: -0.2, unit: 'm/s', reset: true },
+    { id: 'e', label: 'Restitution e', min: 0, max: 1, step: 0.05, value: 1, reset: true },
+  ],
+  buttons: [
+    { id: 'el', label: 'Elastic (e = 1)', kind: 'ghost', run: (c) => { c.setControl('e', 1); c.reset(); } },
+    { id: 'in', label: 'Sticky (e = 0)', kind: 'ghost', run: (c) => { c.setControl('e', 0); c.reset(); } },
+  ],
+  readouts: [{ id: 'v1', label: 'v₁' }, { id: 'v2', label: 'v₂' }, { id: 'p', label: 'Total momentum' }, { id: 'ke', label: 'Total KE' }, { id: 'lost', label: 'KE lost' }, { id: 'vcm', label: 'Centre-of-mass v' }],
+  graph: { title: 'Momentum and kinetic energy', series: [{ name: 'p₁', color: '#60a5fa' }, { name: 'p₂', color: '#f87171' }, { name: 'p total', color: '#22c55e' }, { name: 'KE (J)', color: '#f59e0b' }], max: 800 },
+  info: 'Two gliders ride on an air cushion, so friction is negligible. When they meet, equal and opposite forces act for the same time, so the momentum one gains the other loses. The coefficient of restitution e is the ratio of separation speed to approach speed: e = 1 is elastic (no KE lost), e = 0 makes them stick together. The buffers at the ends of the track push the gliders back, so the total momentum changes only when a glider hits an end.,
+  formulas: ['m₁u₁ + m₂u₂ = m₁v₁ + m₂v₂', 'e = (v₂ − v₁) / (u₁ − u₂)'],
+  formulasPlain: ['m1u1 + m2u2 = m1v1 + m2v2', 'e = (v2 - v1)/(u1 - u2)'],
+  setup(ctx) {
+    const track = mesh(new THREE.BoxGeometry(2 * HALF + 12, 2.5, 6), MAT.steel); track.position.set(0, -1.75, 0);
+    const holes = mesh(new THREE.BoxGeometry(2 * HALF + 8, 0.1, 5), new THREE.MeshStandardMaterial({ map: ctx.canvasTex(1024, 32, (g, w, h) => { g.fillStyle = '#b9c0c7'; g.fillRect(0, 0, w, h); g.fillStyle = '#555'; for (let i = 6; i < w; i += 14) { g.beginPath(); g.arc(i, 10, 2.2, 0, 7); g.arc(i + 7, 22, 2.2, 0, 7); g.fill(); } }), metalness: 0.8, roughness: 0.3 }));
+    holes.position.set(0, -0.45, 0);
+    [-1, 1].forEach((s) => { const end = mesh(new THREE.BoxGeometry(3, 8, 8), MAT.darkSteel); end.position.set(s * (HALF + 6), 1, 0); ctx.scene.add(end); });
+    ctx.scene.add(track, holes);
+    g1 = glider(0x2563eb); g2 = glider(0xdc2626); ctx.scene.add(g1, g2);
+    g1.bumper.position.set(6.2, 0, 0); g1.bumper.rotation.y = Math.PI / 2; g2.bumper.position.set(-6.2, 0, 0); g2.bumper.rotation.y = Math.PI / 2;
+    a1 = ctx.arrow(0x60a5fa, { radius: 0.4, head: 2.5 }); a2 = ctx.arrow(0xf87171, { radius: 0.4, head: 2.5 }); ctx.scene.add(a1, a2);
+    flash = ctx.glowSprite(0xfff3b0, 0.1); ctx.scene.add(flash);
+    ctx.label('m₁', () => g1.position.clone().add(V3(0, 9, 0)));
+    ctx.label('m₂', () => g2.position.clone().add(V3(0, 9, 0)));
+  },
+  reset(ctx) { x1 = -30; x2 = 20; v1 = ctx.v.u1; v2 = ctx.v.u2; hit = false; p0 = mom(ctx); ke0 = ke(ctx); place(ctx); },
+  step(ctx, dt) {
+    x1 += v1 * dt * 100; x2 += v2 * dt * 100;
+    const w = (i) => 6 * Math.cbrt(ctx.v[i]); // half-length of each glider (cm)
+    if (x2 - x1 <= w('m1') + w('m2') && v1 - v2 > 0) {
+      const { m1, m2, e } = ctx.v, P = m1 * v1 + m2 * v2;
+      const n1 = (P + m2 * e * (v2 - v1)) / (m1 + m2), n2 = (P + m1 * e * (v1 - v2)) / (m1 + m2);
+      v1 = n1; v2 = n2; hit = true; flash.userData.t = 0.35; flash.position.set((x1 + w('m1') + x2 - w('m2')) / 2, Y + 1, 0);
+    }
+    // the track ends bounce the gliders back (elastic buffers)
+    if (x1 - w('m1') < -HALF && v1 < 0) v1 = -v1; if (x2 + w('m2') > HALF && v2 > 0) v2 = -v2;
+    ctx.n = (ctx.n || 0) + 1;
+    if (ctx.n % 12 === 0) ctx.plot(ctx.t, [ctx.v.m1 * v1, ctx.v.m2 * v2, mom(ctx), ke(ctx)]);
+  },
+  frame(ctx, dt) {
+    place(ctx);
+    const t = (flash.userData.t || 0) - dt; flash.userData.t = t; flash.scale.setScalar(t > 0 ? 18 * t / 0.35 + 2 : 0.001);
+  },
+  ui(ctx) {
+    ctx.readout('v1', `${v1.toFixed(3)} m/s`); ctx.readout('v2', `${v2.toFixed(3)} m/s`);
+    ctx.readout('p', `${mom(ctx).toFixed(3)} kg·m/s`); ctx.readout('ke', `${ke(ctx).toFixed(3)} J`);
+    ctx.readout('lost', hit ? `${Math.max(0, ke0 - ke(ctx)).toFixed(3)} J` : '—');
+    ctx.readout('vcm', `${(p0 / (ctx.v.m1 + ctx.v.m2)).toFixed(3)} m/s`);
+  },
 });
-document.getElementById('run').onclick=()=>{if(!running){running=true; step();}};
-document.getElementById('reset').onclick=()=>{running=false; reset(); draw();};
-reset(); draw();
+function mom(ctx) { return ctx.v.m1 * v1 + ctx.v.m2 * v2; }
+function ke(ctx) { return 0.5 * ctx.v.m1 * v1 * v1 + 0.5 * ctx.v.m2 * v2 * v2; }
+function place(ctx) {
+  const s1 = Math.cbrt(ctx.v.m1), s2 = Math.cbrt(ctx.v.m2);
+  g1.scale.set(s1, Math.min(1.4, s1), 1); g2.scale.set(s2, Math.min(1.4, s2), 1);
+  g1.position.set(x1, Y * Math.min(1.4, s1) - 1, 0); g2.position.set(x2, Y * Math.min(1.4, s2) - 1, 0);
+  a1.set(g1.position.clone().add(V3(0, 12, 0)), V3(v1, 0, 0), 25);
+  a2.set(g2.position.clone().add(V3(0, 12, 0)), V3(v2, 0, 0), 25);
+}
 </script>
 </body></html>

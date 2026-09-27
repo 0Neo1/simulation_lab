@@ -1,86 +1,66 @@
 <!DOCTYPE html>
-<html lang="en"><head><meta charset="UTF-8"><title>Relative Velocity</title><link rel="stylesheet" href="../styles.css"></head>
-<body>
-<header><a href="../index.html"><h1>Relative Velocity — River Crossing</h1></a><p>A boat tries to cross a flowing river.</p></header>
-<main>
-<a class="back-link" href="../index.html">&larr; All simulations</a>
-<div class="sim-container">
-  <div>
-    <div class="canvas-wrap"><canvas id="cv" width="800" height="500"></canvas></div>
-    <div class="info-box">
-      <h3>The Physics</h3>
-      <p>The boat's velocity relative to the ground is the vector sum of its velocity relative to the water and the water's velocity relative to the ground.</p>
-      <div class="formula">v⃗_BG = v⃗_BW + v⃗_WG</div>
-      <p>Even if the boat aims straight across, the current carries it downstream.</p>
-    </div>
-  </div>
-  <div class="controls">
-    <h3>Controls</h3>
-    <div class="control-row"><label>Boat speed (rel. water) <span class="val" id="vBs">8 m/s</span></label><input type="range" id="boat" min="1" max="20" value="8"></div>
-    <div class="control-row"><label>Boat heading <span class="val" id="vBh">90°</span></label><input type="range" id="head" min="0" max="180" value="90"></div>
-    <div class="control-row"><label>River current <span class="val" id="vC">3 m/s</span></label><input type="range" id="cur" min="0" max="15" value="3"></div>
-    <div class="btn-row"><button id="run">Start</button><button class="secondary" id="reset">Reset</button></div>
-    <div class="readouts">
-      <div>v_ground: <span id="rVG">0</span></div>
-      <div>angle: <span id="rAng">0°</span></div>
-      <div>cross time: <span id="rT">0 s</span></div>
-      <div>drift: <span id="rD">0 m</span></div>
-    </div>
-  </div>
-</div>
-</main>
-<script>
-const cv = document.getElementById('cv'), ctx = cv.getContext('2d');
-let boat = 8, head = 90, cur = 3;
-let bx = 50, by = 400, t = 0, running = false;
-const scale = 5, riverW = 60; // 60 m wide
-
-function draw(){
-  ctx.clearRect(0,0,cv.width,cv.height);
-  // banks
-  ctx.fillStyle = '#1f1f1f'; ctx.fillRect(0,0,cv.width,50); ctx.fillRect(0,450,cv.width,50);
-  // river
-  ctx.fillStyle = '#3a3a3a'; ctx.fillRect(0,50,cv.width,400);
-  // current arrows
-  ctx.strokeStyle = 'rgba(255,255,255,0.5)'; ctx.lineWidth = 2;
-  for(let y=80;y<450;y+=50) for(let x=20;x<cv.width;x+=80){
-    ctx.beginPath(); ctx.moveTo(x,y); ctx.lineTo(x+cur*4,y); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(x+cur*4,y); ctx.lineTo(x+cur*4-6,y-4); ctx.lineTo(x+cur*4-6,y+4); ctx.closePath();
-    ctx.fillStyle = 'rgba(255,255,255,0.5)'; ctx.fill();
-  }
-  // boat
-  ctx.save(); ctx.translate(bx, by);
-  ctx.rotate(-(head-90)*Math.PI/180);
-  ctx.fillStyle = '#3a3a3a';
-  ctx.beginPath(); ctx.moveTo(0,-15); ctx.lineTo(8,10); ctx.lineTo(-8,10); ctx.closePath(); ctx.fill();
-  ctx.fillStyle = '#fff'; ctx.fillRect(-2,-10,4,12);
-  ctx.restore();
-  // start marker
-  ctx.strokeStyle = '#dddddd'; ctx.setLineDash([5,5]);
-  ctx.beginPath(); ctx.moveTo(50,50); ctx.lineTo(50,450); ctx.stroke();
-  ctx.setLineDash([]);
-}
-
-function step(){
-  if(!running) return;
-  const dt = 0.05; t += dt;
-  const vbx = boat*Math.cos(head*Math.PI/180);
-  const vby = -boat*Math.sin(head*Math.PI/180);
-  bx += (vbx + cur)*scale*dt;
-  by += vby*scale*dt;
-  if(by < 50 || bx > cv.width || bx < 0){ running = false; }
-  document.getElementById('rVG').textContent = Math.hypot(vbx+cur, vby).toFixed(2)+' m/s';
-  document.getElementById('rAng').textContent = (Math.atan2(-vby, vbx+cur)*180/Math.PI).toFixed(1)+'°';
-  document.getElementById('rT').textContent = t.toFixed(2)+' s';
-  document.getElementById('rD').textContent = ((bx-50)/scale).toFixed(1)+' m';
-  draw(); requestAnimationFrame(step);
-}
-
-document.getElementById('boat').oninput = e=>{boat=+e.target.value; document.getElementById('vBs').textContent=boat+' m/s';};
-document.getElementById('head').oninput = e=>{head=+e.target.value; document.getElementById('vBh').textContent=head+'°';};
-document.getElementById('cur').oninput = e=>{cur=+e.target.value; document.getElementById('vC').textContent=cur+' m/s'; draw();};
-document.getElementById('run').onclick = ()=>{ if(!running){running=true; step();} };
-document.getElementById('reset').onclick = ()=>{ running=false; bx=50; by=400; t=0; draw(); };
-draw();
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Relative Velocity</title>
+<link rel="stylesheet" href="../engine/concept.css">
+<script type="importmap">{"imports":{"three":"../../simulations/lib/three/three.module.min.js","three/addons/":"../../simulations/lib/three/addons/"}}</script>
+</head><body>
+<script type="module">
+import { runSim, V3, MAT, mesh, std, THREE } from '../engine/concept.js';
+// A boat crossing a river (metres). Water flows along +x; the far bank is at z = -W.
+const W = 60;
+let boat, pos, water, tr, aBW, aWG, aBG, waterTex;
+runSim({
+  title: 'Relative Velocity', subtitle: 'A boat heads across a flowing river — its velocity over the ground is the sum of two velocities.',
+  stage: 'field', camera: { pos: [-40, 55, 70], target: [15, 0, -30], far: 3000 }, sun: { pos: [40, 80, 30], size: 90, far: 300 },
+  controls: [
+    { id: 'vb', label: 'Boat speed (relative to water)', min: 0.5, max: 8, step: 0.1, value: 4, unit: 'm/s', reset: true },
+    { id: 'vr', label: 'River speed', min: 0, max: 6, step: 0.1, value: 2.5, unit: 'm/s' },
+    { id: 'hd', label: 'Heading (0° = straight across, + upstream)', min: -60, max: 80, step: 1, value: 0, unit: '°', reset: true },
+  ],
+  buttons: [{ id: 'aim', label: 'Aim to land opposite', kind: 'ghost', run: (ctx) => { const s = ctx.v.vr / ctx.v.vb; if (s >= 1) return; ctx.setControl('hd', Math.round(Math.asin(s) * 180 / Math.PI)); ctx.sim?.reset?.(); resetBoat(ctx); } }],
+  readouts: [{ id: 'vg', label: 'Speed over ground' }, { id: 'dir', label: 'Direction of travel' }, { id: 't', label: 'Crossing time' }, { id: 'drift', label: 'Drift downstream' }],
+  info: 'The boat’s velocity relative to the ground is its velocity relative to the water plus the water’s velocity relative to the ground. Pointing straight across gives the quickest crossing but the current carries the boat downstream; to land directly opposite, point upstream at the angle where the upstream part of the boat’s velocity cancels the current.',
+  formulas: ['v_BG = v_BW + v_WG', 't = W / (v_BW cos θ)', 'drift = (v_WG − v_BW sin θ) · t'],
+  setup(ctx) {
+    waterTex = ctx.canvasTex(256, 256, (g, w, h) => { g.fillStyle = '#1f6fa8'; g.fillRect(0, 0, w, h); for (let i = 0; i < 260; i++) { g.strokeStyle = `rgba(255,255,255,${0.05 + Math.random() * 0.12})`; g.lineWidth = 1 + Math.random() * 2; const x = Math.random() * w, y = Math.random() * h; g.beginPath(); g.moveTo(x, y); g.quadraticCurveTo(x + 12, y - 3, x + 26 + Math.random() * 20, y); g.stroke(); } });
+    waterTex.wrapS = waterTex.wrapT = THREE.RepeatWrapping; waterTex.repeat.set(20, 4);
+    water = mesh(new THREE.PlaneGeometry(600, W), new THREE.MeshStandardMaterial({ map: waterTex, roughness: 0.15, metalness: 0.1 }), false);
+    water.rotation.x = -Math.PI / 2; water.position.set(0, 0.05, -W / 2); ctx.scene.add(water);
+    ['near', 'far'].forEach((k, i) => { const bank = mesh(new THREE.BoxGeometry(600, 1.2, 6), std(0x8b6b43)); bank.position.set(0, 0.4, i ? -W - 3 : 3); ctx.scene.add(bank); });
+    const target = mesh(new THREE.CylinderGeometry(1.2, 1.2, 0.3, 20), std(0xef4444)); target.position.set(0, 1.2, -W - 2); ctx.scene.add(target);
+    ctx.label('opposite point', () => V3(0, 3, -W - 2));
+    boat = new THREE.Group();
+    const hull = mesh(new THREE.CylinderGeometry(1.2, 0.6, 6, 16, 1, false), std(0xf8fafc)); hull.rotation.x = Math.PI / 2; hull.scale.set(1, 1, 0.55); hull.position.y = 0.5;
+    const bow = mesh(new THREE.ConeGeometry(1.2, 2.4, 16), std(0xf8fafc)); bow.rotation.x = -Math.PI / 2; bow.position.set(0, 0.5, -4.2); bow.scale.set(1, 1, 0.55);
+    const cabin = mesh(new THREE.BoxGeometry(1.4, 1, 1.8), std(0xef4444)); cabin.position.set(0, 1.4, 0.4);
+    boat.add(hull, bow, cabin); boat.scale.setScalar(1.8); ctx.scene.add(boat);
+    tr = ctx.trail(0xfde047, 3000); ctx.scene.add(tr);
+    aBW = ctx.arrow(0x22d3ee, { radius: 0.35, head: 2 }); aWG = ctx.arrow(0x3b82f6, { radius: 0.35, head: 2 }); aBG = ctx.arrow(0xa3e635, { radius: 0.45, head: 2.4 });
+    ctx.scene.add(aBW, aWG, aBG);
+    ctx.label('v_BW (boat in water)', () => boat.position.clone().add(dirBW(ctx).multiplyScalar(ctx.v.vb * 3)).add(V3(0, 3, 0)));
+    ctx.label('v_WG (current)', () => boat.position.clone().add(V3(ctx.v.vr * 3, 3, 0)));
+    ctx.label('v_BG (over ground)', () => boat.position.clone().add(vBG(ctx).multiplyScalar(3)).add(V3(0, 5, 0)), 'big');
+  },
+  reset(ctx) { resetBoat(ctx); },
+  step(ctx, dt) {
+    if (pos.z <= -W + 1) { ctx.pause(); return; }
+    pos.add(vBG(ctx).multiplyScalar(dt));
+    ctx.sc = (ctx.sc || 0) + 1; if (ctx.sc % 20 === 0) tr.push(pos.clone().setY(0.3));
+  },
+  frame(ctx, dt) {
+    waterTex.offset.x -= ctx.running ? (ctx.v.vr / 30) * dt * ctx.speed : 0;
+    boat.position.copy(pos); boat.rotation.y = ctx.v.hd * Math.PI / 180;
+    const o = pos.clone().add(V3(0, 2.5, 0));
+    aBW.set(o, dirBW(ctx).multiplyScalar(ctx.v.vb), 3); aWG.set(o, V3(ctx.v.vr, 0, 0), 3); aBG.set(o.clone().add(V3(0, 0.5, 0)), vBG(ctx), 3);
+  },
+  ui(ctx) {
+    const g = vBG(ctx), th = ctx.v.hd * Math.PI / 180, across = ctx.v.vb * Math.cos(th);
+    const t = W / across, drift = (ctx.v.vr - ctx.v.vb * Math.sin(th)) * t;
+    ctx.readout('vg', `${g.length().toFixed(2)} m/s`); ctx.readout('dir', `${(Math.atan2(g.x, -g.z) * 180 / Math.PI).toFixed(1)}° downstream of straight`);
+    ctx.readout('t', `${t.toFixed(1)} s`); ctx.readout('drift', `${drift.toFixed(1)} m`);
+  },
+});
+function dirBW(ctx) { const th = ctx.v.hd * Math.PI / 180; return V3(-Math.sin(th), 0, -Math.cos(th)); }
+function vBG(ctx) { return dirBW(ctx).multiplyScalar(ctx.v.vb).add(V3(ctx.v.vr, 0, 0)); }
+function resetBoat(ctx) { pos = V3(0, 0, -1); tr.clear(); ctx.t = 0; }
 </script>
 </body></html>

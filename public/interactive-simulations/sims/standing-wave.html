@@ -1,75 +1,76 @@
 <!DOCTYPE html>
-<html lang="en"><head><meta charset="UTF-8"><title>Standing Waves</title><link rel="stylesheet" href="../styles.css"></head>
-<body>
-<header><a href="../index.html"><h1>Standing Waves</h1></a><p>Two opposing waves create nodes and antinodes.</p></header>
-<main>
-<a class="back-link" href="../index.html">&larr; All simulations</a>
-<div class="sim-container">
-  <div>
-    <div class="canvas-wrap"><canvas id="cv" width="800" height="400"></canvas></div>
-    <div class="info-box">
-      <h3>The Physics</h3>
-      <p>Two waves of equal amplitude traveling in opposite directions form a standing wave with stationary nodes (zeros) and antinodes (maxima).</p>
-      <div class="formula">y = 2A sin(kx) cos(ωt)<br>For string fixed at both ends: λ_n = 2L/n &nbsp; (n = 1, 2, 3, ...)</div>
-    </div>
-  </div>
-  <div class="controls">
-    <h3>Controls</h3>
-    <div class="control-row"><label>Mode (harmonic) <span class="val" id="vN">2</span></label><input type="range" id="n" min="1" max="8" value="2"></div>
-    <div class="control-row"><label>Amplitude <span class="val" id="vA">60</span></label><input type="range" id="A" min="10" max="100" value="60"></div>
-    <div class="control-row"><label>Speed <span class="val" id="vS">2.0</span></label><input type="range" id="s" min="2" max="40" value="20"></div>
-    <div class="control-row"><label>Show component waves <input type="checkbox" id="comp" checked></label></div>
-    <div class="btn-row"><button id="run">Start</button><button class="secondary" id="pause">Pause</button></div>
-  </div>
-</div>
-</main>
-<script>
-const cv=document.getElementById('cv'), ctx=cv.getContext('2d');
-let n=2, A=60, s=2.0, t=0, running=false;
-const x0=80, x1=720, midY=200;
-function draw(){
-  ctx.clearRect(0,0,cv.width,cv.height);
-  ctx.fillStyle='#0a0a0a'; ctx.fillRect(0,0,cv.width,cv.height);
-  // walls (fixed ends)
-  ctx.fillStyle='#444'; ctx.fillRect(x0-15,midY-50,15,100); ctx.fillRect(x1,midY-50,15,100);
-  ctx.strokeStyle='#bbbbbb'; ctx.beginPath(); ctx.moveTo(x0,midY); ctx.lineTo(x1,midY); ctx.stroke();
-  const Ls = x1-x0, k = n*Math.PI/Ls;
-  if(document.getElementById('comp').checked){
-    // right-moving
-    ctx.strokeStyle='rgba(140,140,140,0.4)'; ctx.lineWidth=1.5;
-    ctx.beginPath();
-    for(let xx=x0;xx<=x1;xx++){ const y = midY - A*Math.sin(k*(xx-x0) - s*t); if(xx===x0) ctx.moveTo(xx,y); else ctx.lineTo(xx,y); }
-    ctx.stroke();
-    // left-moving
-    ctx.strokeStyle='rgba(180,180,180,0.4)';
-    ctx.beginPath();
-    for(let xx=x0;xx<=x1;xx++){ const y = midY - A*Math.sin(k*(xx-x0) + s*t); if(xx===x0) ctx.moveTo(xx,y); else ctx.lineTo(xx,y); }
-    ctx.stroke();
-  }
-  // standing wave
-  ctx.strokeStyle='#ffffff'; ctx.lineWidth=3;
-  ctx.beginPath();
-  for(let xx=x0;xx<=x1;xx++){
-    const y = midY - 2*A*Math.sin(k*(xx-x0))*Math.cos(s*t);
-    if(xx===x0) ctx.moveTo(xx,y); else ctx.lineTo(xx,y);
-  }
-  ctx.stroke();
-  // nodes
-  for(let i=0;i<=n;i++){
-    const nx = x0 + i*Ls/n;
-    ctx.fillStyle='#dddddd'; ctx.beginPath(); ctx.arc(nx,midY,5,0,2*Math.PI); ctx.fill();
-  }
-  // labels
-  ctx.fillStyle='#dddddd'; ctx.font='14px sans-serif';
-  ctx.fillText(`Mode n = ${n}`, 350, 30);
-}
-function step(){ if(!running) return; t+=0.05; draw(); requestAnimationFrame(step); }
-document.getElementById('n').oninput=e=>{n=+e.target.value; document.getElementById('vN').textContent=n; if(!running)draw();};
-document.getElementById('A').oninput=e=>{A=+e.target.value; document.getElementById('vA').textContent=A;};
-document.getElementById('s').oninput=e=>{s=+e.target.value/10; document.getElementById('vS').textContent=s.toFixed(1);};
-document.getElementById('comp').onchange=()=>{if(!running)draw();};
-document.getElementById('run').onclick=()=>{if(!running){running=true; step();}};
-document.getElementById('pause').onclick=()=>running=false;
-draw();
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Standing Waves</title>
+<link rel="stylesheet" href="../engine/concept.css">
+<script type="importmap">{"imports":{"three":"../../simulations/lib/three/three.module.min.js","three/addons/":"../../simulations/lib/three/addons/"}}</script>
+</head><body>
+<script type="module">
+import { runSim, V3, MAT, mesh, std, glow, THREE } from '../engine/concept.js';
+// Melde's experiment on a sonometer: a string fixed at both ends vibrates in its harmonics.
+const X0 = -45, Y = 22, NP = 200;
+let str, env = [], nodes = [], anti = [], vib, pulley, weight, comps = [];
+runSim({
+  title: 'Standing Waves', subtitle: 'Two identical waves travelling opposite ways make a pattern of nodes and antinodes.',
+  stage: 'bench', camera: { pos: [0, 38, 88], target: [0, 18, 0] },
+  autoplay: true,
+  controls: [
+    { id: 'n', label: 'Harmonic n', min: 1, max: 8, step: 1, value: 3 },
+    { id: 'L', label: 'String length L', min: 40, max: 90, step: 1, value: 80, unit: 'cm' },
+    { id: 'T', label: 'Tension T', min: 5, max: 100, step: 1, value: 40, unit: 'N' },
+    { id: 'mu', label: 'Linear density μ', min: 0.5, max: 10, step: 0.1, value: 2, unit: 'g/m' },
+    { id: 'A', label: 'Antinode amplitude', min: 0.5, max: 5, step: 0.1, value: 3, unit: 'cm' },
+    { id: 'parts', label: 'Show the two travelling waves', type: 'check', value: false },
+  ],
+  readouts: [{ id: 'v', label: 'Wave speed v = √(T/μ)' }, { id: 'lam', label: 'Wavelength λ = 2L/n' }, { id: 'f', label: 'Frequency fₙ' }, { id: 'f1', label: 'Fundamental f₁' }, { id: 'nn', label: 'Nodes' }, { id: 'na', label: 'Antinodes' }],
+  info: 'Waves reflected from the fixed ends travel back and interfere with the incoming waves. Only wavelengths that fit a whole number of half-waves into the string survive, so the string vibrates in harmonics: n loops, n + 1 nodes (never move) and n antinodes (largest motion). The vibration is shown slowed down (a real string at these settings vibrates hundreds of times a second).',
+  formulas: ['y = 2A sin(kx) cos(ωt)', 'λₙ = 2L / n', 'fₙ = (n / 2L) √(T / μ)'],
+  formulasPlain: ['y = 2A sin kx cos ωt', 'λ = 2L/n', 'f = (n/2L)√(T/μ)'],
+  setup(ctx) {
+    const box = mesh(new THREE.BoxGeometry(100, 8, 16), MAT.wood); box.position.set(-10, 1, 0);
+    const hole = mesh(new THREE.CylinderGeometry(3, 3, 0.2, 32), MAT.black); hole.position.set(-10, 5.1, 0);
+    vib = mesh(new THREE.BoxGeometry(6, 16, 6), std(0x334155, { metalness: 0.5 })); vib.position.set(X0 - 5, 13, 0);
+    const bridgeL = mesh(new THREE.BoxGeometry(1.5, Y - 5, 5), MAT.darkWood); bridgeL.position.set(X0, (Y + 5) / 2 - 0.5, 0);
+    pulley = mesh(new THREE.CylinderGeometry(3, 3, 1.5, 28), MAT.brass); pulley.rotation.x = Math.PI / 2;
+    const pstand = mesh(new THREE.BoxGeometry(2, 1, 4), MAT.darkSteel); pstand.geometry.translate(0, -0.5, 0);
+    weight = mesh(new THREE.CylinderGeometry(3, 3, 6, 24), MAT.brass);
+    str = new THREE.Line(new THREE.BufferGeometry().setFromPoints(Array.from({ length: NP }, () => V3())), new THREE.LineBasicMaterial({ color: 0xfafafa }));
+    for (let i = 0; i < 2; i++) env.push(new THREE.Line(new THREE.BufferGeometry().setFromPoints(Array.from({ length: NP }, () => V3())), new THREE.LineDashedMaterial({ color: 0x67e8f9, dashSize: 1, gapSize: 0.8, transparent: true, opacity: 0.6 })));
+    for (let i = 0; i < 2; i++) comps.push(new THREE.Line(new THREE.BufferGeometry().setFromPoints(Array.from({ length: NP }, () => V3())), new THREE.LineBasicMaterial({ color: i ? 0xf472b6 : 0x60a5fa })));
+    for (let i = 0; i < 9; i++) { const m = mesh(new THREE.SphereGeometry(0.8, 16, 12), glow(0xef4444)); nodes.push(m); ctx.scene.add(m); }
+    for (let i = 0; i < 8; i++) { const m = mesh(new THREE.RingGeometry(0.8, 1.2, 24), glow(0x22c55e, { side: THREE.DoubleSide })); anti.push(m); ctx.scene.add(m); }
+    ctx.scene.add(box, hole, vib, bridgeL, pulley, pstand, weight, str, ...env, ...comps);
+    ctx.pstand = pstand; ctx.bridgeR = mesh(new THREE.BoxGeometry(1.5, Y - 5, 5), MAT.darkWood); ctx.scene.add(ctx.bridgeR);
+    ctx.label('node', () => nodes[1].visible ? nodes[1].position.clone().add(V3(0, -3, 0)) : null);
+    ctx.label('antinode', () => anti[0].position.clone().add(V3(0, ctx.v.A + 2, 0)));
+    ctx.label('vibrator', () => vib.position.clone().add(V3(0, 10, 0)));
+  },
+  frame(ctx) {
+    // shown slowed down: the on-screen rate rises with the real frequency but stays watchable
+    const { n, L, A } = ctx.v, k = n * Math.PI / L, f = Math.min(2.2, Math.max(0.4, freq(ctx) / 150)), c = Math.cos(2 * Math.PI * f * ctx.t);
+    const X1 = X0 + L;
+    ctx.bridgeR.position.set(X1, (Y + 5) / 2 - 0.5, 0);
+    pulley.position.set(X1 + 6, Y - 3, 0); ctx.pstand.position.set(X1 + 6, Y - 3, -1.5); ctx.pstand.scale.y = Y;
+    weight.position.set(X1 + 9, Y - 16, 0); weight.scale.y = 0.4 + ctx.v.T / 60;
+    const pts = [], e1 = [], e2 = [], c1 = [], c2 = [], w = 2 * Math.PI * f * ctx.t;
+    for (let i = 0; i < NP; i++) {
+      const x = (i / (NP - 1)) * L, s = Math.sin(k * x);
+      pts.push(V3(X0 + x, Y + A * s * c, 0)); e1.push(V3(X0 + x, Y + A * s, 0)); e2.push(V3(X0 + x, Y - A * s, 0));
+      c1.push(V3(X0 + x, Y + (A / 2) * Math.sin(k * x - w), -4)); c2.push(V3(X0 + x, Y + (A / 2) * Math.sin(k * x + w), -8));
+    }
+    pts.push(V3(X1 + 6, Y, 0), V3(X1 + 8.1, Y - 0.9, 0), V3(X1 + 9, Y - 3, 0), V3(X1 + 9, Y - 16 + 3 * weight.scale.y, 0));
+    str.geometry.setFromPoints(pts); env[0].geometry.setFromPoints(e1); env[1].geometry.setFromPoints(e2); env.forEach((l) => l.computeLineDistances());
+    comps[0].geometry.setFromPoints(c1); comps[1].geometry.setFromPoints(c2); comps.forEach((l) => { l.visible = ctx.v.parts; });
+    nodes.forEach((m, i) => { m.visible = i <= n; m.position.set(X0 + (i * L) / n, Y, 0.5); });
+    anti.forEach((m, i) => { m.visible = i < n; m.position.set(X0 + ((i + 0.5) * L) / n, Y + A * Math.sin(Math.PI * (i + 0.5)) * c, 0.5); });
+    vib.position.y = 13 + Math.sin(w) * 0.25;
+  },
+  ui(ctx) {
+    const { n, L } = ctx.v, v = speed(ctx);
+    ctx.readout('v', `${v.toFixed(1)} m/s`); ctx.readout('lam', `${(2 * L / n).toFixed(1)} cm`);
+    ctx.readout('f', `${freq(ctx).toFixed(1)} Hz`); ctx.readout('f1', `${(v / (2 * L / 100)).toFixed(1)} Hz`);
+    ctx.readout('nn', String(n + 1)); ctx.readout('na', String(n));
+  },
+});
+function speed(ctx) { return Math.sqrt(ctx.v.T / (ctx.v.mu / 1000)); }
+function freq(ctx) { return (ctx.v.n / (2 * ctx.v.L / 100)) * speed(ctx); }
 </script>
 </body></html>

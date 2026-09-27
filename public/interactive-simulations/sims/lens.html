@@ -1,133 +1,113 @@
 <!DOCTYPE html>
-<html lang="en"><head><meta charset="UTF-8"><title>Thin Lens</title><link rel="stylesheet" href="../styles.css"></head>
-<body>
-<header><a href="../index.html"><h1>Thin Lens — Image Formation</h1></a><p>Drag the object to see real and virtual images.</p></header>
-<main>
-<a class="back-link" href="../index.html">&larr; All simulations</a>
-<div class="sim-container">
-  <div>
-    <div class="canvas-wrap"><canvas id="cv" width="800" height="400"></canvas></div>
-    <div class="info-box">
-      <h3>The Physics</h3>
-      <p>Three principal rays through a thin lens locate the image: parallel ray bends through F, central ray goes straight, focal-point ray emerges parallel.</p>
-      <div class="formula">1/d_o + 1/d_i = 1/f &nbsp;&nbsp; M = −d_i/d_o</div>
-      <p>Positive f = converging lens. Image is real if d_i &gt; 0, virtual if d_i &lt; 0.</p>
-    </div>
-  </div>
-  <div class="controls">
-    <h3>Controls</h3>
-    <div class="control-row"><label>Focal length <span class="val" id="vF">100</span></label><input type="range" id="f" min="-200" max="200" value="100"></div>
-    <div class="control-row"><label>Object distance <span class="val" id="vDo">250</span></label><input type="range" id="do" min="20" max="350" value="250"></div>
-    <div class="control-row"><label>Object height <span class="val" id="vH">60</span></label><input type="range" id="h" min="20" max="100" value="60"></div>
-    <div class="readouts">
-      <div>d_i: <span id="rDi">0</span></div>
-      <div>M: <span id="rM">0</span></div>
-      <div>Type: <span id="rT">—</span></div>
-    </div>
-  </div>
-</div>
-</main>
-<script>
-const cv=document.getElementById('cv'), ctx=cv.getContext('2d');
-const cy=200, lensX=400;
-let f=100, dO=250, h=60;
-function draw(){
-  ctx.clearRect(0,0,cv.width,cv.height);
-  ctx.fillStyle='#0a0a0a'; ctx.fillRect(0,0,cv.width,cv.height);
-  // optic axis
-  ctx.strokeStyle='#cccccc'; ctx.beginPath(); ctx.moveTo(0,cy); ctx.lineTo(cv.width,cy); ctx.stroke();
-  // lens
-  ctx.strokeStyle='#ffffff'; ctx.lineWidth=3;
-  ctx.beginPath();
-  if(f>0){
-    ctx.moveTo(lensX,40); ctx.lineTo(lensX,360);
-    // arrows up/down
-    ctx.moveTo(lensX-8,48); ctx.lineTo(lensX,40); ctx.lineTo(lensX+8,48);
-    ctx.moveTo(lensX-8,352); ctx.lineTo(lensX,360); ctx.lineTo(lensX+8,352);
-  } else {
-    ctx.moveTo(lensX,40); ctx.lineTo(lensX,360);
-    ctx.moveTo(lensX-8,48); ctx.lineTo(lensX,52); ctx.lineTo(lensX+8,48);
-    ctx.moveTo(lensX-8,352); ctx.lineTo(lensX,348); ctx.lineTo(lensX+8,352);
-  }
-  ctx.stroke();
-  // focal points
-  ctx.fillStyle='#ffffff';
-  ctx.beginPath(); ctx.arc(lensX-Math.abs(f),cy,4,0,2*Math.PI); ctx.fill();
-  ctx.beginPath(); ctx.arc(lensX+Math.abs(f),cy,4,0,2*Math.PI); ctx.fill();
-  ctx.fillStyle='#dddddd'; ctx.font='12px sans-serif';
-  ctx.fillText('F', lensX-Math.abs(f)-5, cy+18);
-  ctx.fillText('F', lensX+Math.abs(f)-5, cy+18);
-  // object
-  const objX = lensX - dO;
-  ctx.strokeStyle='#aaaaaa'; ctx.lineWidth=3;
-  ctx.beginPath(); ctx.moveTo(objX, cy); ctx.lineTo(objX, cy-h); ctx.stroke();
-  ctx.beginPath(); ctx.moveTo(objX-6,cy-h+8); ctx.lineTo(objX,cy-h); ctx.lineTo(objX+6,cy-h+8); ctx.stroke();
-  // image via lens equation
-  let dI;
-  if(Math.abs(dO - f) < 0.01) dI = Infinity;
-  else dI = 1/(1/f - 1/dO);
-  const imgX = lensX + dI;
-  const M = -dI/dO;
-  const imgH = M*h;
-  // rays:
-  // 1. parallel from top of object → through F on far side
-  if(isFinite(dI)){
-    const ox = objX, oy = cy - h;
-    // ray 1: parallel then through far F
-    ctx.strokeStyle='#888888'; ctx.lineWidth=1.5;
-    ctx.beginPath(); ctx.moveTo(ox,oy); ctx.lineTo(lensX, oy); ctx.stroke();
-    // after lens, goes through F (or its extension)
-    if(f>0){
-      // through far F
-      ctx.beginPath(); ctx.moveTo(lensX,oy);
-      const slope = (cy-oy)/Math.abs(f);
-      ctx.lineTo(cv.width, oy + slope*(cv.width-lensX)); ctx.stroke();
-    } else {
-      // appears to come from near F (diverge)
-      const slope = (oy-cy)/Math.abs(f);
-      ctx.beginPath(); ctx.moveTo(lensX,oy); ctx.lineTo(cv.width, oy + slope*(cv.width-lensX)); ctx.stroke();
-      // virtual extension
-      ctx.setLineDash([3,3]); ctx.beginPath(); ctx.moveTo(lensX,oy); ctx.lineTo(0, oy - slope*lensX); ctx.stroke(); ctx.setLineDash([]);
-    }
-    // ray 2: through center → straight
-    ctx.strokeStyle='#aaaaaa';
-    ctx.beginPath(); ctx.moveTo(ox,oy);
-    const slope2 = (cy-oy)/(lensX-ox);
-    ctx.lineTo(cv.width, oy + slope2*(cv.width-ox));
-    ctx.stroke();
-    // ray 3: through near F → parallel after
-    if(f>0 && dO > f){
-      ctx.strokeStyle='#888888';
-      const fx = lensX - f;
-      const slope3 = (cy-oy)/(fx-ox);
-      ctx.beginPath(); ctx.moveTo(ox,oy); ctx.lineTo(lensX, oy + slope3*(lensX-ox)); ctx.stroke();
-      ctx.beginPath(); ctx.moveTo(lensX, oy + slope3*(lensX-ox)); ctx.lineTo(cv.width, oy + slope3*(lensX-ox)); ctx.stroke();
-    }
-  }
-  // image
-  if(isFinite(dI) && imgX > 0 && imgX < cv.width){
-    ctx.strokeStyle = dI > 0 ? '#bbbbbb' : '#888';
-    ctx.setLineDash(dI>0 ? [] : [4,4]);
-    ctx.lineWidth=3;
-    ctx.beginPath(); ctx.moveTo(imgX, cy); ctx.lineTo(imgX, cy-imgH); ctx.stroke();
-    if(imgH<0){
-      ctx.beginPath(); ctx.moveTo(imgX-6,cy-imgH-8); ctx.lineTo(imgX,cy-imgH); ctx.lineTo(imgX+6,cy-imgH-8); ctx.stroke();
-    } else {
-      ctx.beginPath(); ctx.moveTo(imgX-6,cy-imgH+8); ctx.lineTo(imgX,cy-imgH); ctx.lineTo(imgX+6,cy-imgH+8); ctx.stroke();
-    }
-    ctx.setLineDash([]);
-  }
-  document.getElementById('rDi').textContent = isFinite(dI) ? dI.toFixed(1) : '∞';
-  document.getElementById('rM').textContent = isFinite(dI) ? M.toFixed(2) : '—';
-  document.getElementById('rT').textContent = !isFinite(dI) ? 'No image' : (dI>0 ? 'Real, '+(M<0?'inverted':'upright') : 'Virtual, upright');
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Lens Ray Diagram</title>
+<link rel="stylesheet" href="../engine/concept.css">
+<script type="importmap">{"imports":{"three":"../../simulations/lib/three/three.module.min.js","three/addons/":"../../simulations/lib/three/addons/"}}</script>
+</head><body>
+<script type="module">
+import { runSim, V3, MAT, mesh, std, glow, THREE } from '../engine/concept.js';
+// An optical bench: object arrow, thin lens at x = 0, principal rays and the image.
+// Real-is-positive convention: 1/f = 1/u + 1/v with u > 0 (object on the left).
+const AX = 22, XMIN = -95, XMAX = 95;
+let lens, lensMat, obj, img, imgMat, screen, rays = [], ext = [], marks = [], cur = {};
+function arrowObj(color, mat) {
+  const g = new THREE.Group();
+  const m = mat || std(color, { emissive: color, emissiveIntensity: 0.3 });
+  const shaft = mesh(new THREE.CylinderGeometry(0.35, 0.35, 1, 12), m); shaft.geometry.translate(0, 0.5, 0);
+  const head = mesh(new THREE.ConeGeometry(1.2, 2.6, 16), m);
+  g.add(shaft, head); g.shaft = shaft; g.head = head;
+  g.setH = (h) => { const s = Math.sign(h) || 1, a = Math.abs(h); const hl = Math.min(2.6, a * 0.4); shaft.scale.y = Math.max(0.01, a - hl) * s; head.scale.set(1, hl / 2.6, 1); head.position.y = s * (a - hl / 2); head.rotation.z = s > 0 ? 0 : Math.PI; };
+  return g;
 }
-['f','do','h'].forEach(id=>document.getElementById(id).oninput=()=>{
-  f=+document.getElementById('f').value; dO=+document.getElementById('do').value; h=+document.getElementById('h').value;
-  document.getElementById('vF').textContent=f;
-  document.getElementById('vDo').textContent=dO;
-  document.getElementById('vH').textContent=h;
-  draw();
+function lensGeo(f) {
+  const conv = f > 0, R = 9, t = Math.min(4.5, 160 / Math.abs(f));
+  // lathe around the optical axis: build in (r, y) then rotate so the axis is x
+  const prof = []; for (let i = 0; i <= 24; i++) { const y = (i / 24) * R; const w = conv ? 0.4 + (1 - (y / R) ** 2) * t : 0.5 + ((y / R) ** 2) * t * 0.6; prof.push(new THREE.Vector2(y, w)); }
+  const outline = [...prof.map((p) => new THREE.Vector2(p.x, p.y)), ...prof.slice().reverse().map((p) => new THREE.Vector2(p.x, -p.y))];
+  const g = new THREE.LatheGeometry(outline.map((p) => new THREE.Vector2(p.x, p.y)), 64);
+  // LatheGeometry revolves around y with points (radius, height): rotate so height → x
+  g.rotateZ(-Math.PI / 2);
+  return g;
+}
+function ray(color) { return new THREE.Line(new THREE.BufferGeometry().setFromPoints([V3(), V3(), V3()]), new THREE.LineBasicMaterial({ color, toneMapped: false })); }
+runSim({
+  title: 'Lens Ray Diagram', subtitle: 'Where the image forms, how big it is and whether it is real — from 1/f = 1/u + 1/v.',
+  stage: 'bench', camera: { pos: [0, 42, 118], target: [0, 18, 0] },
+  controls: [
+    { id: 'type', label: 'Lens', type: 'select', value: 'conv', options: [{ value: 'conv', label: 'Convex (converging)' }, { value: 'div', label: 'Concave (diverging)' }] },
+    { id: 'f', label: 'Focal length |f|', min: 10, max: 40, step: 0.5, value: 20, unit: 'cm' },
+    { id: 'u', label: 'Object distance u', min: 5, max: 90, step: 0.5, value: 45, unit: 'cm' },
+    { id: 'h', label: 'Object height', min: 3, max: 12, step: 0.5, value: 7, unit: 'cm' },
+  ],
+  buttons: [
+    { id: 'b1', label: 'Beyond 2F', kind: 'ghost', run: (c) => c.setControl('u', Math.min(90, c.v.f * 2.6)) },
+    { id: 'b2', label: 'At 2F', kind: 'ghost', run: (c) => c.setControl('u', c.v.f * 2) },
+    { id: 'b3', label: 'Between F and 2F', kind: 'ghost', run: (c) => c.setControl('u', c.v.f * 1.5) },
+    { id: 'b4', label: 'Inside F (magnifier)', kind: 'ghost', run: (c) => c.setControl('u', c.v.f * 0.6) },
+  ],
+  readouts: [{ id: 'v', label: 'Image distance v' }, { id: 'm', label: 'Magnification m' }, { id: 'hi', label: 'Image height' }, { id: 'nat', label: 'Nature' }, { id: 'or', label: 'Orientation' }, { id: 'P', label: 'Power P = 1/f' }],
+  info: 'Three easy rays locate the image: a ray parallel to the axis is bent through the focal point F; a ray through the centre of the lens goes straight on; a ray through F on the near side leaves parallel. Where the rays really meet a real image forms, and you can catch it on a screen. If they only appear to come from a point behind the lens (dashed lines), the image is virtual, like the one you see through a magnifying glass.',
+  formulas: ['1/f = 1/u + 1/v', 'm = −v / u = hᵢ / hₒ', 'P = 1 / f (in metres) dioptres'],
+  formulasPlain: ['1/f = 1/u + 1/v', 'm = -v/u', 'P = 1/f'],
+  setup(ctx) {
+    const rail = mesh(new THREE.BoxGeometry(200, 3, 6), MAT.darkSteel); rail.position.set(0, -1.5, 0);
+    const scale = mesh(new THREE.PlaneGeometry(196, 3), new THREE.MeshStandardMaterial({ map: ctx.canvasTex(2048, 32, (g, w, h) => { g.fillStyle = '#e5e7eb'; g.fillRect(0, 0, w, h); g.fillStyle = '#111'; g.font = '14px Arial'; for (let c = -98; c <= 98; c++) { const x = ((c + 98) / 196) * w; g.fillRect(x, 0, 1.5, c % 10 ? 8 : 16); if (c % 10 === 0) g.fillText(String(c), x + 2, 28); } }) }));
+    scale.position.set(0, -1.2, 3.05); ctx.scene.add(rail, scale);
+    const axis = new THREE.Line(new THREE.BufferGeometry().setFromPoints([V3(XMIN, AX, 0), V3(XMAX, AX, 0)]), new THREE.LineDashedMaterial({ color: 0x475569, dashSize: 2, gapSize: 1.5 })); axis.computeLineDistances(); ctx.scene.add(axis);
+    lensMat = new THREE.MeshPhysicalMaterial({ color: 0xbfe3f5, roughness: 0.05, clearcoat: 1, transparent: true, opacity: 0.45, side: THREE.DoubleSide, depthWrite: false });
+    lens = new THREE.Mesh(lensGeo(20), lensMat); lens.position.set(0, AX, 0);
+    const holder = mesh(new THREE.CylinderGeometry(0.7, 0.7, AX - 9, 12), MAT.steel); holder.position.set(0, (AX - 9) / 2, 0);
+    const ring = mesh(new THREE.TorusGeometry(9.3, 0.5, 10, 48), MAT.darkSteel); ring.rotation.y = Math.PI / 2; ring.position.set(0, AX, 0);
+    ctx.scene.add(lens, holder, ring);
+    obj = arrowObj(0xf59e0b); ctx.objPost = mesh(new THREE.CylinderGeometry(0.6, 0.6, AX, 10), MAT.steel); ctx.objPost.geometry.translate(0, -AX / 2, 0); obj.add(ctx.objPost);
+    imgMat = std(0x22d3ee, { emissive: 0x22d3ee, emissiveIntensity: 0.4, transparent: true });
+    img = arrowObj(0x22d3ee, imgMat);
+    screen = mesh(new THREE.BoxGeometry(0.6, 36, 30), MAT.white); screen.position.y = AX;
+    ctx.scene.add(obj, img, screen);
+    [0xfbbf24, 0xf472b6, 0x4ade80].forEach((c) => { const r = ray(c); rays.push(r); ctx.scene.add(r); const e = new THREE.Line(new THREE.BufferGeometry().setFromPoints([V3(), V3()]), new THREE.LineDashedMaterial({ color: c, dashSize: 1.2, gapSize: 1, transparent: true, opacity: 0.8 })); ext.push(e); ctx.scene.add(e); });
+    ['F', 'F', '2F', '2F'].forEach((t, i) => { const m = mesh(new THREE.SphereGeometry(0.8, 12, 8), glow(i < 2 ? 0xef4444 : 0xa78bfa)); marks.push(m); ctx.scene.add(m); m.tag = ctx.label(t, () => m.position.clone().add(V3(0, -1.5, 0))); });
+    ctx.label('object', () => obj.position.clone().add(V3(0, ctx.v.h + 2.5, 0)));
+    ctx.imgTag = ctx.label('image', () => (Number.isFinite(cur.v) ? img.position.clone().add(V3(0, cur.hi > 0 ? cur.hi + 2.5 : 2, 0)) : null));
+    ctx.lastF = null;
+  },
+  frame(ctx) {
+    const f = ctx.v.type === 'conv' ? ctx.v.f : -ctx.v.f, u = ctx.v.u, h = ctx.v.h;
+    if (ctx.lastF !== f) { lens.geometry.dispose(); lens.geometry = lensGeo(f); ctx.lastF = f; }
+    const inf = Math.abs(u - f) < 0.3;
+    const v = inf ? Infinity : (u * f) / (u - f), m = -v / u, hi = m * h;
+    cur = { f, v, m, hi };
+    obj.position.set(-u, AX, 0); obj.setH(h);
+    const real = v > 0 && Number.isFinite(v);
+    img.visible = Number.isFinite(v) && Math.abs(v) < 400;
+    if (img.visible) { img.position.set(v, AX, 0); img.setH(hi); imgMat.opacity = real ? 1 : 0.45; }
+    screen.visible = real && v < XMAX + 5; screen.position.x = Math.min(v, XMAX) + 0.5;
+    marks.forEach((mk, i) => { const k = i < 2 ? 1 : 2, s = i % 2 ? 1 : -1; mk.position.set(s * k * Math.abs(f), AX, 0); });
+    // principal rays: each leaves the object tip, meets the lens at height yl and then heads for the image tip
+    const P = V3(-u, AX + h, 0);
+    const yl = [h, 0, inf ? null : h - (u * h) / (u - f)];
+    rays.forEach((r, i) => {
+      const y = yl[i];
+      if (y == null || Math.abs(y) > 30) { r.visible = false; ext[i].visible = false; return; }
+      r.visible = true;
+      const L = V3(0, AX + y, 0);
+      let dir;
+      if (inf) dir = V3(u, -h, 0).normalize(); // all rays leave parallel to the undeviated ray
+      else if (real) dir = V3(v, AX + hi, 0).sub(L).normalize();
+      else dir = L.clone().sub(V3(v, AX + hi, 0)).normalize();
+      const k = (XMAX - L.x) / Math.max(1e-6, dir.x), end = L.clone().add(dir.multiplyScalar(Math.min(k, 200)));
+      if (end.y < -2) end.lerpVectors(L, end, (L.y + 2) / (L.y - end.y));
+      r.geometry.setFromPoints([P, L, end]);
+      ext[i].visible = !real && img.visible;
+      if (ext[i].visible) { ext[i].geometry.setFromPoints([L, V3(v, AX + hi, 0)]); ext[i].computeLineDistances(); }
+    });
+  },
+  ui(ctx) {
+    const { v, m, hi, f } = cur;
+    const fin = Number.isFinite(v);
+    ctx.readout('v', fin ? `${v.toFixed(1)} cm` : '∞'); ctx.readout('m', fin ? m.toFixed(2) : '∞'); ctx.readout('hi', fin ? `${hi.toFixed(1)} cm` : '—');
+    ctx.readout('nat', !fin ? 'No image (at infinity)' : v > 0 ? 'Real — on a screen' : 'Virtual — seen through lens');
+    ctx.readout('or', !fin ? '—' : `${m < 0 ? 'Inverted' : 'Upright'}, ${Math.abs(m) > 1.02 ? 'magnified' : Math.abs(m) < 0.98 ? 'diminished' : 'same size'}`);
+    ctx.readout('P', `${(100 / f).toFixed(1)} D`);
+  },
 });
-draw();
 </script>
 </body></html>

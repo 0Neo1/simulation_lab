@@ -1,79 +1,83 @@
 <!DOCTYPE html>
-<html lang="en"><head><meta charset="UTF-8"><title>Doppler Effect</title><link rel="stylesheet" href="../styles.css"></head>
-<body>
-<header><a href="../index.html"><h1>Doppler Effect</h1></a><p>Wavefronts compress in front of a moving source.</p></header>
-<main>
-<a class="back-link" href="../index.html">&larr; All simulations</a>
-<div class="sim-container">
-  <div>
-    <div class="canvas-wrap"><canvas id="cv" width="800" height="500"></canvas></div>
-    <div class="info-box">
-      <h3>The Physics</h3>
-      <p>When a source moves through a medium, wavefronts ahead of it compress (higher frequency) and those behind expand (lower frequency).</p>
-      <div class="formula">f' = f · (v_wave) / (v_wave − v_source · cos θ)</div>
-      <p>Mach 1 produces a shock wave; supersonic motion creates a Mach cone.</p>
-    </div>
-  </div>
-  <div class="controls">
-    <h3>Controls</h3>
-    <div class="control-row"><label>Source speed <span class="val" id="vS">0.5 v</span></label><input type="range" id="vs" min="0" max="200" value="50"></div>
-    <div class="control-row"><label>Wave speed <span class="val" id="vW">100</span></label><input type="range" id="vw" min="50" max="200" value="100"></div>
-    <div class="control-row"><label>Frequency <span class="val" id="vF">1.0</span></label><input type="range" id="f" min="2" max="20" value="10"></div>
-    <div class="btn-row"><button id="run">Start</button><button class="secondary" id="pause">Pause</button><button class="danger" id="reset">Reset</button></div>
-  </div>
-</div>
-</main>
-<script>
-const cv=document.getElementById('cv'), ctx=cv.getContext('2d');
-let vs=50, vw=100, f=1.0, running=false;
-let x=100, y=250, t=0, fronts=[], lastEmit=0;
-
-function step(){
-  if(!running) return;
-  const dt = 0.03; t += dt;
-  x += vs*dt;
-  if(x > cv.width-50) { x = 100; fronts = []; }
-  if(t - lastEmit > 1/f){ fronts.push({x, y, t0: t}); lastEmit = t; }
-  fronts = fronts.filter(fr => t-fr.t0 < 6);
-  draw(); requestAnimationFrame(step);
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Doppler Effect</title>
+<link rel="stylesheet" href="../engine/concept.css">
+<script type="importmap">{"imports":{"three":"../../simulations/lib/three/three.module.min.js","three/addons/":"../../simulations/lib/three/addons/"}}</script>
+</head><body>
+<script type="module">
+import { runSim, V3, MAT, mesh, std, glow, THREE } from '../engine/concept.js';
+// A siren car drives past two listeners; each ring is one wavefront (shown every 0.04 s).
+const XA = -150, XB = 150, EMIT = 0.04, OBS = [{ x: 60, z: 14, name: 'Listener A', col: 0x22c55e }, { x: -60, z: 14, name: 'Listener B', col: 0xf97316 }];
+let car, rings = [], ringI = 0, lastEmit, sx, figs = [], hist = [];
+function person(color) {
+  const g = new THREE.Group();
+  const body = mesh(new THREE.CapsuleGeometry(0.9, 2.2, 6, 12), std(color)); body.position.y = 2.3;
+  const head = mesh(new THREE.SphereGeometry(0.75, 16, 12), std(0xe0ac85)); head.position.y = 4.6;
+  const legs = mesh(new THREE.BoxGeometry(1.1, 1.4, 0.7), MAT.black); legs.position.y = 0.7;
+  g.add(body, head, legs); return g;
 }
-
-function draw(){
-  ctx.clearRect(0,0,cv.width,cv.height);
-  ctx.fillStyle='#000000'; ctx.fillRect(0,0,cv.width,cv.height);
-  // wavefronts
-  fronts.forEach(fr=>{
-    const r = vw*(t-fr.t0);
-    ctx.strokeStyle = `rgba(200,200,200,${1-(t-fr.t0)/6})`;
-    ctx.lineWidth = 2;
-    ctx.beginPath(); ctx.arc(fr.x, fr.y, r, 0, 2*Math.PI); ctx.stroke();
-  });
-  // source
-  ctx.fillStyle='#cccccc'; ctx.beginPath(); ctx.arc(x,y,10,0,2*Math.PI); ctx.fill();
-  // observer (left)
-  ctx.fillStyle='#ffffff'; ctx.beginPath(); ctx.arc(50,250,8,0,2*Math.PI); ctx.fill();
-  ctx.fillStyle='#fff'; ctx.font='12px sans-serif'; ctx.fillText('observer', 30, 230);
-  // observer (right)
-  ctx.fillStyle='#ffffff'; ctx.beginPath(); ctx.arc(750,250,8,0,2*Math.PI); ctx.fill();
-  ctx.fillText('observer', 720, 230);
-  // mach speed indicator
-  ctx.fillStyle='#fff'; ctx.font='14px sans-serif';
-  const mach = vs/vw;
-  ctx.fillText(`Mach: ${mach.toFixed(2)}${mach>1?' (supersonic!)':''}`, 20, 30);
-  // Doppler shifted frequencies (approx for 1D)
-  const fL = f * vw/(vw + vs); // left observer (source moves away)
-  const fR = vs<vw ? f * vw/(vw - vs) : 0; // right (toward)
-  ctx.fillStyle='#ffffff';
-  ctx.fillText(`f_left ≈ ${fL.toFixed(2)} Hz`, 30, 290);
-  ctx.fillText(`f_right ≈ ${fR.toFixed(2)} Hz`, 700, 290);
+runSim({
+  title: 'Doppler Effect', subtitle: 'A moving source bunches its waves up in front and stretches them out behind.',
+  stage: 'field', camera: { pos: [0, 80, 185], target: [0, 0, 0] }, stageOpts: { fogNear: 300, fogFar: 1200 },
+  autoplay: true, timeScale: 0.12,
+  controls: [
+    { id: 'vs', label: 'Source speed vₛ', min: 0, max: 450, step: 5, value: 120, unit: 'm/s' },
+    { id: 'f', label: 'Siren frequency f', min: 200, max: 1000, step: 10, value: 500, unit: 'Hz' },
+    { id: 'v', label: 'Speed of sound v', min: 300, max: 360, step: 1, value: 343, unit: 'm/s' },
+  ],
+  buttons: [{ id: 'mach', label: 'Break the sound barrier', kind: 'warn', run: (c) => c.setControl('vs', 420) }, { id: 'still', label: 'Park the car', kind: 'ghost', run: (c) => c.setControl('vs', 0) }],
+  readouts: [{ id: 'fa', label: 'Heard by A' }, { id: 'fb', label: 'Heard by B' }, { id: 'la', label: 'λ in front of car' }, { id: 'lb', label: 'λ behind car' }, { id: 'M', label: 'Mach number' }, { id: 'st', label: 'Regime' }],
+  graph: { title: 'Frequency each listener hears', series: [{ name: 'A', color: '#22c55e' }, { name: 'B', color: '#f97316' }, { name: 'emitted', color: '#94a3b8' }], max: 500, window: 6 },
+  info: 'Each ring is a wavefront that spreads out at the speed of sound from where the car was when it was emitted. Because the car moves, the rings are closer together in front (shorter wavelength, higher pitch) and further apart behind (lower pitch). When the car reaches the speed of sound the fronts pile up; faster than that they form a Mach cone and a sonic boom. Watch A's pitch drop as the car passes. Time runs about eight times slower than real life so you can see the waves.',
+  formulas: ['f′ = f · v / (v − vₛ)  (approaching)', 'f′ = f · v / (v + vₛ)  (receding)', 'sin α = v / vₛ  (Mach cone)'],
+  setup(ctx) {
+    const road = mesh(new THREE.PlaneGeometry(320, 12), new THREE.MeshStandardMaterial({ map: ctx.canvasTex(1024, 48, (g, w, h) => { g.fillStyle = '#3b3f45'; g.fillRect(0, 0, w, h); g.fillStyle = '#f5f5f5'; for (let x = 0; x < w; x += 40) g.fillRect(x, h / 2 - 2, 22, 4); g.fillStyle = '#e5c100'; g.fillRect(0, 2, w, 3); g.fillRect(0, h - 5, w, 3); }), roughness: 0.9 }), false);
+    road.rotation.x = -Math.PI / 2; road.position.y = 0.05; ctx.scene.add(road);
+    car = new THREE.Group();
+    const body = mesh(new THREE.BoxGeometry(9, 2.6, 4.2), std(0xf8fafc, { metalness: 0.3 })); body.position.y = 2;
+    const cab = mesh(new THREE.BoxGeometry(4.5, 2, 3.8), std(0xf8fafc)); cab.position.set(-1, 4.2, 0);
+    const stripe = mesh(new THREE.BoxGeometry(9.05, 0.6, 4.25), std(0xdc2626)); stripe.position.y = 2.2;
+    const light = mesh(new THREE.BoxGeometry(1.2, 0.5, 2.4), glow(0x3b82f6)); light.position.set(-1, 5.4, 0); car.light = light;
+    car.add(body, cab, stripe, light);
+    [[-3, -2.1], [3, -2.1], [-3, 2.1], [3, 2.1]].forEach(([x, z]) => { const w = mesh(new THREE.CylinderGeometry(1, 1, 0.8, 20), MAT.black); w.rotation.x = Math.PI / 2; w.position.set(x, 1, z); car.add(w); });
+    ctx.scene.add(car);
+    const rg = new THREE.BufferGeometry().setFromPoints(Array.from({ length: 128 }, (_, i) => V3(Math.cos(i / 128 * Math.PI * 2), 0, Math.sin(i / 128 * Math.PI * 2))));
+    for (let i = 0; i < 70; i++) { const r = new THREE.LineLoop(rg, new THREE.LineBasicMaterial({ color: 0x0c4a6e, transparent: true, opacity: 0.9, depthWrite: false })); r.visible = false; r.position.y = 0.3; ctx.scene.add(r); rings.push(r); }
+    OBS.forEach((o) => { const p = person(o.col); p.position.set(o.x, 0, o.z); p.scale.setScalar(1.8); ctx.scene.add(p); figs.push(p); });
+    OBS.forEach((o, i) => { o.tag = ctx.label(o.name, () => figs[i].position.clone().add(V3(0, 11, 0)), 'big'); });
+    ctx.label('siren', () => car.position.clone().add(V3(0, 8, 0)));
+  },
+  reset(ctx) { sx = -40; lastEmit = -1; hist = []; rings.forEach((r) => { r.visible = false; }); },
+  step(ctx, dt) {
+    sx += ctx.v.vs * dt; if (sx > XB) { sx = XA; }
+    hist.push([ctx.t, sx]); if (hist.length > 20000) hist.splice(0, 5000);
+    if (ctx.t - lastEmit >= EMIT) { lastEmit = ctx.t; const r = rings[ringI++ % rings.length]; r.userData = { t0: ctx.t, x0: sx }; r.visible = true; }
+    ctx.n = (ctx.n || 0) + 1; if (ctx.n % 12 === 0) ctx.plot(ctx.t, [...OBS.map((o) => heard(ctx, o)), ctx.v.f]);
+  },
+  frame(ctx) {
+    car.position.set(sx, 0, 0); car.light.material.color.setHex(Math.sin(ctx.t * 30) > 0 ? 0x3b82f6 : 0xef4444);
+    for (const r of rings) {
+      if (!r.visible) continue;
+      const R = ctx.v.v * (ctx.t - r.userData.t0);
+      if (R > 320 || R < 0) { r.visible = false; continue; }
+      r.position.x = r.userData.x0; r.scale.set(Math.max(R, 0.01), 1, Math.max(R, 0.01)); r.material.opacity = 0.9 * (1 - R / 320);
+    }
+  },
+  ui(ctx) {
+    const [fa, fb] = OBS.map((o) => heard(ctx, o)), { v, vs, f } = ctx.v;
+    ctx.readout('fa', fa ? `${fa.toFixed(0)} Hz` : 'not reached yet'); ctx.readout('fb', fb ? `${fb.toFixed(0)} Hz` : 'not reached yet');
+    ctx.readout('la', vs < v ? `${((v - vs) / f).toFixed(3)} m` : '—'); ctx.readout('lb', `${((v + vs) / f).toFixed(3)} m`);
+    ctx.readout('M', (vs / v).toFixed(2)); ctx.readout('st', vs === 0 ? 'At rest' : vs < v ? 'Subsonic' : vs === v ? 'Sonic' : 'Supersonic — Mach cone');
+  },
+});
+// Frequency a listener hears now: find the wave emitted earlier that arrives now (retarded time).
+function heard(ctx, o) {
+  const { v, vs, f } = ctx.v;
+  if (!hist.length) return f;
+  for (let i = hist.length - 1; i >= 0; i -= 1) {
+    const [te, xe] = hist[i], d = Math.hypot(o.x - xe, o.z);
+    if (v * (ctx.t - te) >= d) return (f * v) / (v - vs * ((o.x - xe) / d)); // vₛ cos θ: speed towards the listener
+  }
+  return null;
 }
-
-document.getElementById('vs').oninput=e=>{vs=+e.target.value; document.getElementById('vS').textContent=(vs/vw).toFixed(2)+' v';};
-document.getElementById('vw').oninput=e=>{vw=+e.target.value; document.getElementById('vW').textContent=vw;};
-document.getElementById('f').oninput=e=>{f=+e.target.value/10; document.getElementById('vF').textContent=f.toFixed(1)+' Hz';};
-document.getElementById('run').onclick=()=>{if(!running){running=true; step();}};
-document.getElementById('pause').onclick=()=>running=false;
-document.getElementById('reset').onclick=()=>{running=false; x=100; fronts=[]; t=0; draw();};
-draw();
 </script>
 </body></html>

@@ -1,76 +1,118 @@
 <!DOCTYPE html>
-<html lang="en"><head><meta charset="UTF-8"><title>Double-Slit Diffraction</title><link rel="stylesheet" href="../styles.css"></head>
-<body>
-<header><a href="../index.html"><h1>Double-Slit Diffraction</h1></a><p>Coherent waves through two slits.</p></header>
-<main>
-<a class="back-link" href="../index.html">&larr; All simulations</a>
-<div class="sim-container">
-  <div>
-    <div class="canvas-wrap"><canvas id="cv" width="800" height="500"></canvas></div>
-    <div class="info-box">
-      <h3>The Physics</h3>
-      <p>Light through two narrow slits creates an interference pattern with bright fringes where path difference is an integer wavelength.</p>
-      <div class="formula">d sin θ = m λ &nbsp;&nbsp; (bright fringes)</div>
-      <p>Fringe spacing on screen: <em>Δy ≈ λL/d</em>.</p>
-    </div>
-  </div>
-  <div class="controls">
-    <h3>Controls</h3>
-    <div class="control-row"><label>Wavelength <span class="val" id="vL">30</span></label><input type="range" id="L" min="10" max="80" value="30"></div>
-    <div class="control-row"><label>Slit separation d <span class="val" id="vD">80</span></label><input type="range" id="d" min="20" max="200" value="80"></div>
-    <div class="btn-row"><button id="run">Start</button><button class="secondary" id="pause">Pause</button></div>
-  </div>
-</div>
-</main>
-<script>
-const cv=document.getElementById('cv'), ctx=cv.getContext('2d');
-let L=30, d=80, t=0, running=false;
-const W=cv.width, H=cv.height;
-const img = ctx.createImageData(W,H);
-const slitX = 250, screenX = 700;
-
-function draw(){
-  const w = 2*Math.PI/L;
-  const s1y = H/2 - d/2, s2y = H/2 + d/2;
-  const data = img.data;
-  for(let y=0;y<H;y+=2) for(let x=0;x<W;x+=2){
-    let v = 0;
-    if(x < slitX){
-      v = Math.sin(w*x - 5*t)*1.5;
-    } else {
-      const r1 = Math.hypot(x-slitX, y-s1y);
-      const r2 = Math.hypot(x-slitX, y-s2y);
-      v = Math.sin(w*r1 - 5*t)/Math.sqrt(r1/30+1) + Math.sin(w*r2 - 5*t)/Math.sqrt(r2/30+1);
-    }
-    const g = Math.max(0, Math.min(255, Math.floor(127 + v*60)));
-    for(let dy=0;dy<2;dy++) for(let dx=0;dx<2;dx++){
-      const idx = ((y+dy)*W + (x+dx))*4;
-      data[idx]=g; data[idx+1]=g; data[idx+2]=g; data[idx+3]=255;
-    }
-  }
-  ctx.putImageData(img,0,0);
-  // barrier
-  ctx.fillStyle='#888888';
-  ctx.fillRect(slitX-5, 0, 10, s1y-15);
-  ctx.fillRect(slitX-5, s1y+15, 10, s2y-s1y-30);
-  ctx.fillRect(slitX-5, s2y+15, 10, H-s2y-15);
-  // screen with intensity
-  ctx.fillStyle='#dddddd'; ctx.fillRect(screenX-3, 50, 6, H-100);
-  for(let y=50;y<H-50;y++){
-    const r1 = Math.hypot(screenX-slitX, y-s1y);
-    const r2 = Math.hypot(screenX-slitX, y-s2y);
-    const a = Math.cos(w*(r2-r1)/2);
-    const I = a*a;
-    const g = Math.floor(I*255);
-    ctx.fillStyle = `rgb(${g},${g},${g})`;
-    ctx.fillRect(screenX+5, y, 80, 1);
-  }
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Young's Double Slit</title>
+<link rel="stylesheet" href="../engine/concept.css">
+<script type="importmap">{"imports":{"three":"../../simulations/lib/three/three.module.min.js","three/addons/":"../../simulations/lib/three/addons/"}}</script>
+</head><body>
+<script type="module">
+import { runSim, V3, MAT, mesh, std, glow, THREE } from '../engine/concept.js';
+// Laser → double slit → screen on an optical bench. The fringe pattern on the screen is the
+// real two-slit intensity (with the single-slit envelope). The wave view between slit and
+// screen is not to scale. Photon mode builds the pattern one detection at a time.
+const AX = 20, SLIT_X = -30, SCR_HALF = 5; // screen shows y from −5 cm to +5 cm
+let laser, beam, plate, screen, scrTex, scrCanvas, wave, waveTex, waveCanvas, hits, lastKey = '', photons = 0, hitBuf;
+function wlColor(nm) {
+  let r = 0, g = 0, b = 0;
+  if (nm < 440) { r = -(nm - 440) / 60; b = 1; } else if (nm < 490) { g = (nm - 440) / 50; b = 1; } else if (nm < 510) { g = 1; b = -(nm - 510) / 20; } else if (nm < 580) { r = (nm - 510) / 70; g = 1; } else if (nm < 645) { r = 1; g = -(nm - 645) / 65; } else r = 1;
+  const k = nm < 420 ? 0.3 + 0.7 * (nm - 380) / 40 : nm > 700 ? 0.3 + 0.7 * (750 - nm) / 50 : 1;
+  return [r * k, g * k, b * k];
 }
-function step(){ if(!running)return; t+=0.05; draw(); requestAnimationFrame(step); }
-document.getElementById('L').oninput=e=>{L=+e.target.value; document.getElementById('vL').textContent=L; if(!running)draw();};
-document.getElementById('d').oninput=e=>{d=+e.target.value; document.getElementById('vD').textContent=d; if(!running)draw();};
-document.getElementById('run').onclick=()=>{if(!running){running=true; step();}};
-document.getElementById('pause').onclick=()=>running=false;
-draw();
+function I(ctx, y) { // y in metres on the screen
+  const lam = ctx.v.lam * 1e-9, d = ctx.v.d * 1e-3, a = ctx.v.a * 1e-3, L = ctx.v.L;
+  const beta = Math.PI * a * y / (lam * L), alpha = Math.PI * d * y / (lam * L);
+  const env = beta === 0 ? 1 : (Math.sin(beta) / beta) ** 2;
+  return (ctx.v.slits === 1 ? 1 : Math.cos(alpha) ** 2) * env;
+}
+runSim({
+  title: "Young's Double Slit", subtitle: 'Light passing two narrow slits makes bright and dark fringes: evidence that light is a wave.',
+  stage: 'bench', camera: { pos: [-8, 48, 92], target: [-6, 15, 0] },
+  autoplay: true,
+  controls: [
+    { id: 'lam', label: 'Wavelength λ', min: 380, max: 750, step: 5, value: 632, unit: 'nm' },
+    { id: 'd', label: 'Slit separation d', min: 0.05, max: 0.6, step: 0.01, value: 0.25, unit: 'mm' },
+    { id: 'a', label: 'Slit width a', min: 0.01, max: 0.12, step: 0.005, value: 0.04, unit: 'mm' },
+    { id: 'L', label: 'Slit-to-screen distance L', min: 0.5, max: 3, step: 0.05, value: 1.5, unit: 'm' },
+    { id: 'slits', label: 'Slits open', type: 'select', value: 2, options: [{ value: 2, label: 'Both slits' }, { value: 1, label: 'One slit only' }] },
+    { id: 'mode', label: 'Source', type: 'select', value: 'wave', options: [{ value: 'wave', label: 'Bright laser (steady pattern)' }, { value: 'photon', label: 'One photon at a time' }] },
+  ],
+  buttons: [{ id: 'clr', label: 'Clear screen', kind: 'ghost', run: () => { photons = 0; hitBuf.fill(0); lastKey = ''; } }],
+  readouts: [{ id: 'beta', label: 'Fringe spacing β = λL/d' }, { id: 'n', label: 'Bright fringes on screen' }, { id: 'env', label: 'Central envelope width' }, { id: 'ph', label: 'Photons detected' }, { id: 'col', label: 'Colour' }, { id: 'f', label: 'Frequency' }],
+  graph: { title: 'Intensity across the screen', series: [{ name: 'I / I₀', color: '#fde047' }], xlabel: 'y (mm)', ymin: 0, ymax: 1.05, max: 500 },
+  info: 'Each slit acts as a new source. Where the path difference to the screen is a whole number of wavelengths, the waves arrive in step and give a bright fringe; half a wavelength out of step gives a dark fringe. The fringe spacing grows with wavelength and screen distance and shrinks when the slits are further apart. Narrower slits spread the light wider (the single-slit envelope). Switch to single photons: each photon lands at one random spot, but after thousands the same fringes appear.',
+  formulas: ['Bright:  d sin θ = nλ', 'β = λL / d', 'Envelope zeros:  a sin θ = mλ'],
+  formulasPlain: ['d sin θ = nλ', 'β = λL/d', 'a sin θ = mλ'],
+  setup(ctx) {
+    const rail = mesh(new THREE.BoxGeometry(120, 3, 6), MAT.darkSteel); rail.position.set(0, -1.5, 0); ctx.scene.add(rail);
+    const post = (x, h = AX) => { const p = mesh(new THREE.CylinderGeometry(0.7, 0.7, h, 12), MAT.steel); p.position.set(x, h / 2, 0); ctx.scene.add(p); };
+    laser = mesh(new THREE.CylinderGeometry(2, 2, 18, 24), std(0x1f2937, { metalness: 0.7 })); laser.rotation.z = Math.PI / 2; laser.position.set(-58, AX, 0); post(-58, AX - 2);
+    beam = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.35, 1, 10), glow(0xff0000)); beam.rotation.z = Math.PI / 2;
+    plate = mesh(new THREE.BoxGeometry(0.4, 14, 14), MAT.black); plate.position.set(SLIT_X, AX, 0); post(SLIT_X, AX - 7);
+    [-1, 1].forEach((s) => { const sl = mesh(new THREE.BoxGeometry(0.5, 8, 0.25), glow(0xdddddd)); sl.position.set(SLIT_X, AX, s * 0.7); ctx.scene.add(sl); sl.userData.s = s; ctx['slit' + s] = sl; });
+    scrCanvas = document.createElement('canvas'); scrCanvas.width = 1024; scrCanvas.height = 32;
+    scrTex = new THREE.CanvasTexture(scrCanvas); scrTex.colorSpace = THREE.SRGBColorSpace;
+    screen = new THREE.Mesh(new THREE.PlaneGeometry(30, 18), new THREE.MeshBasicMaterial({ map: scrTex, toneMapped: false }));
+    screen.rotation.y = -Math.PI / 2; screen.position.set(45, AX, 0);
+    const back = mesh(new THREE.BoxGeometry(0.8, 19, 31), MAT.white); back.position.set(45.5, AX, 0); post(45.5, AX - 9.5);
+    // top-down wave view between the slits and the screen (not to scale)
+    waveCanvas = document.createElement('canvas'); waveCanvas.width = 256; waveCanvas.height = 128;
+    waveTex = new THREE.CanvasTexture(waveCanvas); waveTex.colorSpace = THREE.SRGBColorSpace;
+    wave = new THREE.Mesh(new THREE.PlaneGeometry(74, 30), new THREE.MeshBasicMaterial({ map: waveTex, transparent: true, opacity: 0.85, toneMapped: false, depthWrite: false, blending: THREE.AdditiveBlending }));
+    wave.rotation.x = -Math.PI / 2; wave.position.set(SLIT_X + 37.5, AX - 0.2, 0);
+    ctx.scene.add(laser, beam, plate, screen, back, wave);
+    hitBuf = new Float32Array(1024);
+    ctx.label('laser', () => V3(-58, AX + 4, 0)); ctx.label('double slit', () => V3(SLIT_X, AX + 9, 0)); ctx.label('screen', () => V3(45, AX + 11, 0));
+    ctx.label('wave view (not to scale)', () => V3(5, AX, 16));
+  },
+  step(ctx, dt) {
+    if (ctx.v.mode !== 'photon') return;
+    // rejection sampling: photons land with probability ∝ I(y)
+    for (let k = 0; k < 6; k++) {
+      const y = (Math.random() * 2 - 1) * SCR_HALF / 100;
+      if (Math.random() < I(ctx, y)) { const px = Math.floor(((y * 100 + SCR_HALF) / (2 * SCR_HALF)) * 1023); hitBuf[px] += 1; photons++; ctx.newHit = (ctx.newHit || []); ctx.newHit.push([px, Math.random()]); }
+    }
+  },
+  frame(ctx) {
+    const [r, g, b] = wlColor(ctx.v.lam), css = `rgb(${r * 255 | 0},${g * 255 | 0},${b * 255 | 0})`;
+    beam.material.color.setRGB(r, g, b, THREE.SRGBColorSpace);
+    beam.position.set((-49 + SLIT_X) / 2, AX, 0); beam.scale.y = SLIT_X - -49;
+    ctx.slit1.visible = ctx.v.slits === 2;
+    const sep = Math.min(4, 0.6 + ctx.v.d * 5); ctx['slit-1'].position.z = ctx.v.slits === 2 ? -sep / 2 : 0; ctx.slit1.position.z = sep / 2;
+    const key = [ctx.v.lam, ctx.v.d, ctx.v.a, ctx.v.L, ctx.v.slits, ctx.v.mode].join();
+    const gx = scrCanvas.getContext('2d');
+    if (key !== lastKey) {
+      if (lastKey && ctx.v.mode === 'photon') { photons = 0; hitBuf.fill(0); }
+      lastKey = key;
+      ctx.clearGraph(); for (let i = 0; i <= 400; i++) { const y = (-SCR_HALF + (i / 400) * 2 * SCR_HALF) / 100; ctx.plot(y * 1000, [I(ctx, y)]); }
+      gx.fillStyle = '#050505'; gx.fillRect(0, 0, 1024, 32);
+    }
+    if (ctx.v.mode === 'wave') {
+      const img = gx.createImageData(1024, 1);
+      for (let i = 0; i < 1024; i++) { const y = (-SCR_HALF + (i / 1023) * 2 * SCR_HALF) / 100, v = Math.pow(I(ctx, y), 0.8); img.data.set([r * 255 * v, g * 255 * v, b * 255 * v, 255], i * 4); }
+      for (let row = 0; row < 32; row++) gx.putImageData(img, 0, row);
+    } else if (ctx.newHit) {
+      gx.fillStyle = css;
+      for (const [px, ry] of ctx.newHit) gx.fillRect(px, ry * 32, 1.5, 1.5);
+      ctx.newHit = [];
+    }
+    scrTex.needsUpdate = true;
+    // wave view: two circular waves from the slits, coloured by the light
+    const wg = waveCanvas.getContext('2d'), W = 256, H = 128, im = wg.createImageData(W, H);
+    const kv = 2 * Math.PI / (6 + (ctx.v.lam - 380) / 40), sv = 10 + ctx.v.d * 40, t = ctx.t * 6;
+    for (let yy = 0; yy < H; yy++) for (let xx = 0; xx < W; xx++) {
+      const dy1 = yy - H / 2 - sv / 2, dy2 = yy - H / 2 + sv / 2, r1 = Math.hypot(xx, dy1), r2 = Math.hypot(xx, dy2);
+      const s = ctx.v.slits === 2 ? Math.sin(kv * r1 - t) + Math.sin(kv * r2 - t) : 2 * Math.sin(kv * Math.hypot(xx, yy - H / 2) - t);
+      const v = Math.max(0, s) / 2 * Math.min(1, xx / 12);
+      const o = (yy * W + xx) * 4; im.data[o] = r * 255 * v; im.data[o + 1] = g * 255 * v; im.data[o + 2] = b * 255 * v; im.data[o + 3] = 255 * v;
+    }
+    wg.putImageData(im, 0, 0); waveTex.needsUpdate = true;
+  },
+  ui(ctx) {
+    const lam = ctx.v.lam * 1e-9, beta = lam * ctx.v.L / (ctx.v.d * 1e-3), env = 2 * lam * ctx.v.L / (ctx.v.a * 1e-3);
+    ctx.readout('beta', `${(beta * 1000).toFixed(2)} mm`);
+    ctx.readout('n', ctx.v.slits === 2 ? String(2 * Math.floor(Math.min(SCR_HALF / 100, env / 2) / beta) + 1) : '1 broad band');
+    ctx.readout('env', `${(env * 1000).toFixed(1)} mm`); ctx.readout('ph', ctx.v.mode === 'photon' ? String(photons) : '— (laser)');
+    const nm = ctx.v.lam; ctx.readout('col', nm < 450 ? 'Violet' : nm < 495 ? 'Blue' : nm < 570 ? 'Green' : nm < 590 ? 'Yellow' : nm < 620 ? 'Orange' : 'Red');
+    ctx.readout('f', `${(3e8 / lam / 1e12).toFixed(0)} THz`);
+  },
+});
 </script>
 </body></html>

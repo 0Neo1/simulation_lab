@@ -1,101 +1,65 @@
 <!DOCTYPE html>
-<html lang="en"><head><meta charset="UTF-8"><title>Motion Graphs</title><link rel="stylesheet" href="../styles.css"></head>
-<body>
-<header><a href="../index.html"><h1>Motion Graphs</h1></a><p>Visualize position, velocity, and acceleration in real time.</p></header>
-<main>
-<a class="back-link" href="../index.html">&larr; All simulations</a>
-<div class="sim-container">
-  <div>
-    <div class="canvas-wrap"><canvas id="cv" width="800" height="600"></canvas></div>
-    <div class="info-box">
-      <h3>The Physics</h3>
-      <p>Position, velocity, and acceleration are linked: velocity is the derivative of position; acceleration is the derivative of velocity.</p>
-      <div class="formula">v = dx/dt &nbsp;&nbsp; a = dv/dt</div>
-      <p>For constant acceleration: <em>x = x₀ + v₀t + ½at²</em></p>
-    </div>
-  </div>
-  <div class="controls">
-    <h3>Motion Profile</h3>
-    <div class="control-row"><label>Initial Velocity <span class="val" id="vV">5 m/s</span></label><input type="range" id="v0" min="-20" max="20" value="5"></div>
-    <div class="control-row"><label>Acceleration <span class="val" id="vA">2 m/s²</span></label><input type="range" id="a0" min="-10" max="10" value="2" step="0.5"></div>
-    <div class="btn-row"><button id="run">Start</button><button class="secondary" id="pause">Pause</button><button class="danger" id="reset">Reset</button></div>
-    <div class="readouts">
-      <div>t: <span id="rT">0 s</span></div>
-      <div>x: <span id="rX">0 m</span></div>
-      <div>v: <span id="rV">0 m/s</span></div>
-      <div>a: <span id="rA">0 m/s²</span></div>
-    </div>
-  </div>
-</div>
-</main>
-<script>
-const cv = document.getElementById('cv'), ctx = cv.getContext('2d');
-let v0 = 5, a = 2, t = 0, x = 0, v = 5;
-let running = false;
-let history = [];
-const tMax = 10, panel = 180;
-
-function drawTrack() {
-  // top: animated cart
-  ctx.fillStyle = '#f7f7f7'; ctx.fillRect(0,0,cv.width,60);
-  ctx.fillStyle = '#444'; ctx.fillRect(0,55,cv.width,5);
-  // cart at scaled position
-  const cartX = 50 + (x % 700);
-  const adjX = ((cartX % 700) + 700) % 700;
-  ctx.fillStyle = '#ffffff'; ctx.fillRect(adjX, 25, 40, 25);
-  ctx.fillStyle = '#888888';
-  ctx.beginPath(); ctx.arc(adjX+8, 52, 5, 0, 2*Math.PI); ctx.fill();
-  ctx.beginPath(); ctx.arc(adjX+32, 52, 5, 0, 2*Math.PI); ctx.fill();
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Motion Graphs</title>
+<link rel="stylesheet" href="../engine/concept.css">
+<script type="importmap">{"imports":{"three":"../../simulations/lib/three/three.module.min.js","three/addons/":"../../simulations/lib/three/addons/"}}</script>
+</head><body>
+<script type="module">
+import { runSim, V3, MAT, mesh, std, THREE } from '../engine/concept.js';
+// A cart on a 2 m track on the lab bench (cm). Physics in SI.
+const TRACK = 200, Y = 2;
+let cart, wheels, x, v, a, velA, accA;
+const MODES = { rest: 'At rest', const: 'Constant velocity', accel: 'Constant acceleration', brake: 'Speed up, then brake', osc: 'Oscillating (spring)' };
+runSim({
+  title: 'Motion Graphs', subtitle: 'Watch position, velocity and acceleration graphs build in real time as a cart moves.',
+  stage: 'bench', camera: { pos: [0, 70, 170], target: [0, 5, 0] },
+  controls: [
+    { id: 'mode', label: 'Motion', type: 'select', value: 'accel', options: Object.entries(MODES).map(([value, label]) => ({ value, label })), reset: true },
+    { id: 'v0', label: 'Initial velocity', min: -0.5, max: 1, step: 0.05, value: 0.1, unit: 'm/s', reset: true },
+    { id: 'acc', label: 'Acceleration', min: -0.5, max: 0.5, step: 0.01, value: 0.15, unit: 'm/s²' },
+  ],
+  readouts: [{ id: 'x', label: 'Position x' }, { id: 'v', label: 'Velocity v' }, { id: 'a', label: 'Acceleration a' }, { id: 't', label: 'Time' }],
+  graph: { title: 'x, v and a against time', series: [{ name: 'x (m)', color: '#22d3ee' }, { name: 'v (m/s)', color: '#f59e0b' }, { name: 'a (m/s²)', color: '#f472b6' }], max: 800 },
+  info: 'Velocity is the slope of the position–time graph and acceleration is the slope of the velocity–time graph. Try each kind of motion and compare the three curves: a straight x-line means constant v; a straight v-line means constant a.',
+  formulas: ['v = dx/dt', 'a = dv/dt', 'x = x₀ + v₀t + ½at²'],
+  setup(ctx) {
+    const track = mesh(new THREE.BoxGeometry(TRACK + 10, 2, 12), std(0x9ca3af, { metalness: 0.6, roughness: 0.3 })); track.position.set(0, -2 + 1, 0); ctx.scene.add(track);
+    const scale = mesh(new THREE.PlaneGeometry(TRACK, 3), new THREE.MeshStandardMaterial({ map: ctx.canvasTex(2048, 64, (g, w, h) => { g.fillStyle = '#f4ead0'; g.fillRect(0, 0, w, h); g.fillStyle = '#111'; for (let i = 0; i <= 200; i++) { const px = (i / 200) * (w - 2) + 1; g.fillRect(px, 0, i % 10 ? 2 : 4, i % 10 ? 18 : 34); if (i % 20 === 0) { g.font = 'bold 24px Arial'; g.fillText(String(i / 100 - 1), px + 3, 58); } } }) }));
+    scale.rotation.x = -Math.PI / 2; scale.position.set(0, 0.02, 7.6); ctx.scene.add(scale);
+    [-1, 1].forEach((s) => { const stop = mesh(new THREE.BoxGeometry(2, 6, 12), MAT.black); stop.position.set(s * (TRACK / 2 + 4), 2, 0); ctx.scene.add(stop); });
+    cart = new THREE.Group();
+    const body = mesh(new THREE.BoxGeometry(16, 5, 9), std(0x2563eb, { metalness: 0.3 })); body.position.y = Y + 3.5;
+    const top = mesh(new THREE.BoxGeometry(14, 0.6, 7), MAT.darkSteel); top.position.y = Y + 6.3;
+    const flagp = mesh(new THREE.BoxGeometry(0.4, 8, 0.4), MAT.white); flagp.position.set(0, Y + 10, 0);
+    cart.add(body, top, flagp);
+    wheels = [];
+    [-5, 5].forEach((wx) => [-4.8, 4.8].forEach((wz) => { const w = mesh(new THREE.CylinderGeometry(1.6, 1.6, 0.8, 16), MAT.black); w.rotation.x = Math.PI / 2; w.position.set(wx, Y + 1.6, wz); cart.add(w); wheels.push(w); }));
+    ctx.scene.add(cart);
+    velA = ctx.arrow(0xf59e0b, { radius: 0.5, head: 3 }); accA = ctx.arrow(0xf472b6, { radius: 0.5, head: 3 }); ctx.scene.add(velA, accA);
+    ctx.label('v', () => (velA.visible ? cart.position.clone().add(V3(0, 18, 0)) : null));
+    ctx.label('a', () => (accA.visible ? cart.position.clone().add(V3(0, 24, 0)) : null));
+  },
+  reset(ctx) { x = -0.8; v = ctx.v.mode === 'rest' ? 0 : ctx.v.v0; if (ctx.v.mode === 'osc') { x = 0.5; v = 0; } a = 0; place(); },
+  step(ctx, dt) {
+    const m = ctx.v.mode;
+    if (m === 'rest') { v = 0; a = 0; }
+    else if (m === 'const') a = 0;
+    else if (m === 'accel') a = ctx.v.acc;
+    else if (m === 'brake') a = ctx.t < 3 ? Math.abs(ctx.v.acc) : v > 0 ? -2 * Math.abs(ctx.v.acc) : 0;
+    else if (m === 'osc') a = -((2 * Math.PI / 4) ** 2) * x; // T = 4 s
+    v += a * dt; x += v * dt;
+    if (m === 'brake' && ctx.t > 3 && v < 0) { v = 0; a = 0; }
+    if (Math.abs(x) > 0.95) { x = Math.sign(x) * 0.95; v = -v * 0.4; } // bounce off the end stops
+    ctx.sc = (ctx.sc || 0) + 1;
+    if (ctx.sc % 12 === 0) ctx.plot(ctx.t, [x, v, a]);
+  },
+  frame() { place(); },
+  ui(ctx) { ctx.readout('x', `${x.toFixed(3)} m`); ctx.readout('v', `${v.toFixed(3)} m/s`); ctx.readout('a', `${a.toFixed(3)} m/s²`); ctx.readout('t', `${ctx.t.toFixed(2)} s`); },
+});
+function place() {
+  cart.position.set(x * 100, 0, 0);
+  wheels.forEach((w) => { w.rotation.y = -x * 100 / 1.6; });
+  velA.set(cart.position.clone().add(V3(0, 16, 0)), V3(v, 0, 0), 40);
+  accA.set(cart.position.clone().add(V3(0, 22, 0)), V3(a, 0, 0), 80);
 }
-
-function drawGraph(yStart, label, color, vals, scaleY) {
-  ctx.fillStyle = '#fff'; ctx.fillRect(40, yStart, cv.width-50, panel-20);
-  ctx.strokeStyle = '#dddddd'; ctx.strokeRect(40, yStart, cv.width-50, panel-20);
-  // axes
-  const midY = yStart + (panel-20)/2;
-  ctx.strokeStyle = '#bbbbbb'; ctx.lineWidth = 1;
-  ctx.beginPath(); ctx.moveTo(40, midY); ctx.lineTo(cv.width-10, midY); ctx.stroke();
-  // label
-  ctx.fillStyle = '#999999'; ctx.font = 'bold 14px sans-serif';
-  ctx.fillText(label, 8, yStart+12);
-  // plot
-  ctx.strokeStyle = color; ctx.lineWidth = 2;
-  ctx.beginPath();
-  vals.forEach((p,i)=>{
-    const px = 40 + (p.t/tMax)*(cv.width-50);
-    const py = midY - p.val*scaleY;
-    if(i===0) ctx.moveTo(px,py); else ctx.lineTo(px,py);
-  });
-  ctx.stroke();
-}
-
-function draw() {
-  ctx.clearRect(0,0,cv.width,cv.height);
-  drawTrack();
-  drawGraph(75, 'Position (m)', '#ffffff', history.map(h=>({t:h.t,val:h.x})), 1.5);
-  drawGraph(75+panel, 'Velocity (m/s)', '#aaaaaa', history.map(h=>({t:h.t,val:h.v})), 4);
-  drawGraph(75+2*panel, 'Acceleration (m/s²)', '#888888', history.map(h=>({t:h.t,val:h.a})), 8);
-}
-
-function step() {
-  if (!running) return;
-  const dt = 0.05;
-  t += dt; v = v0 + a*t; x = v0*t + 0.5*a*t*t;
-  history.push({t, x, v, a});
-  if (t > tMax) running = false;
-  document.getElementById('rT').textContent = t.toFixed(2)+' s';
-  document.getElementById('rX').textContent = x.toFixed(2)+' m';
-  document.getElementById('rV').textContent = v.toFixed(2)+' m/s';
-  document.getElementById('rA').textContent = a.toFixed(2)+' m/s²';
-  draw();
-  requestAnimationFrame(step);
-}
-
-document.getElementById('v0').oninput = e=>{v0=+e.target.value; document.getElementById('vV').textContent=v0+' m/s';};
-document.getElementById('a0').oninput = e=>{a=+e.target.value; document.getElementById('vA').textContent=a+' m/s²';};
-document.getElementById('run').onclick = ()=>{ if(!running){running=true; step();} };
-document.getElementById('pause').onclick = ()=>{ running=false; };
-document.getElementById('reset').onclick = ()=>{ running=false; t=0; x=0; v=v0; history=[]; draw(); };
-draw();
 </script>
 </body></html>

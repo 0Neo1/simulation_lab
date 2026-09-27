@@ -1,66 +1,93 @@
 <!DOCTYPE html>
-<html lang="en"><head><meta charset="UTF-8"><title>Light Intensity Mixing</title><link rel="stylesheet" href="../styles.css"></head>
-<body>
-<header><a href="../index.html"><h1>Light Intensity Mixing</h1></a><p>Three light sources combine — additive brightness.</p></header>
-<main>
-<a class="back-link" href="../index.html">&larr; All simulations</a>
-<div class="sim-container">
-  <div>
-    <div class="canvas-wrap"><canvas id="cv" width="800" height="500"></canvas></div>
-    <div class="info-box">
-      <h3>The Physics</h3>
-      <p>Light is additive — overlapping beams sum their intensities. Where all three sources overlap with full intensity, you get pure white. Absence of light is black.</p>
-      <div class="formula">I_total = I₁ + I₂ + I₃</div>
-      <p>Adjust the intensity of each source and watch the overlap regions brighten.</p>
-    </div>
-  </div>
-  <div class="controls">
-    <h3>Controls</h3>
-    <div class="control-row"><label>Source A intensity <span class="val" id="vA">100%</span></label><input type="range" id="a" min="0" max="255" value="255"></div>
-    <div class="control-row"><label>Source B intensity <span class="val" id="vB">100%</span></label><input type="range" id="b" min="0" max="255" value="255"></div>
-    <div class="control-row"><label>Source C intensity <span class="val" id="vC">100%</span></label><input type="range" id="c" min="0" max="255" value="255"></div>
-    <div class="readouts" style="grid-template-columns:1fr;">
-      <div>Center brightness: <span id="rO">100%</span></div>
-    </div>
-  </div>
-</div>
-</main>
-<script>
-const cv=document.getElementById('cv'), ctx=cv.getContext('2d');
-let A=255,B=255,C=255;
-function draw(){
-  ctx.fillStyle='#000'; ctx.fillRect(0,0,cv.width,cv.height);
-  // three overlapping circles using additive (lighter) composite — all white
-  ctx.globalCompositeOperation = 'lighter';
-  const r = 130;
-  ctx.fillStyle = `rgb(${A},${A},${A})`;
-  ctx.beginPath(); ctx.arc(290,210,r,0,2*Math.PI); ctx.fill();
-  ctx.fillStyle = `rgb(${B},${B},${B})`;
-  ctx.beginPath(); ctx.arc(420,210,r,0,2*Math.PI); ctx.fill();
-  ctx.fillStyle = `rgb(${C},${C},${C})`;
-  ctx.beginPath(); ctx.arc(355,330,r,0,2*Math.PI); ctx.fill();
-  ctx.globalCompositeOperation = 'source-over';
-  // labels
-  ctx.fillStyle='#888'; ctx.font='12px sans-serif';
-  ctx.fillText('A', 220, 145);
-  ctx.fillText('B', 490, 145);
-  ctx.fillText('C', 350, 410);
-  // result swatch
-  const total = Math.min(255, A + B + C);
-  ctx.fillStyle = `rgb(${total},${total},${total})`;
-  ctx.fillRect(620, 90, 130, 130);
-  ctx.strokeStyle='#333'; ctx.lineWidth=1; ctx.strokeRect(620,90,130,130);
-  ctx.fillStyle='#888'; ctx.font='11px sans-serif';
-  ctx.fillText('Mixed brightness', 620, 80);
-  document.getElementById('rO').textContent = Math.floor(total/255*100)+'%';
-}
-['a','b','c'].forEach(id=>document.getElementById(id).oninput=()=>{
-  A=+document.getElementById('a').value; B=+document.getElementById('b').value; C=+document.getElementById('c').value;
-  document.getElementById('vA').textContent=Math.floor(A/255*100)+'%';
-  document.getElementById('vB').textContent=Math.floor(B/255*100)+'%';
-  document.getElementById('vC').textContent=Math.floor(C/255*100)+'%';
-  draw();
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Color Mixing</title>
+<link rel="stylesheet" href="../engine/concept.css">
+<script type="importmap">{"imports":{"three":"../../simulations/lib/three/three.module.min.js","three/addons/":"../../simulations/lib/three/addons/"}}</script>
+</head><body>
+<script type="module">
+import { runSim, V3, MAT, mesh, std, THREE } from '../engine/concept.js';
+// Additive mixing with three real spotlights on a white screen, or subtractive mixing with
+// three filters in front of a white light box.
+const hex = (r, g, b) => '#' + [r, g, b].map((v) => Math.round(v).toString(16).padStart(2, '0')).join('');
+let spots = [], cones = [], lamps = [], screen, box, boxTex, boxCanvas, swatch;
+const COLS = [0xff0000, 0x00ff00, 0x0000ff], POS = [[-9, 11, 16], [9, 11, 16], [0, 19, 13]], AIM = [[-1.6, 7.6, -5], [1.6, 7.6, -5], [0, 5, -5]];
+runSim({
+  title: 'Color Mixing', subtitle: 'Light adds (RGB → white); pigments and filters subtract (CMY → black).',
+  stage: 'studio', camera: { pos: [0, 9, 30], target: [0, 6.5, -3] }, stageOpts: { floorSize: 30 }, envIntensity: 0.05,
+  controls: [
+    { id: 'mode', label: 'Mixing', type: 'select', value: 'add', options: [{ value: 'add', label: 'Additive — coloured lights' }, { value: 'sub', label: 'Subtractive — filters / paint' }] },
+    { id: 'r', label: 'Red light / Cyan filter', min: 0, max: 255, step: 1, value: 255 },
+    { id: 'g', label: 'Green light / Magenta filter', min: 0, max: 255, step: 1, value: 255 },
+    { id: 'b', label: 'Blue light / Yellow filter', min: 0, max: 255, step: 1, value: 255 },
+  ],
+  buttons: [
+    { id: 'p1', label: 'Yellow', kind: 'ghost', run: (c) => { c.setControl('r', 255); c.setControl('g', 255); c.setControl('b', 0); } },
+    { id: 'p2', label: 'Cyan', kind: 'ghost', run: (c) => { c.setControl('r', 0); c.setControl('g', 255); c.setControl('b', 255); } },
+    { id: 'p3', label: 'Magenta', kind: 'ghost', run: (c) => { c.setControl('r', 255); c.setControl('g', 0); c.setControl('b', 255); } },
+    { id: 'p4', label: 'Orange', kind: 'ghost', run: (c) => { c.setControl('r', 255); c.setControl('g', 128); c.setControl('b', 0); } },
+  ],
+  readouts: [{ id: 'hex', label: 'Centre colour' }, { id: 'rgb', label: 'RGB' }, { id: 'name', label: 'You see' }, { id: 'lum', label: 'Brightness' }],
+  extraHtml: '<h3>Mixed colour</h3><div id="sw" style="height:46px;border-radius:10px;border:1px solid #334155"></div>',
+  info: 'Our eyes have three kinds of colour cones, most sensitive to red, green and blue. Shining coloured lights on a white screen adds their light together: red + green looks yellow, and all three make white. Filters and paints work the other way: each absorbs (subtracts) part of white light. A cyan filter removes red, magenta removes green, yellow removes blue, and stacking all three leaves black.',
+  formulas: ['Additive: R + G = Yellow, G + B = Cyan, R + B = Magenta', 'Subtractive: White − (C + M + Y) = Black'],
+  setup(ctx) {
+    ctx.scene.children.filter((o) => o.isDirectionalLight || o.isHemisphereLight).forEach((l) => { l.intensity *= 0.08; });
+    screen = mesh(new THREE.PlaneGeometry(24, 15), new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.95 }), false);
+    screen.position.set(0, 7.5, -5); screen.receiveShadow = true;
+    const frame = mesh(new THREE.BoxGeometry(25, 16, 0.5), MAT.black); frame.position.set(0, 7.5, -5.35);
+    ctx.scene.add(screen, frame);
+    POS.forEach((p, i) => {
+      const s = new THREE.SpotLight(COLS[i], 900, 60, 0.2, 0.35, 1.6);
+      s.position.set(...p); s.target.position.set(...AIM[i]); s.castShadow = false;
+      ctx.scene.add(s, s.target); spots.push(s);
+      const lamp = new THREE.Group();
+      const can = mesh(new THREE.CylinderGeometry(0.9, 1.2, 2.6, 24, 1, true), std(0x1f2937, { metalness: 0.8, side: THREE.DoubleSide }));
+      const lens = mesh(new THREE.CircleGeometry(1.15, 24), new THREE.MeshBasicMaterial({ color: COLS[i] })); lens.rotation.x = Math.PI / 2; lens.position.y = -1.3;
+      lamp.add(can, lens); lamp.position.set(...p); lamp.lookAt(V3(...AIM[i])); lamp.rotateX(Math.PI / 2 + Math.PI); lamps.push(lamp); ctx.scene.add(lamp);
+      // faint visible beam
+      const d = V3(...AIM[i]).sub(V3(...p)), L = d.length();
+      const cone = new THREE.Mesh(new THREE.ConeGeometry(Math.tan(0.2) * L, L, 32, 1, true), new THREE.MeshBasicMaterial({ color: COLS[i], transparent: true, opacity: 0.06, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide }));
+      cone.position.copy(V3(...p)).add(d.clone().multiplyScalar(0.5)); cone.quaternion.setFromUnitVectors(V3(0, -1, 0), d.clone().normalize()); cones.push(cone); ctx.scene.add(cone);
+    });
+    // subtractive light box with three overlapping filters (drawn with multiply compositing)
+    boxCanvas = document.createElement('canvas'); boxCanvas.width = boxCanvas.height = 512;
+    boxTex = new THREE.CanvasTexture(boxCanvas); boxTex.colorSpace = THREE.SRGBColorSpace;
+    box = new THREE.Group();
+    const face = new THREE.Mesh(new THREE.PlaneGeometry(14, 14), new THREE.MeshBasicMaterial({ map: boxTex, toneMapped: false })); face.position.z = 0.51;
+    const shell = mesh(new THREE.BoxGeometry(15, 15, 1), std(0x334155)); box.add(shell, face); box.position.set(0, 7.5, -3);
+    ctx.scene.add(box);
+  },
+  frame(ctx) {
+    const add = ctx.v.mode === 'add', k = [ctx.v.r, ctx.v.g, ctx.v.b].map((x) => x / 255);
+    spots.forEach((s, i) => { s.visible = add; s.intensity = 900 * k[i]; cones[i].visible = add && k[i] > 0; cones[i].material.opacity = 0.06 * k[i]; lamps[i].visible = add; });
+    screen.visible = add; box.visible = !add;
+    if (!add) drawFilters(k);
+  },
+  ui(ctx) {
+    const add = ctx.v.mode === 'add', { r, g, b } = ctx.v;
+    const c = add ? [r, g, b] : [255 - r, 255 - g, 255 - b];
+    ctx.readout('hex', hex(...c)); ctx.readout('rgb', c.map((x) => Math.round(x)).join(', '));
+    ctx.readout('name', name(c)); ctx.readout('lum', `${Math.round((0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]) / 2.55)} %`);
+    const sw = document.getElementById('sw'); if (sw) sw.style.background = hex(...c);
+  },
 });
-draw();
+function drawFilters(k) {
+  const g = boxCanvas.getContext('2d');
+  g.globalCompositeOperation = 'source-over'; g.fillStyle = '#ffffff'; g.fillRect(0, 0, 512, 512);
+  g.globalCompositeOperation = 'multiply';
+  // filter strength: cyan removes red, magenta removes green, yellow removes blue
+  [[0, 180, 200, 1 - k[0], 255, 255], [1, 330, 200, 255, 1 - k[1], 255], [2, 256, 340, 255, 255, 1 - k[2]]].forEach(([, x, y, a, b, c]) => {
+    const col = [a, b, c].map((v) => (v > 1 ? 255 : Math.round(255 * v)));
+    g.fillStyle = `rgb(${col.join(',')})`; g.beginPath(); g.arc(x, y, 130, 0, 7); g.fill();
+  });
+  g.globalCompositeOperation = 'source-over'; g.fillStyle = '#334155'; g.font = 'bold 26px Arial'; g.textAlign = 'center';
+  g.fillText('C', 120, 110); g.fillText('M', 392, 110); g.fillText('Y', 256, 494);
+  boxTex.needsUpdate = true;
+}
+function name([r, g, b]) {
+  const mx = Math.max(r, g, b), mn = Math.min(r, g, b);
+  if (mx < 40) return 'Black'; if (mn > 215) return 'White'; if (mx - mn < 25) return 'Grey';
+  const h = new THREE.Color().setRGB(r / 255, g / 255, b / 255, THREE.SRGBColorSpace).getHSL({}).h * 360;
+  return h < 15 || h >= 345 ? 'Red' : h < 45 ? 'Orange' : h < 70 ? 'Yellow' : h < 160 ? 'Green' : h < 200 ? 'Cyan' : h < 255 ? 'Blue' : h < 290 ? 'Violet' : 'Magenta';
+}
 </script>
 </body></html>

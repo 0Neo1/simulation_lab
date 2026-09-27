@@ -1,98 +1,89 @@
 <!DOCTYPE html>
-<html lang="en"><head><meta charset="UTF-8"><title>Lorentz Force</title><link rel="stylesheet" href="../styles.css"></head>
-<body>
-<header><a href="../index.html"><h1>Charged Particle in a Magnetic Field</h1></a><p>The Lorentz force creates circular motion.</p></header>
-<main>
-<a class="back-link" href="../index.html">&larr; All simulations</a>
-<div class="sim-container">
-  <div>
-    <div class="canvas-wrap"><canvas id="cv" width="800" height="500"></canvas></div>
-    <div class="info-box">
-      <h3>The Physics</h3>
-      <p>A magnetic field exerts a force perpendicular to a charge's velocity. With B out of the page, a positive charge moving right experiences an upward force.</p>
-      <div class="formula">F⃗ = q v⃗ × B⃗ &nbsp;&nbsp; r = mv/(qB)</div>
-    </div>
-  </div>
-  <div class="controls">
-    <h3>Controls</h3>
-    <div class="control-row"><label>B field <span class="val" id="vB">1.0</span></label><input type="range" id="B" min="-30" max="30" value="10"></div>
-    <div class="control-row"><label>Initial speed <span class="val" id="vV">3</span></label><input type="range" id="v" min="1" max="10" value="3"></div>
-    <div class="control-row"><label>Charge q <span class="val" id="vQ">+1</span></label><input type="range" id="q" min="-3" max="3" value="1" step="1"></div>
-    <div class="btn-row"><button id="run">Start</button><button class="danger" id="reset">Reset</button></div>
-    <div class="readouts">
-      <div>r: <span id="rR">0</span></div>
-      <div>T: <span id="rT">0</span></div>
-    </div>
-  </div>
-</div>
-</main>
-<script>
-const cv=document.getElementById('cv'), ctx=cv.getContext('2d');
-let B=1.0, v0=3, q=1;
-let p={x:100,y:250, vx:3, vy:0};
-let trail=[], running=false;
-
-function step(){
-  if(!running) return;
-  const dt = 0.05;
-  // F = qv x B (B out of page = +z), so Fx = qvy*B, Fy = -qvx*B
-  const ax = q*p.vy*B;
-  const ay = -q*p.vx*B;
-  p.vx += ax*dt; p.vy += ay*dt;
-  p.x += p.vx*dt*30; p.y += p.vy*dt*30;
-  trail.push({x:p.x,y:p.y});
-  if(trail.length>500) trail.shift();
-  if(p.x<0||p.x>cv.width||p.y<0||p.y>cv.height){ running=false; }
-  draw(); requestAnimationFrame(step);
-}
-
-function draw(){
-  ctx.clearRect(0,0,cv.width,cv.height);
-  ctx.fillStyle='#0d0d0d'; ctx.fillRect(0,0,cv.width,cv.height);
-  // B-field dots (out of page)
-  ctx.fillStyle='#888';
-  for(let y=20;y<cv.height;y+=40) for(let x=20;x<cv.width;x+=40){
-    if(B>0){
-      ctx.beginPath(); ctx.arc(x,y,2,0,2*Math.PI); ctx.fill();
-      ctx.strokeStyle='#888'; ctx.beginPath(); ctx.arc(x,y,7,0,2*Math.PI); ctx.stroke();
-    } else if(B<0){
-      ctx.strokeStyle='#888'; ctx.lineWidth=1;
-      ctx.beginPath(); ctx.arc(x,y,7,0,2*Math.PI); ctx.stroke();
-      ctx.beginPath(); ctx.moveTo(x-5,y-5); ctx.lineTo(x+5,y+5); ctx.moveTo(x+5,y-5); ctx.lineTo(x-5,y+5); ctx.stroke();
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Magnetic Force on a Charge</title>
+<link rel="stylesheet" href="../engine/concept.css">
+<script type="importmap">{"imports":{"three":"../../simulations/lib/three/three.module.min.js","three/addons/":"../../simulations/lib/three/addons/"}}</script>
+</head><body>
+<script type="module">
+import { runSim, V3, MAT, mesh, std, glow, THREE } from '../engine/concept.js';
+// A charged particle fired into the uniform field between two magnet poles (B points up, +y).
+// Boris push: exact circular motion for a pure magnetic field. Arbitrary units.
+const GAP = 16, HALF = 14;
+let p, vel, tr, part, vA, fA, fieldLines, halo;
+runSim({
+  title: 'Magnetic Force on a Charge', subtitle: 'F = qv × B is always sideways, so the charge curves into a circle or a helix.',
+  stage: 'studio', camera: { pos: [30, 24, 44], target: [0, 7, 0] }, stageOpts: { floorSize: 30 },
+  controls: [
+    { id: 'q', label: 'Charge', type: 'select', value: 1, reset: true, options: [{ value: 1, label: 'Positive (proton-like)' }, { value: -1, label: 'Negative (electron-like)' }] },
+    { id: 'm', label: 'Mass m', min: 0.5, max: 3, step: 0.1, value: 1, unit: 'u', reset: true },
+    { id: 'v', label: 'Speed v', min: 1, max: 6, step: 0.1, value: 4, unit: 'u', reset: true },
+    { id: 'B', label: 'Field strength B', min: 0.5, max: 3, step: 0.05, value: 1, unit: 'u', reset: true },
+    { id: 'ang', label: 'Angle between v and B', min: 10, max: 90, step: 1, value: 90, unit: '°', reset: true },
+  ],
+  readouts: [{ id: 'r', label: 'Radius r = mv⊥/(qB)' }, { id: 'T', label: 'Period T = 2πm/(qB)' }, { id: 'F', label: 'Force |F| = qvB sin θ' }, { id: 'pitch', label: 'Helix pitch' }, { id: 'KE', label: 'Kinetic energy' }, { id: 'turn', label: 'Turns' }],
+  info: 'The magnetic force is perpendicular to both the velocity and the field, so it can change the direction of motion but never the speed. The kinetic energy stays constant. Moving at right angles to B, the charge goes round a circle whose radius grows with momentum and shrinks with stronger fields; this is how mass spectrometers and cyclotrons work. Any velocity component along B is unaffected, which stretches the circle into a helix. Negative charges curve the other way.',
+  formulas: ['F = q v × B', 'r = m v⊥ / (|q| B)', 'T = 2π m / (|q| B)'],
+  setup(ctx) {
+    const poleMat = (c) => std(c, { metalness: 0.5, roughness: 0.4 });
+    const S = mesh(new THREE.BoxGeometry(2 * HALF + 4, 2, 2 * HALF + 4), poleMat(0x2563eb)); S.position.y = GAP + 1;
+    const N = mesh(new THREE.BoxGeometry(2 * HALF + 4, 2, 2 * HALF + 4), poleMat(0xdc2626)); N.position.y = -0.2;
+    const yoke = mesh(new THREE.BoxGeometry(3, GAP + 4, 2 * HALF + 4), MAT.darkSteel); yoke.position.set(-HALF - 3.5, GAP / 2 + 0.4, 0);
+    ctx.scene.add(N, S, yoke);
+    // field lines leave the N pole (below) and enter the S pole (above), so B points up
+    const sT = ctx.textSprite('S', { size: 2 }); sT.position.set(HALF, GAP + 1, HALF + 2.4); const nT = ctx.textSprite('N', { size: 2 }); nT.position.set(HALF, -0.2, HALF + 2.4);
+    ctx.scene.add(nT, sT);
+    // field lines: faint vertical arrows pointing up
+    fieldLines = new THREE.Group();
+    for (let x = -HALF + 2; x <= HALF - 2; x += 4) for (let z = -HALF + 2; z <= HALF - 2; z += 4) {
+      const l = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, GAP - 1.5, 6), new THREE.MeshBasicMaterial({ color: 0x93c5fd, transparent: true, opacity: 0.35 })); l.position.set(x, GAP / 2 + 0.3, z);
+      const c = new THREE.Mesh(new THREE.ConeGeometry(0.22, 0.7, 10), new THREE.MeshBasicMaterial({ color: 0x93c5fd, transparent: true, opacity: 0.6 })); c.position.set(x, GAP - 1, z);
+      fieldLines.add(l, c);
     }
-  }
-  // trail
-  ctx.strokeStyle='rgba(140,140,140,0.6)'; ctx.lineWidth=2;
-  ctx.beginPath();
-  trail.forEach((t,i)=>{ if(i===0) ctx.moveTo(t.x,t.y); else ctx.lineTo(t.x,t.y); });
-  ctx.stroke();
-  // particle
-  ctx.fillStyle = q>0?'#888888':'#ffffff';
-  ctx.beginPath(); ctx.arc(p.x,p.y,10,0,2*Math.PI); ctx.fill();
-  ctx.strokeStyle='#dddddd'; ctx.stroke();
-  ctx.fillStyle='#fff'; ctx.font='bold 12px sans-serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
-  ctx.fillText(q>0?'+':'−', p.x, p.y); ctx.textAlign='left'; ctx.textBaseline='alphabetic';
-  // velocity
-  ctx.strokeStyle='#aaaaaa'; ctx.lineWidth=2;
-  ctx.beginPath(); ctx.moveTo(p.x,p.y); ctx.lineTo(p.x+p.vx*15,p.y+p.vy*15); ctx.stroke();
-  // force
-  const Fx = q*p.vy*B, Fy = -q*p.vx*B;
-  ctx.strokeStyle='#888888'; ctx.beginPath(); ctx.moveTo(p.x,p.y); ctx.lineTo(p.x+Fx*8,p.y+Fy*8); ctx.stroke();
-
-  if(B!==0){
-    const m = 1, vMag = Math.hypot(p.vx,p.vy);
-    document.getElementById('rR').textContent = (m*vMag/(Math.abs(q*B))).toFixed(2);
-    document.getElementById('rT').textContent = (2*Math.PI*m/(Math.abs(q*B))).toFixed(2);
-  }
+    ctx.scene.add(fieldLines);
+    part = mesh(new THREE.SphereGeometry(0.45, 20, 14), std(0xfde047, { emissive: 0xfde047, emissiveIntensity: 0.6 }));
+    halo = ctx.glowSprite(0xfde047, 3); part.add(halo);
+    tr = ctx.trail(0xfde047, 2500);
+    vA = ctx.arrow(0x22c55e, { radius: 0.1, head: 0.6 }); fA = ctx.arrow(0xf472b6, { radius: 0.1, head: 0.6 });
+    const gun = mesh(new THREE.CylinderGeometry(0.8, 1, 4, 20), MAT.darkSteel); ctx.gun = gun;
+    ctx.scene.add(part, tr, vA, fA, gun);
+    ctx.label('v', () => vA.visible ? part.position.clone().add(vel.clone().normalize().multiplyScalar(3.4)) : null);
+    ctx.label('F', () => fA.visible ? part.position.clone().add(ctx.Fdir.clone().multiplyScalar(3.4)) : null);
+    ctx.label('B ↑', () => V3(-HALF + 2, GAP - 0.5, HALF - 2), 'big');
+    ctx.Fdir = V3(1, 0, 0);
+  },
+  reset(ctx) {
+    const a = ctx.v.ang * Math.PI / 180;
+    vel = V3(Math.sin(a), Math.cos(a), 0).multiplyScalar(ctx.v.v);
+    // start so that the circle is centred on the axis of the poles (F = qv × B points along ±z)
+    const r = ctx.v.m * ctx.v.v * Math.sin(a) / ctx.v.B, rr = Math.min(r, HALF - 1), sg = ctx.v.q > 0 ? 1 : -1;
+    p = V3(0, 2, -sg * rr); ctx.c0z = p.z + sg * r;
+    ctx.turns = 0; ctx.lastAng = null; tr.clear();
+    ctx.gun.position.copy(p).addScaledVector(vel.clone().normalize(), -2.6); ctx.gun.quaternion.setFromUnitVectors(V3(0, 1, 0), vel.clone().normalize());
+    place(ctx);
+  },
+  step(ctx, dt) {
+    // Boris rotation: v' = v rotated about B by angle −qB dt / m
+    const { q, m, B } = ctx.v, t = V3(0, (q * B / m) * dt / 2, 0), s = t.clone().multiplyScalar(2 / (1 + t.lengthSq()));
+    const vp = vel.clone().add(vel.clone().cross(t)); vel.add(vp.cross(s));
+    p.addScaledVector(vel, dt);
+    const ang = Math.atan2(p.z - ctx.c0z, p.x);
+    if (ctx.lastAng != null) { let d = ang - ctx.lastAng; if (d > Math.PI) d -= 2 * Math.PI; if (d < -Math.PI) d += 2 * Math.PI; ctx.turns += Math.abs(d) / (2 * Math.PI); }
+    ctx.lastAng = ang;
+    if (p.y > GAP - 0.8 || Math.abs(p.x) > HALF + 2 || Math.abs(p.z) > HALF + 2) ctx.pause();
+    ctx.n = (ctx.n || 0) + 1; if (ctx.n % 4 === 0) tr.push(p);
+  },
+  frame(ctx) { place(ctx); },
+  ui(ctx) {
+    const { m, v, B, ang } = ctx.v, a = ang * Math.PI / 180;
+    ctx.readout('r', `${(m * v * Math.sin(a) / B).toFixed(2)} u`); ctx.readout('T', `${(2 * Math.PI * m / B).toFixed(2)} s`);
+    ctx.readout('F', `${(v * B * Math.sin(a)).toFixed(2)} u`); ctx.readout('pitch', ang >= 90 ? '0 (flat circle)' : `${(v * Math.cos(a) * 2 * Math.PI * m / B).toFixed(2)} u`);
+    ctx.readout('KE', `${(0.5 * m * vel.lengthSq()).toFixed(3)} u (constant)`); ctx.readout('turn', (ctx.turns || 0).toFixed(1));
+  },
+});
+function place(ctx) {
+  part.position.copy(p);
+  vA.set(p, vel, 0.6);
+  const F = vel.clone().cross(V3(0, ctx.v.B, 0)).multiplyScalar(ctx.v.q);
+  ctx.Fdir = F.clone().normalize(); fA.set(p, F, 0.5);
 }
-
-document.getElementById('B').oninput=e=>{B=+e.target.value/10; document.getElementById('vB').textContent=B.toFixed(1); if(!running) draw();};
-document.getElementById('v').oninput=e=>{v0=+e.target.value; document.getElementById('vV').textContent=v0;};
-document.getElementById('q').oninput=e=>{q=+e.target.value; document.getElementById('vQ').textContent=(q>=0?'+':'')+q;};
-document.getElementById('run').onclick=()=>{
-  if(!running){ p={x:100,y:250,vx:v0,vy:0}; trail=[]; running=true; step(); }
-};
-document.getElementById('reset').onclick=()=>{ running=false; p={x:100,y:250,vx:v0,vy:0}; trail=[]; draw(); };
-draw();
 </script>
 </body></html>

@@ -1,87 +1,74 @@
 <!DOCTYPE html>
-<html lang="en"><head><meta charset="UTF-8"><title>Simple Harmonic Motion</title><link rel="stylesheet" href="../styles.css"></head>
-<body>
-<header><a href="../index.html"><h1>Simple Harmonic Motion</h1></a><p>Mass-spring oscillator with phase circle.</p></header>
-<main>
-<a class="back-link" href="../index.html">&larr; All simulations</a>
-<div class="sim-container">
-  <div>
-    <div class="canvas-wrap"><canvas id="cv" width="800" height="500"></canvas></div>
-    <div class="info-box">
-      <h3>The Physics</h3>
-      <p>SHM arises whenever the restoring force is proportional to displacement. The motion is the projection of uniform circular motion onto a diameter.</p>
-      <div class="formula">x(t) = A cos(ωt + φ) &nbsp;&nbsp; ω = √(k/m) &nbsp;&nbsp; T = 2π/ω</div>
-    </div>
-  </div>
-  <div class="controls">
-    <h3>Controls</h3>
-    <div class="control-row"><label>Amplitude <span class="val" id="vA">80</span></label><input type="range" id="A" min="20" max="150" value="80"></div>
-    <div class="control-row"><label>Angular frequency ω <span class="val" id="vW">2.0</span></label><input type="range" id="w" min="5" max="50" value="20"></div>
-    <div class="btn-row"><button id="run">Start</button><button class="secondary" id="pause">Pause</button></div>
-  </div>
-</div>
-</main>
-<script>
-const cv=document.getElementById('cv'), ctx=cv.getContext('2d');
-let A=80, w=2.0, t=0, running=false;
-let history = [];
-
-function draw(){
-  ctx.clearRect(0,0,cv.width,cv.height);
-  ctx.fillStyle='#0a0a0a'; ctx.fillRect(0,0,cv.width,cv.height);
-  // phase circle
-  const cxC = 150, cyC = 250;
-  ctx.strokeStyle='#bbbbbb'; ctx.lineWidth=1.5;
-  ctx.beginPath(); ctx.arc(cxC,cyC,A,0,2*Math.PI); ctx.stroke();
-  // axes
-  ctx.beginPath(); ctx.moveTo(cxC-A-10,cyC); ctx.lineTo(cxC+A+10,cyC); ctx.stroke();
-  ctx.beginPath(); ctx.moveTo(cxC,cyC-A-10); ctx.lineTo(cxC,cyC+A+10); ctx.stroke();
-  // rotating point
-  const px = cxC + A*Math.cos(w*t);
-  const py = cyC - A*Math.sin(w*t);
-  ctx.strokeStyle='#ffffff'; ctx.lineWidth=2;
-  ctx.beginPath(); ctx.moveTo(cxC,cyC); ctx.lineTo(px,py); ctx.stroke();
-  ctx.fillStyle='#888888'; ctx.beginPath(); ctx.arc(px,py,8,0,2*Math.PI); ctx.fill();
-  // projection on x-axis
-  ctx.strokeStyle='#aaaaaa'; ctx.setLineDash([3,3]);
-  ctx.beginPath(); ctx.moveTo(px,py); ctx.lineTo(px,cyC); ctx.stroke();
-  ctx.setLineDash([]);
-  ctx.fillStyle='#aaaaaa'; ctx.beginPath(); ctx.arc(px,cyC,7,0,2*Math.PI); ctx.fill();
-  // graph
-  history.push({t, x: A*Math.cos(w*t)});
-  if(history.length>500) history.shift();
-  const gX=350, gY=100, gW=420, gH=300;
-  ctx.fillStyle='#fff'; ctx.fillRect(gX,gY,gW,gH);
-  ctx.strokeStyle='#999999'; ctx.strokeRect(gX,gY,gW,gH);
-  ctx.strokeStyle='#cccccc';
-  ctx.beginPath(); ctx.moveTo(gX,gY+gH/2); ctx.lineTo(gX+gW,gY+gH/2); ctx.stroke();
-  // plot
-  ctx.strokeStyle='#ffffff'; ctx.lineWidth=2;
-  ctx.beginPath();
-  history.forEach((h,i)=>{
-    const xx = gX + (h.t-(t-history.length*0.02))/(history.length*0.02)*gW;
-    const yy = gY+gH/2 - h.x;
-    if(i===0) ctx.moveTo(xx,yy); else ctx.lineTo(xx,yy);
-  });
-  ctx.stroke();
-  // current point on graph
-  ctx.fillStyle='#888888'; ctx.beginPath(); ctx.arc(gX+gW, gY+gH/2 - A*Math.cos(w*t), 6, 0, 2*Math.PI); ctx.fill();
-  ctx.fillStyle='#dddddd'; ctx.font='14px sans-serif';
-  ctx.fillText('Phase Circle', 100, 120);
-  ctx.fillText('x(t)', 540, 90);
-}
-
-function step(){
-  if(!running) return;
-  t += 0.02;
-  draw();
-  requestAnimationFrame(step);
-}
-
-document.getElementById('A').oninput=e=>{A=+e.target.value; document.getElementById('vA').textContent=A; if(!running)draw();};
-document.getElementById('w').oninput=e=>{w=+e.target.value/10; document.getElementById('vW').textContent=w.toFixed(1);};
-document.getElementById('run').onclick=()=>{if(!running){running=true; step();}};
-document.getElementById('pause').onclick=()=>running=false;
-draw();
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Simple Harmonic Motion</title>
+<link rel="stylesheet" href="../engine/concept.css">
+<script type="importmap">{"imports":{"three":"../../simulations/lib/three/three.module.min.js","three/addons/":"../../simulations/lib/three/addons/"}}</script>
+</head><body>
+<script type="module">
+import { runSim, V3, MAT, mesh, std, glow, THREE } from '../engine/concept.js';
+// SHM as the shadow of uniform circular motion, next to a mass on a spring.
+const C = V3(-4, 5, 0), SPX = 5, TOP = 10.5, REST = 5;
+let disc, peg, rod, shadowBall, beam, bob, spr, vA, aA, tr, proj;
+runSim({
+  title: 'Simple Harmonic Motion', subtitle: 'SHM is the shadow of uniform circular motion: x = A cos(ωt + φ).',
+  stage: 'studio', camera: { pos: [2, 7, 17], target: [0, 5, 0] }, stageOpts: { floorSize: 20, gridDiv: 20 },
+  controls: [
+    { id: 'A', label: 'Amplitude A', min: 0.5, max: 3, step: 0.1, value: 2.2, unit: 'm' },
+    { id: 'w', label: 'Angular frequency ω', min: 0.5, max: 6, step: 0.1, value: 2, unit: 'rad/s' },
+    { id: 'phi', label: 'Phase φ', min: 0, max: 360, step: 5, value: 0, unit: '°' },
+    { id: 'vec', label: 'Show velocity and acceleration arrows', type: 'check', value: true },
+  ],
+  readouts: [{ id: 'x', label: 'x' }, { id: 'v', label: 'v' }, { id: 'a', label: 'a' }, { id: 'T', label: 'Period T' }, { id: 'f', label: 'Frequency f' }, { id: 'ph', label: 'Phase angle' }],
+  graph: { title: 'x, v and a against time', series: [{ name: 'x (m)', color: '#22d3ee' }, { name: 'v (m/s)', color: '#f59e0b' }, { name: 'a (m/s²)', color: '#ef4444' }], max: 700, window: 8 },
+  info: 'A peg goes round the disc at a steady rate ω. Light from the side casts its shadow on the screen, and that shadow moves back and forth in exactly the same way as the mass on the spring. The acceleration always points back towards the centre and is proportional to the displacement (a = −ω²x). That is the definition of simple harmonic motion. Velocity is largest at the centre; acceleration is largest at the ends.',
+  formulas: ['x = A cos(ωt + φ)', 'v = −Aω sin(ωt + φ)', 'a = −ω² x', 'T = 2π / ω'],
+  setup(ctx) {
+    disc = mesh(new THREE.CylinderGeometry(3.2, 3.2, 0.25, 64), new THREE.MeshStandardMaterial({ map: ctx.canvasTex(256, 256, (g) => { g.fillStyle = '#334155'; g.fillRect(0, 0, 256, 256); g.strokeStyle = '#94a3b8'; g.lineWidth = 2; for (let a = 0; a < 12; a++) { g.beginPath(); g.moveTo(128, 128); g.lineTo(128 + Math.cos(a * Math.PI / 6) * 128, 128 + Math.sin(a * Math.PI / 6) * 128); g.stroke(); } }), metalness: 0.4, roughness: 0.4 }));
+    disc.rotation.x = Math.PI / 2; disc.position.copy(C).add(V3(0, 0, -0.3));
+    const axle = mesh(new THREE.CylinderGeometry(0.15, 0.15, 5, 12), MAT.steel); axle.position.set(C.x, 2.5, -0.6);
+    peg = mesh(new THREE.SphereGeometry(0.28, 24, 16), std(0x22d3ee, { emissive: 0x22d3ee, emissiveIntensity: 0.4 }));
+    rod = mesh(new THREE.CylinderGeometry(0.05, 0.05, 1, 8), MAT.steel);
+    // the screen that receives the shadow (horizontal motion projected onto the x axis)
+    const screen = mesh(new THREE.BoxGeometry(8, 0.1, 1.2), MAT.white); screen.position.set(C.x, 1.2, 0);
+    shadowBall = mesh(new THREE.SphereGeometry(0.28, 20, 14), std(0x0f172a)); shadowBall.scale.y = 0.3;
+    beam = new THREE.Line(new THREE.BufferGeometry().setFromPoints([V3(), V3()]), new THREE.LineDashedMaterial({ color: 0xfef08a, dashSize: 0.2, gapSize: 0.15 }));
+    // the spring–mass on the right, oscillating vertically with the same x(t)
+    const stand = mesh(new THREE.BoxGeometry(3, 0.3, 0.4), MAT.darkSteel); stand.position.set(SPX, TOP + 0.15, 0);
+    const pole = mesh(new THREE.CylinderGeometry(0.12, 0.12, TOP, 12), MAT.steel); pole.position.set(SPX + 1.4, TOP / 2, 0);
+    spr = ctx.spring(0xcbd5e1, { r: 0.35, turns: 16, wire: 0.05 });
+    bob = mesh(new THREE.CylinderGeometry(0.6, 0.6, 1, 32), MAT.brass);
+    const eq = mesh(new THREE.BoxGeometry(2.4, 0.03, 0.03), glow(0x22c55e)); eq.position.set(SPX, REST, 0.7);
+    tr = ctx.trail(0x22d3ee, 200);
+    vA = ctx.arrow(0xf59e0b, { radius: 0.06, head: 0.3 }); aA = ctx.arrow(0xef4444, { radius: 0.06, head: 0.3 });
+    ctx.scene.add(disc, axle, peg, rod, screen, shadowBall, beam, stand, pole, spr, bob, eq, tr, vA, aA);
+    ctx.label('reference circle', () => C.clone().add(V3(0, 3.6, 0)));
+    ctx.label('shadow', () => shadowBall.position.clone().add(V3(0, -0.2, 0.6)));
+    ctx.label('equilibrium', () => V3(SPX - 1.9, REST + 0.2, 0.7));
+    proj = { x: 0, v: 0, a: 0 };
+  },
+  reset(ctx) { tr.clear(); },
+  step(ctx, dt) {
+    const { A, w } = ctx.v, ph = w * ctx.t + ctx.v.phi * Math.PI / 180;
+    proj = { x: A * Math.cos(ph), v: -A * w * Math.sin(ph), a: -w * w * A * Math.cos(ph), ph };
+    ctx.n = (ctx.n || 0) + 1; if (ctx.n % 8 === 0) { ctx.plot(ctx.t, [proj.x, proj.v, proj.a]); tr.push(peg.position); }
+  },
+  frame(ctx) {
+    const { A } = ctx.v, ph = proj.ph ?? ctx.v.phi * Math.PI / 180, x = A * Math.cos(ph), y = A * Math.sin(ph);
+    const pp = V3(C.x + x, C.y + y, 0);
+    peg.position.copy(pp); disc.rotation.y = -ph;
+    rod.position.copy(C).lerp(pp, 0.5); rod.scale.y = pp.distanceTo(C); rod.rotation.z = ph - Math.PI / 2;
+    shadowBall.position.set(pp.x, 1.3, 0);
+    beam.geometry.setFromPoints([pp, shadowBall.position]); beam.computeLineDistances();
+    const by = REST + x * 1.2; bob.position.set(SPX, by, 0); spr.set(V3(SPX, TOP, 0), V3(SPX, by + 0.5, 0));
+    const show = ctx.v.vec;
+    vA.visible = aA.visible = show;
+    if (show) { vA.set(V3(SPX + 0.9, by, 0), V3(0, proj.v, 0), 0.4); aA.set(V3(SPX - 0.9, by, 0), V3(0, proj.a, 0), 0.12); }
+  },
+  ui(ctx) {
+    const { w } = ctx.v;
+    ctx.readout('x', `${proj.x.toFixed(2)} m`); ctx.readout('v', `${proj.v.toFixed(2)} m/s`); ctx.readout('a', `${proj.a.toFixed(2)} m/s²`);
+    ctx.readout('T', `${(2 * Math.PI / w).toFixed(2)} s`); ctx.readout('f', `${(w / 2 / Math.PI).toFixed(3)} Hz`);
+    ctx.readout('ph', `${((((proj.ph ?? 0) * 180 / Math.PI) % 360 + 360) % 360).toFixed(0)}°`);
+  },
+});
 </script>
 </body></html>

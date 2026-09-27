@@ -1,75 +1,60 @@
 <!DOCTYPE html>
-<html lang="en"><head><meta charset="UTF-8"><title>Uniform Circular Motion</title><link rel="stylesheet" href="../styles.css"></head>
-<body>
-<header><a href="../index.html"><h1>Uniform Circular Motion</h1></a><p>Centripetal acceleration always points to center.</p></header>
-<main>
-<a class="back-link" href="../index.html">&larr; All simulations</a>
-<div class="sim-container">
-  <div>
-    <div class="canvas-wrap"><canvas id="cv" width="800" height="500"></canvas></div>
-    <div class="info-box">
-      <h3>The Physics</h3>
-      <p>An object moving in a circle at constant speed is constantly accelerating because its direction changes.</p>
-      <div class="formula">a_c = v²/r = ω²r &nbsp;&nbsp; F_c = m a_c</div>
-    </div>
-  </div>
-  <div class="controls">
-    <h3>Controls</h3>
-    <div class="control-row"><label>Radius <span class="val" id="vR">120</span></label><input type="range" id="r" min="40" max="200" value="120"></div>
-    <div class="control-row"><label>Angular velocity <span class="val" id="vW">2.0</span></label><input type="range" id="w" min="2" max="60" value="20"></div>
-    <div class="btn-row"><button id="run">Start</button><button class="secondary" id="pause">Pause</button></div>
-    <div class="readouts">
-      <div>v: <span id="rV">0</span></div>
-      <div>a_c: <span id="rA">0</span></div>
-      <div>T: <span id="rT">0 s</span></div>
-      <div>θ: <span id="rTh">0°</span></div>
-    </div>
-  </div>
-</div>
-</main>
-<script>
-const cv=document.getElementById('cv'), ctx=cv.getContext('2d');
-const cx=400, cy=250;
-let r=120, w=2.0, theta=0, running=false;
-function draw(){
-  ctx.clearRect(0,0,cv.width,cv.height);
-  ctx.fillStyle='#0a0a0a'; ctx.fillRect(0,0,cv.width,cv.height);
-  ctx.strokeStyle='#cccccc'; ctx.lineWidth=2;
-  ctx.beginPath(); ctx.arc(cx,cy,r,0,2*Math.PI); ctx.stroke();
-  ctx.fillStyle='#dddddd'; ctx.beginPath(); ctx.arc(cx,cy,3,0,2*Math.PI); ctx.fill();
-  const px=cx+r*Math.cos(theta), py=cy+r*Math.sin(theta);
-  // velocity (tangent)
-  const vx = -r*w*Math.sin(theta), vy = r*w*Math.cos(theta);
-  // acceleration (toward center)
-  const ax = -r*w*w*Math.cos(theta), ay = -r*w*w*Math.sin(theta);
-  drawArrow(px,py, px+vx*3, py+vy*3, '#aaaaaa','v');
-  drawArrow(px,py, px+ax*1.5, py+ay*1.5, '#888888','a_c');
-  ctx.fillStyle='#ffffff'; ctx.beginPath(); ctx.arc(px,py,12,0,2*Math.PI); ctx.fill();
-  ctx.strokeStyle='#dddddd'; ctx.stroke();
-}
-function drawArrow(x1,y1,x2,y2,c,l){
-  ctx.strokeStyle=c; ctx.fillStyle=c; ctx.lineWidth=2;
-  ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(x2,y2); ctx.stroke();
-  const a=Math.atan2(y2-y1,x2-x1);
-  ctx.beginPath(); ctx.moveTo(x2,y2);
-  ctx.lineTo(x2-10*Math.cos(a-0.4),y2-10*Math.sin(a-0.4));
-  ctx.lineTo(x2-10*Math.cos(a+0.4),y2-10*Math.sin(a+0.4));
-  ctx.closePath(); ctx.fill();
-  ctx.font='bold 14px sans-serif'; ctx.fillText(l,x2+5,y2);
-}
-function step(){
-  if(!running) return;
-  theta += w*0.03;
-  document.getElementById('rV').textContent=(r*w).toFixed(1);
-  document.getElementById('rA').textContent=(r*w*w).toFixed(1);
-  document.getElementById('rT').textContent=(2*Math.PI/w).toFixed(2)+' s';
-  document.getElementById('rTh').textContent=((theta*180/Math.PI)%360).toFixed(0)+'°';
-  draw(); requestAnimationFrame(step);
-}
-document.getElementById('r').oninput=e=>{r=+e.target.value; document.getElementById('vR').textContent=r; if(!running)draw();};
-document.getElementById('w').oninput=e=>{w=+e.target.value/10; document.getElementById('vW').textContent=w.toFixed(1);};
-document.getElementById('run').onclick=()=>{if(!running){running=true; step();}};
-document.getElementById('pause').onclick=()=>running=false;
-draw();
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Uniform Circular Motion</title>
+<link rel="stylesheet" href="../engine/concept.css">
+<script type="importmap">{"imports":{"three":"../../simulations/lib/three/three.module.min.js","three/addons/":"../../simulations/lib/three/addons/"}}</script>
+</head><body>
+<script type="module">
+import { runSim, V3, MAT, mesh, std, THREE } from '../engine/concept.js';
+// A ball whirled on a string over a turntable (metres, studio).
+let ball, string, disc, ang, aV, aA, tr;
+runSim({
+  title: 'Uniform Circular Motion', subtitle: 'A ball on a string moves in a circle — its velocity is tangential, its acceleration points to the centre.',
+  stage: 'studio', camera: { pos: [0, 5, 6.5], target: [0, 0.6, 0] }, autoplay: true,
+  controls: [
+    { id: 'r', label: 'Radius', min: 0.5, max: 2.5, step: 0.05, value: 1.5, unit: 'm' },
+    { id: 'w', label: 'Angular speed ω', min: 0.2, max: 6, step: 0.05, value: 2, unit: 'rad/s' },
+    { id: 'm', label: 'Mass', min: 0.1, max: 2, step: 0.05, value: 0.5, unit: 'kg' },
+    { id: 'cut', label: 'Cut the string', type: 'check', value: false, reset: true },
+  ],
+  readouts: [{ id: 'v', label: 'Speed v = ωr' }, { id: 'a', label: 'Centripetal a' }, { id: 'F', label: 'String tension F' }, { id: 'T', label: 'Period' }],
+  graph: { title: 'x and y of the ball', series: [{ name: 'x (m)', color: '#22d3ee' }, { name: 'y (m)', color: '#f472b6' }], max: 600 },
+  info: 'Even at constant speed the ball accelerates, because its direction keeps changing. The string supplies the centripetal force that pulls it towards the centre. Cut the string and there is no force: the ball flies off along the tangent in a straight line.',
+  formulas: ['v = ω r', 'a_c = v² / r = ω² r', 'F_c = m v² / r'],
+  setup(ctx) {
+    disc = mesh(new THREE.CylinderGeometry(2.8, 2.8, 0.08, 64), new THREE.MeshStandardMaterial({ map: ctx.canvasTex(512, 512, (g, w) => { g.fillStyle = '#1e293b'; g.fillRect(0, 0, w, w); g.strokeStyle = '#475569'; for (let r = 40; r < 256; r += 40) { g.beginPath(); g.arc(256, 256, r, 0, 7); g.stroke(); } for (let i = 0; i < 12; i++) { const a = i * Math.PI / 6; g.beginPath(); g.moveTo(256, 256); g.lineTo(256 + Math.cos(a) * 250, 256 + Math.sin(a) * 250); g.stroke(); } }), roughness: 0.6 }));
+    disc.position.y = 0.04; ctx.scene.add(disc);
+    const post = mesh(new THREE.CylinderGeometry(0.05, 0.05, 1.2, 12), MAT.steel); post.position.y = 0.6; ctx.scene.add(post);
+    ball = mesh(new THREE.SphereGeometry(0.12, 24, 16), std(0xef4444, { metalness: 0.2 })); ctx.scene.add(ball);
+    string = mesh(new THREE.CylinderGeometry(0.008, 0.008, 1, 5), MAT.white, false); ctx.scene.add(string);
+    aV = ctx.arrow(0x22c55e, { radius: 0.025, head: 0.15 }); aA = ctx.arrow(0xf59e0b, { radius: 0.025, head: 0.15 }); ctx.scene.add(aV, aA);
+    tr = ctx.trail(0xfca5a5, 600); ctx.scene.add(tr);
+    ctx.label('v', () => ball.position.clone().add(ctx.vel.clone().normalize().multiplyScalar(0.7)).add(V3(0, 0.15, 0)));
+    ctx.label('a (to centre)', () => (ctx.v.cut ? null : ball.position.clone().multiplyScalar(0.6).setY(1.3)));
+  },
+  reset(ctx) { ang = 0; ctx.free = null; tr.clear(); ctx.vel = V3(); },
+  step(ctx, dt) {
+    const r = ctx.v.r, w = ctx.v.w;
+    if (ctx.v.cut) {
+      if (!ctx.free) ctx.free = { p: V3(Math.cos(ang) * r, 1.2, -Math.sin(ang) * r), v: V3(-Math.sin(ang), 0, -Math.cos(ang)).multiplyScalar(w * r) };
+      ctx.free.p.addScaledVector(ctx.free.v, dt);
+      if (ctx.free.p.length() > 12) ctx.pause();
+    } else ang += w * dt;
+    ctx.sc = (ctx.sc || 0) + 1; if (ctx.sc % 12 === 0) { tr.push(ball.position); ctx.plot(ctx.t, [ball.position.x, -ball.position.z]); }
+  },
+  frame(ctx) {
+    const r = ctx.v.r, w = ctx.v.w;
+    if (ctx.free) { ball.position.copy(ctx.free.p); ctx.vel = ctx.free.v.clone(); string.visible = false; aA.visible = false; }
+    else {
+      ball.position.set(Math.cos(ang) * r, 1.2, -Math.sin(ang) * r);
+      ctx.vel = V3(-Math.sin(ang), 0, -Math.cos(ang)).multiplyScalar(w * r);
+      string.visible = true; const top = V3(0, 1.2, 0);
+      string.position.copy(top).lerp(ball.position, 0.5); string.scale.y = r; string.quaternion.setFromUnitVectors(V3(0, 1, 0), ball.position.clone().sub(top).normalize());
+      aA.set(ball.position, ball.position.clone().setY(1.2).multiplyScalar(-1).setY(0).multiplyScalar(w * w), 0.08);
+    }
+    aV.set(ball.position, ctx.vel, 0.25);
+    disc.rotation.y = ctx.free ? disc.rotation.y : ang;
+  },
+  ui(ctx) { const r = ctx.v.r, w = ctx.v.w; ctx.readout('v', `${(w * r).toFixed(2)} m/s`); ctx.readout('a', `${(w * w * r).toFixed(2)} m/s²`); ctx.readout('F', ctx.v.cut ? '0 (string cut)' : `${(ctx.v.m * w * w * r).toFixed(2)} N`); ctx.readout('T', `${(2 * Math.PI / w).toFixed(2)} s`); },
+});
 </script>
 </body></html>
