@@ -459,15 +459,24 @@ export function glassRod(len = 20) {
 // Heating: bunsen burner, spirit lamp, tripod, china dish
 // ---------------------------------------------------------------------------
 
+const flameAlpha = (() => {
+  const c = document.createElement('canvas'); c.width = 64; c.height = 128;
+  const x = c.getContext('2d');
+  const gr = x.createLinearGradient(0, 0, 0, 128);
+  gr.addColorStop(0, 'rgba(0,0,0,1)'); gr.addColorStop(0.25, 'rgba(90,90,90,1)'); gr.addColorStop(0.7, 'rgba(230,230,230,1)'); gr.addColorStop(1, 'rgba(255,255,255,1)');
+  x.fillStyle = gr; x.fillRect(0, 0, 64, 128);
+  const t = new THREE.CanvasTexture(c);
+  return t;
+})();
 function flameMesh() {
   const g = new THREE.Group();
-  const outerMat = new THREE.MeshBasicMaterial({ color: 0x5aa0ff, transparent: true, opacity: 0.35, blending: THREE.AdditiveBlending, depthWrite: false });
+  const outerMat = new THREE.MeshBasicMaterial({ color: 0x5aa0ff, transparent: true, opacity: 0.35, blending: THREE.AdditiveBlending, depthWrite: false, alphaMap: flameAlpha });
   const innerMat = new THREE.MeshBasicMaterial({ color: 0x2f5bff, transparent: true, opacity: 0.6, blending: THREE.AdditiveBlending, depthWrite: false });
   const outer = new THREE.Mesh(new THREE.ConeGeometry(0.9, 7, 16, 1, true), outerMat);
   outer.position.y = 3.5;
   const inner = new THREE.Mesh(new THREE.ConeGeometry(0.55, 2.8, 16, 1, true), innerMat);
   inner.position.y = 1.4;
-  const tint = new THREE.Mesh(new THREE.ConeGeometry(1.2, 6, 16, 1, true), new THREE.MeshBasicMaterial({ color: 0xffcc33, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false }));
+  const tint = new THREE.Mesh(new THREE.ConeGeometry(1.2, 6, 16, 1, true), new THREE.MeshBasicMaterial({ color: 0xffcc33, transparent: true, opacity: 0, depthWrite: false, toneMapped: false, side: THREE.DoubleSide, alphaMap: flameAlpha })); // normal blending keeps the colour saturated against a bright background
   tint.position.y = 4;
   [outer, inner, tint].forEach((m) => { m.renderOrder = 6; m.userData.noPick = true; });
   g.add(outer, inner, tint);
@@ -482,7 +491,8 @@ function flameMesh() {
       const f = 1 + Math.sin(t * 31) * 0.05 + Math.sin(t * 17.3) * 0.04;
       g.scale.set(api.size, api.size * f, api.size);
       tint.material.color.copy(api.tintColor);
-      tint.material.opacity = api.tintAmt * (0.75 + Math.sin(t * 23) * 0.1);
+      tint.material.opacity = api.tintAmt * (0.62 + Math.sin(t * 23) * 0.08);
+      outer.visible = api.tintAmt < 0.5;
       outerMat.color.setHex(0x5aa0ff).lerp(color(0xffb340), api.yellow);
       outerMat.opacity = 0.35 + api.yellow * 0.3;
       light.intensity = 40 + api.tintAmt * 80;
@@ -977,15 +987,14 @@ export async function pour(lab, fx, srcKey, dst, mL, { dur = 1.6, onFlow, tilt =
 }
 
 // Add n drops from a dropper bottle item into a vessel item (or world point)
-export async function addDrops(lab, fx, bottleKey, dstKey, n, { onDrop, interval = 0.45 } = {}) {
+export async function addDrops(lab, fx, bottleKey, dst, n, { onDrop, interval = 0.45 } = {}) {
   const b = lab.items[bottleKey];
-  const dst = lab.items[dstKey];
-  const dv = dst.app.v;
+  const T = target(lab, dst);
   const R = lab.handR();
   const dr = b.app.dropper;
   const home = dr.position.clone();
   const parent = dr.parent;
-  const topW = dst.group.localToWorld(V3(0, (dv.yTop ?? 10) + 3.5, 0));
+  const topW = T.topW().add(V3(0, 3.5, 0));
   // Take the dropper out of its bottle and hold it over the vessel
   await lab.touch(parent.localToWorld(home.clone().add(V3(0, 2, 0))), null, { pose: 'pinch', dur: 0.7 });
   lab.scene.attach(dr);
@@ -996,8 +1005,8 @@ export async function addDrops(lab, fx, bottleKey, dstKey, n, { onDrop, interval
   for (let i = 0; i < n; i++) {
     await lab.tween(interval * 0.5, (e) => { teat.scale.set(1 - 0.25 * e, 1.9 - 0.4 * e, 1 - 0.25 * e); });
     const from = dr.localToWorld(V3(0, -5.2, 0));
-    const landY = dst.group.localToWorld(V3(0, dv.level, 0)).y;
-    await new Promise((res) => fx.drops.drop(from, landY, b.app.dropColor || 0xffffff, () => { lab.sfx('drip'); if (onDrop) onDrop(i); res(); }));
+    const landY = T.surfW().y;
+    await new Promise((res) => fx.drops.drop(from, landY, b.app.dropColor || 0xffffff, () => { lab.sfx('drip'); if (onDrop) onDrop(i); else T.add(0.05, b.app.dropColor, b.app.v?.opacity); res(); }));
     await lab.tween(interval * 0.5, (e) => { teat.scale.set(0.75 + 0.25 * e, 1.5 + 0.4 * e, 0.75 + 0.25 * e); });
     lab.checkAbort();
   }

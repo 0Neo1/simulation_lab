@@ -1311,7 +1311,7 @@ export function runLab(spec) {
     const it = ITEMS[k];
     STEPS.push({
       phase: phaseIndex('Set up the apparatus'),
-      text: it.setupText || `Carry the ${/^[A-Z][a-z]/.test(it.name) ? it.name[0].toLowerCase() + it.name.slice(1) : it.name} from the trolley to its place on the bench.`,
+      text: it.setupText || `Carry the ${/^[A-Z][a-z]+(\s|$)/.test(it.name) ? it.name[0].toLowerCase() + it.name.slice(1) : it.name} from the trolley to its place on the bench.`,
       why: it.why || '',
       check: () => it.placed,
       demo: () => demoPlace(k),
