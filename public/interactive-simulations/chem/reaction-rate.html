@@ -1,125 +1,98 @@
 <!DOCTYPE html>
-<html lang="en"><head><meta charset="UTF-8"><title>Reaction Rate</title><link rel="stylesheet" href="../styles.css"></head>
-<body>
-<header><a href="../index.html"><h1>Collision Theory &amp; Reaction Rate</h1></a><p>Particles must collide with enough energy to react.</p></header>
-<main>
-<a class="back-link" href="../index.html">&larr; All simulations</a>
-<div class="sim-container">
-  <div>
-    <div class="canvas-wrap"><canvas id="cv" width="800" height="500"></canvas></div>
-    <div class="info-box">
-      <h3>The Chemistry</h3>
-      <p>Reactions occur only when particles collide with sufficient energy (activation energy E_a) and proper orientation. Higher temperature and concentration speed up reactions.</p>
-      <div class="formula">k = A · exp(−E_a / RT)</div>
-      <p>The Arrhenius equation: rate constant rises exponentially with temperature.</p>
-    </div>
-  </div>
-  <div class="controls">
-    <h3>Controls</h3>
-    <div class="control-row"><label>Temperature <span class="val" id="vT">300 K</span></label><input type="range" id="t" min="200" max="900" value="300"></div>
-    <div class="control-row"><label>Concentration A <span class="val" id="vA">20</span></label><input type="range" id="a" min="5" max="50" value="20"></div>
-    <div class="control-row"><label>Concentration B <span class="val" id="vB">20</span></label><input type="range" id="b" min="5" max="50" value="20"></div>
-    <div class="control-row"><label>Activation E_a <span class="val" id="vE">500</span></label><input type="range" id="e" min="100" max="2000" value="500"></div>
-    <div class="btn-row"><button id="reset">Reset reaction</button></div>
-    <div class="readouts">
-      <div>Reactions: <span id="rR">0</span></div>
-      <div>Rate (/s): <span id="rRt">0</span></div>
-      <div>A left: <span id="rAL">0</span></div>
-      <div>B left: <span id="rBL">0</span></div>
-    </div>
-  </div>
-</div>
-</main>
-<script>
-const cv=document.getElementById('cv'), ctx=cv.getContext('2d');
-let T=300, NA=20, NB=20, Ea=500;
-let particles = [], products = [];
-let reactions = 0, lastReactions = 0, lastTime = performance.now();
-
-function init(){
-  particles = [];
-  products = [];
-  reactions = 0;
-  for(let i=0;i<NA;i++) particles.push(makeP('A'));
-  for(let i=0;i<NB;i++) particles.push(makeP('B'));
-}
-
-function makeP(type){
-  const speed = Math.sqrt(T)/8;
-  const ang = Math.random()*2*Math.PI;
-  return {x:50+Math.random()*700, y:50+Math.random()*400, vx:speed*Math.cos(ang), vy:speed*Math.sin(ang), type};
-}
-
-function step(){
-  // adjust counts
-  particles.forEach(p=>{
-    const targetSpeed = Math.sqrt(T)/8;
-    const cs = Math.hypot(p.vx,p.vy);
-    if(cs>0){p.vx=p.vx/cs*targetSpeed; p.vy=p.vy/cs*targetSpeed;}
-    p.x+=p.vx; p.y+=p.vy;
-    if(p.x<5||p.x>cv.width-5) p.vx*=-1;
-    if(p.y<5||p.y>cv.height-5) p.vy*=-1;
-  });
-  // collisions
-  for(let i=0;i<particles.length;i++){
-    for(let j=i+1;j<particles.length;j++){
-      const a=particles[i], b=particles[j];
-      if(a.type !== b.type){
-        const d=Math.hypot(a.x-b.x, a.y-b.y);
-        if(d<14){
-          // collision energy proportional to relative velocity squared
-          const vrel = Math.hypot(a.vx-b.vx, a.vy-b.vy);
-          const Ek = 0.5*vrel*vrel*1000; // arbitrary units
-          if(Ek > Ea){
-            // react: form product
-            products.push({x:(a.x+b.x)/2, y:(a.y+b.y)/2, vx:(a.vx+b.vx)/2, vy:(a.vy+b.vy)/2, life:60});
-            particles.splice(Math.max(i,j),1);
-            particles.splice(Math.min(i,j),1);
-            reactions++;
-            i--;
-            break;
-          }
-        }
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Reaction Rate</title>
+<link rel="stylesheet" href="../engine/concept.css">
+<script type="importmap">{"imports":{"three":"../../simulations/lib/three/three.module.min.js","three/addons/":"../../simulations/lib/three/addons/"}}</script>
+</head><body>
+<script type="module">
+import { runSim, V3, THREE } from '../engine/concept.js';
+// Collision theory: A + B → AB happens only when a collision carries at least the activation
+// energy along the line of centres. Energies in kJ/mol-like units; speeds follow temperature.
+const L = 12, RAD = 0.35, MAX = 400;
+let mol = [], meshes = {}, flashes = [], hits = 0, good = 0, winT = 0, rateHist = [];
+const kB = 0.00831; // "R" in kJ/(mol·K)
+const Eeff = (ctx) => ctx.v.Ea * (ctx.v.cat ? 0.55 : 1);
+function spawn(type, T) { const s = Math.sqrt(kB * T / (type === 'C' ? 2 : 1)) * 3.2; const g = () => { let u = 0; for (let i = 0; i < 6; i++) u += Math.random(); return (u - 3) / Math.sqrt(0.5); }; return { t: type, p: V3((Math.random() - 0.5) * (L - 1), (Math.random() - 0.5) * (L - 1), (Math.random() - 0.5) * (L - 1)), v: V3(g(), g(), g()).multiplyScalar(s), m: type === 'C' ? 2 : 1 }; }
+runSim({
+  title: 'Reaction Rate', subtitle: 'Reactions need collisions with enough energy: temperature, concentration and catalysts change how often that happens.',
+  stage: 'studio', camera: { pos: [14, 12, 20], target: [0, 6.5, 0] }, stageOpts: { floorSize: 18 },
+  autoplay: true, dt: 1 / 240,
+  controls: [
+    { id: 'T', label: 'Temperature', min: 200, max: 800, step: 10, value: 400, unit: 'K' },
+    { id: 'nA', label: 'Molecules of A (red)', min: 20, max: 150, step: 5, value: 80, reset: true },
+    { id: 'nB', label: 'Molecules of B (blue)', min: 20, max: 150, step: 5, value: 80, reset: true },
+    { id: 'Ea', label: 'Activation energy Eₐ', min: 2, max: 20, step: 0.5, value: 9, unit: 'kJ/mol' },
+    { id: 'cat', label: 'Add a catalyst (lowers Eₐ)', type: 'check', value: false },
+  ],
+  onControl(ctx, id, val) { if (id === 'T') { const f = Math.sqrt(val / ctx.lastT); mol.forEach((m) => m.v.multiplyScalar(f)); ctx.lastT = val; } },
+  readouts: [{ id: 'A', label: 'A left' }, { id: 'C', label: 'AB formed' }, { id: 'col', label: 'Collisions / s' }, { id: 'ok', label: 'Successful' }, { id: 'f', label: 'Fraction with E ≥ Eₐ' }, { id: 'k', label: 'Relative k (Arrhenius)' }],
+  graph: { title: 'Amounts against time', series: [{ name: 'A', color: '#ef4444' }, { name: 'B', color: '#3b82f6' }, { name: 'AB', color: '#a855f7' }], max: 900, ymin: 0 },
+  extraHtml: '<h3>Energy profile</h3><canvas id="ep" width="320" height="150" style="width:100%;background:#0b1220;border-radius:8px"></canvas>',
+  info: 'Molecules are always moving and colliding, but most collisions just bounce. A reaction happens only if the colliding pair has at least the activation energy Eₐ. Raising the temperature makes molecules faster, so they collide more often and, far more importantly, a much larger fraction of collisions has enough energy. More molecules in the same space means more collisions. A catalyst gives the reaction an easier path with a lower Eₐ, so more collisions succeed at the same temperature.',
+  formulas: ['k = A e^(−Eₐ / RT)  (Arrhenius)', 'rate = k [A][B]', 'fraction ≈ e^(−Eₐ / RT)'],
+  setup(ctx) {
+    const box = new THREE.Mesh(new THREE.BoxGeometry(L, L, L), new THREE.MeshPhysicalMaterial({ color: 0xe0f2fe, transparent: true, opacity: 0.06, side: THREE.DoubleSide, depthWrite: false }));
+    const grp = new THREE.Group(); grp.add(box, new THREE.LineSegments(new THREE.EdgesGeometry(box.geometry), new THREE.LineBasicMaterial({ color: 0x7dd3fc }))); grp.position.y = L / 2 + 0.2; ctx.scene.add(grp);
+    const mk = (col, r) => { const m = new THREE.InstancedMesh(new THREE.SphereGeometry(r, 16, 12), new THREE.MeshStandardMaterial({ color: col, roughness: 0.3, metalness: 0.1 }), MAX); m.frustumCulled = false; ctx.scene.add(m); return m; };
+    meshes.A = mk(0xef4444, RAD); meshes.B = mk(0x3b82f6, RAD);
+    // AB drawn as two fused spheres
+    meshes.C1 = mk(0xef4444, RAD); meshes.C2 = mk(0x3b82f6, RAD);
+    for (let i = 0; i < 12; i++) { const s = ctx.glowSprite(0xfff3b0, 0.01); ctx.scene.add(s); flashes.push({ s, t: 0 }); }
+    ctx.lastT = ctx.v.T;
+  },
+  reset(ctx) { mol = []; for (let i = 0; i < ctx.v.nA; i++) mol.push(spawn('A', ctx.v.T)); for (let i = 0; i < ctx.v.nB; i++) mol.push(spawn('B', ctx.v.T)); hits = good = 0; winT = 0; ctx.lastT = ctx.v.T; ctx.rates = { col: 0, ok: 0 }; },
+  step(ctx, dt) {
+    const H = L / 2 - RAD, Ea = Eeff(ctx);
+    for (const m of mol) { m.p.addScaledVector(m.v, dt); for (const ax of ['x', 'y', 'z']) { if (m.p[ax] > H) { m.p[ax] = H; m.v[ax] = -Math.abs(m.v[ax]); } if (m.p[ax] < -H) { m.p[ax] = -H; m.v[ax] = Math.abs(m.v[ax]); } } }
+    // pair collisions (elastic unless A–B with enough energy → AB)
+    const d2 = (2 * RAD) ** 2;
+    for (let i = 0; i < mol.length; i++) for (let j = i + 1; j < mol.length; j++) {
+      const a = mol[i], b = mol[j]; if (!a || !b || a.dead || b.dead) continue;
+      const dx = b.p.x - a.p.x, dy = b.p.y - a.p.y, dz = b.p.z - a.p.z, r2 = dx * dx + dy * dy + dz * dz;
+      if (r2 > d2 || r2 < 1e-9) continue;
+      const r = Math.sqrt(r2), nx = dx / r, ny = dy / r, nz = dz / r, vr = (a.v.x - b.v.x) * nx + (a.v.y - b.v.y) * ny + (a.v.z - b.v.z) * nz;
+      if (vr <= 0) continue; // moving apart
+      hits++;
+      // energy of the collision along the line of centres, in kJ/mol (speeds carry a factor 3.2)
+      const mu = a.m * b.m / (a.m + b.m), E = 0.5 * mu * (vr / 3.2) ** 2;
+      if (((a.t === 'A' && b.t === 'B') || (a.t === 'B' && b.t === 'A')) && E >= Ea) {
+        good++; const c = { t: 'C', m: 2, p: a.p.clone().add(b.p).multiplyScalar(0.5), v: a.v.clone().add(b.v).multiplyScalar(0.5), axis: V3(nx, ny, nz) };
+        a.dead = b.dead = true; mol.push(c);
+        const f = flashes.find((q) => q.t <= 0); if (f) { f.t = 0.4; f.s.position.copy(c.p).add(V3(0, L / 2 + 0.2, 0)); }
+        continue;
       }
+      const J = (2 * vr) / (1 / a.m + 1 / b.m);
+      a.v.x -= (J / a.m) * nx; a.v.y -= (J / a.m) * ny; a.v.z -= (J / a.m) * nz; b.v.x += (J / b.m) * nx; b.v.y += (J / b.m) * ny; b.v.z += (J / b.m) * nz;
     }
-  }
-  // products
-  products.forEach(p=>{p.x+=p.vx; p.y+=p.vy; p.life--;});
-  products = products.filter(p=>p.life>0);
-  draw();
-  if(performance.now()-lastTime > 1000){
-    document.getElementById('rRt').textContent = (reactions - lastReactions);
-    lastReactions = reactions;
-    lastTime = performance.now();
-  }
-  document.getElementById('rR').textContent = reactions;
-  document.getElementById('rAL').textContent = particles.filter(p=>p.type==='A').length;
-  document.getElementById('rBL').textContent = particles.filter(p=>p.type==='B').length;
-  requestAnimationFrame(step);
+    if (mol.some((m) => m.dead)) mol = mol.filter((m) => !m.dead);
+    winT += dt; if (winT >= 1) { ctx.rates = { col: hits / winT, ok: good / winT }; hits = good = 0; winT = 0; }
+    ctx.n = (ctx.n || 0) + 1; if (ctx.n % 24 === 0) { const c = count(); ctx.plot(ctx.t, [c.A, c.B, c.C]); }
+  },
+  frame(ctx, dt) {
+    const m = new THREE.Matrix4(), idx = { A: 0, B: 0, C: 0 }, off = V3(0, L / 2 + 0.2, 0);
+    for (const o of mol) {
+      if (o.t === 'C') { const d = o.axis.clone().multiplyScalar(RAD * 0.75); m.setPosition(o.p.clone().add(off).sub(d)); meshes.C1.setMatrixAt(idx.C, m); m.setPosition(o.p.clone().add(off).add(d)); meshes.C2.setMatrixAt(idx.C, m); idx.C++; }
+      else { m.setPosition(o.p.clone().add(off)); meshes[o.t].setMatrixAt(idx[o.t]++, m); }
+    }
+    meshes.A.count = idx.A; meshes.B.count = idx.B; meshes.C1.count = meshes.C2.count = idx.C;
+    for (const k of ['A', 'B', 'C1', 'C2']) meshes[k].instanceMatrix.needsUpdate = true;
+    flashes.forEach((f) => { f.t -= dt; f.s.scale.setScalar(f.t > 0 ? 1.6 * f.t / 0.4 + 0.3 : 0.001); });
+  },
+  ui(ctx) {
+    const c = count(), Ea = Eeff(ctx), T = ctx.v.T, frac = Math.exp(-Ea / (kB * T));
+    ctx.readout('A', String(c.A)); ctx.readout('C', String(c.C)); ctx.readout('col', (ctx.rates?.col || 0).toFixed(0)); ctx.readout('ok', `${(ctx.rates?.ok || 0).toFixed(1)} / s`);
+    ctx.readout('f', `${(frac * 100).toFixed(frac < 0.01 ? 3 : 1)} %`); ctx.readout('k', `× ${(frac / Math.exp(-ctx.v.Ea / (kB * 400))).toFixed(2)} vs 400 K, no catalyst`);
+    drawProfile(ctx);
+  },
+});
+function count() { const c = { A: 0, B: 0, C: 0 }; for (const m of mol) c[m.t]++; return c; }
+function drawProfile(ctx) {
+  const cv = document.getElementById('ep'); if (!cv) return; const g = cv.getContext('2d'), W = cv.width, Hh = cv.height;
+  g.clearRect(0, 0, W, Hh); const base = Hh - 30, prodY = base + 12, sc = 5.2;
+  const curve = (Ea, col, dash) => { g.strokeStyle = col; g.setLineDash(dash); g.lineWidth = 2.2; g.beginPath(); for (let x = 0; x <= 1; x += 0.01) { const px = 20 + x * (W - 40), bump = Math.exp(-((x - 0.5) ** 2) / 0.018) * Ea * sc, drift = (x < 0.5 ? 0 : (x - 0.5) / 0.5) * (prodY - base) * (x > 0.5 ? 1 : 0); const py = base - bump + drift * (1 - Math.exp(-((x - 0.5) ** 2) / 0.018)); x ? g.lineTo(px, py) : g.moveTo(px, py); } g.stroke(); g.setLineDash([]); };
+  curve(ctx.v.Ea, '#f59e0b', []); if (ctx.v.cat) curve(Eeff(ctx), '#22c55e', [5, 4]);
+  g.fillStyle = '#cbd5e1'; g.font = '11px sans-serif'; g.fillText('A + B', 16, base + 16); g.fillText('AB', W - 36, prodY + 14);
+  g.strokeStyle = '#94a3b8'; g.beginPath(); g.moveTo(W / 2 + 8, base); g.lineTo(W / 2 + 8, base - Eeff(ctx) * sc); g.stroke();
+  g.fillText(`Eₐ = ${Eeff(ctx).toFixed(1)}`, W / 2 + 12, base - Eeff(ctx) * sc / 2); if (ctx.v.cat) { g.fillStyle = '#22c55e'; g.fillText('with catalyst', W / 2 + 12, base - Eeff(ctx) * sc / 2 + 14); }
 }
-
-function draw(){
-  ctx.fillStyle='#000000'; ctx.fillRect(0,0,cv.width,cv.height);
-  ctx.strokeStyle='#aaaaaa'; ctx.strokeRect(2,2,cv.width-4,cv.height-4);
-  particles.forEach(p=>{
-    ctx.fillStyle = p.type==='A' ? '#888888' : '#ffffff';
-    ctx.beginPath(); ctx.arc(p.x,p.y,7,0,2*Math.PI); ctx.fill();
-    ctx.fillStyle='#fff'; ctx.font='10px sans-serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
-    ctx.fillText(p.type, p.x, p.y);
-  });
-  products.forEach(p=>{
-    ctx.fillStyle=`rgba(255,200,0,${p.life/60})`;
-    ctx.beginPath(); ctx.arc(p.x,p.y,10,0,2*Math.PI); ctx.fill();
-    ctx.fillStyle='#dddddd'; ctx.font='9px sans-serif'; ctx.fillText('AB', p.x, p.y);
-  });
-  ctx.textAlign='left'; ctx.textBaseline='alphabetic';
-}
-
-document.getElementById('t').oninput=e=>{T=+e.target.value; document.getElementById('vT').textContent=T+' K';};
-document.getElementById('a').oninput=e=>{NA=+e.target.value; document.getElementById('vA').textContent=NA; init();};
-document.getElementById('b').oninput=e=>{NB=+e.target.value; document.getElementById('vB').textContent=NB; init();};
-document.getElementById('e').oninput=e=>{Ea=+e.target.value; document.getElementById('vE').textContent=Ea;};
-document.getElementById('reset').onclick=init;
-init(); step();
 </script>
 </body></html>

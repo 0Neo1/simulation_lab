@@ -32,7 +32,7 @@ runSim({
   ],
   readouts: [{ id: 'v1', label: 'v₁' }, { id: 'v2', label: 'v₂' }, { id: 'p', label: 'Total momentum' }, { id: 'ke', label: 'Total KE' }, { id: 'lost', label: 'KE lost' }, { id: 'vcm', label: 'Centre-of-mass v' }],
   graph: { title: 'Momentum and kinetic energy', series: [{ name: 'p₁', color: '#60a5fa' }, { name: 'p₂', color: '#f87171' }, { name: 'p total', color: '#22c55e' }, { name: 'KE (J)', color: '#f59e0b' }], max: 800 },
-  info: 'Two gliders ride on an air cushion, so friction is negligible. When they meet, equal and opposite forces act for the same time, so the momentum one gains the other loses. The coefficient of restitution e is the ratio of separation speed to approach speed: e = 1 is elastic (no KE lost), e = 0 makes them stick together. The buffers at the ends of the track push the gliders back, so the total momentum changes only when a glider hits an end.,
+  info: 'Two gliders ride on an air cushion, so friction is negligible. When they meet, equal and opposite forces act for the same time, so the momentum one gains the other loses. The coefficient of restitution e is the ratio of separation speed to approach speed: e = 1 is elastic (no KE lost), e = 0 makes them stick together. The buffers at the ends of the track push the gliders back, so the total momentum changes only when a glider hits an end.',
   formulas: ['m₁u₁ + m₂u₂ = m₁v₁ + m₂v₂', 'e = (v₂ − v₁) / (u₁ − u₂)'],
   formulasPlain: ['m1u1 + m2u2 = m1v1 + m2v2', 'e = (v2 - v1)/(u1 - u2)'],
   setup(ctx) {

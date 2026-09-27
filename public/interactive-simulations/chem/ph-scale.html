@@ -1,126 +1,81 @@
 <!DOCTYPE html>
-<html lang="en"><head><meta charset="UTF-8"><title>pH Scale</title><link rel="stylesheet" href="../styles.css"></head>
-<body>
-<header><a href="../index.html"><h1>pH Scale Explorer</h1></a><p>Measure acidity of common substances.</p></header>
-<main>
-<a class="back-link" href="../index.html">&larr; All simulations</a>
-<div class="sim-container">
-  <div>
-    <div class="canvas-wrap"><canvas id="cv" width="800" height="500"></canvas></div>
-    <div class="info-box">
-      <h3>The Chemistry</h3>
-      <p>pH measures hydrogen ion concentration. Lower pH = more acidic, higher pH = more basic. Pure water is neutral (pH 7).</p>
-      <div class="formula">pH = −log₁₀[H⁺]<br>pH + pOH = 14</div>
-      <p>Each pH unit is a 10× change in [H⁺].</p>
-    </div>
-  </div>
-  <div class="controls">
-    <h3>Controls</h3>
-    <div class="control-row"><label>Substance: <select id="sub">
-      <option data-ph="0">Battery acid (0)</option>
-      <option data-ph="1">Stomach acid (1.5)</option>
-      <option data-ph="2.4">Lemon juice (2.4)</option>
-      <option data-ph="3">Vinegar (3)</option>
-      <option data-ph="3.5">Soda (3.5)</option>
-      <option data-ph="4">Tomato juice (4)</option>
-      <option data-ph="5.5">Coffee (5.5)</option>
-      <option data-ph="6.5">Milk (6.5)</option>
-      <option data-ph="7" selected>Pure water (7)</option>
-      <option data-ph="7.4">Blood (7.4)</option>
-      <option data-ph="8">Sea water (8)</option>
-      <option data-ph="9">Baking soda (9)</option>
-      <option data-ph="10">Toothpaste (10)</option>
-      <option data-ph="11">Ammonia (11)</option>
-      <option data-ph="12.5">Bleach (12.5)</option>
-      <option data-ph="14">Drain cleaner (14)</option>
-    </select></label></div>
-    <div class="control-row"><label>Or set pH manually <span class="val" id="vP">7.0</span></label><input type="range" id="ph" min="0" max="140" value="70"></div>
-    <div class="readouts">
-      <div>pH: <span id="rP">7.0</span></div>
-      <div>pOH: <span id="rO">7.0</span></div>
-      <div>[H⁺]: <span id="rH">10⁻⁷</span></div>
-      <div>Type: <span id="rT">Neutral</span></div>
-    </div>
-  </div>
-</div>
-</main>
-<script>
-const cv=document.getElementById('cv'), ctx=cv.getContext('2d');
-let pH = 7;
-
-function colorFor(p){
-  // universal indicator
-  if(p<3) return '#888888';
-  if(p<5) return '#aaaaaa';
-  if(p<6.5) return '#cccccc';
-  if(p<7.5) return '#888888';
-  if(p<9) return '#999999';
-  if(p<11) return '#bbbbbb';
-  return '#888';
-}
-
-function draw(){
-  ctx.clearRect(0,0,cv.width,cv.height);
-  ctx.fillStyle='#0a0a0a'; ctx.fillRect(0,0,cv.width,cv.height);
-  // pH scale gradient
-  const gradX = 80, gradY = 60, gradW = 640, gradH = 50;
-  for(let i=0;i<gradW;i++){
-    const p = i/gradW*14;
-    ctx.fillStyle = colorFor(p);
-    ctx.fillRect(gradX+i, gradY, 1, gradH);
-  }
-  // tick marks
-  ctx.fillStyle='#dddddd'; ctx.font='12px sans-serif'; ctx.textAlign='center';
-  for(let i=0;i<=14;i++){
-    const x = gradX + i/14*gradW;
-    ctx.fillRect(x, gradY+gradH, 1, 5);
-    ctx.fillText(i, x, gradY+gradH+18);
-  }
-  // labels
-  ctx.font='14px sans-serif';
-  ctx.fillText('Acidic', gradX+50, gradY-10);
-  ctx.fillText('Neutral', gradX+gradW/2, gradY-10);
-  ctx.fillText('Basic', gradX+gradW-50, gradY-10);
-  // marker
-  const mX = gradX + pH/14*gradW;
-  ctx.fillStyle='#dddddd';
-  ctx.beginPath(); ctx.moveTo(mX, gradY-5); ctx.lineTo(mX-7, gradY-15); ctx.lineTo(mX+7, gradY-15); ctx.closePath(); ctx.fill();
-  // beaker
-  ctx.strokeStyle='#888888'; ctx.lineWidth=3;
-  ctx.beginPath();
-  ctx.moveTo(280, 200); ctx.lineTo(280, 440); ctx.lineTo(520, 440); ctx.lineTo(520, 200);
-  ctx.stroke();
-  // liquid
-  ctx.fillStyle = colorFor(pH);
-  ctx.fillRect(283, 230, 234, 207);
-  // pH meter
-  ctx.fillStyle='#888888'; ctx.fillRect(550, 200, 90, 200);
-  ctx.fillStyle='#ffffff'; ctx.font='bold 36px monospace'; ctx.textAlign='center';
-  ctx.fillText('pH', 595, 240);
-  ctx.fillText(pH.toFixed(1), 595, 290);
-  // probe
-  ctx.fillStyle='#888'; ctx.fillRect(490, 200, 6, 100);
-  ctx.fillStyle='#dddddd'; ctx.fillRect(488, 295, 10, 30);
-  // info
-  ctx.textAlign='left';
-  document.getElementById('rP').textContent = pH.toFixed(2);
-  document.getElementById('rO').textContent = (14-pH).toFixed(2);
-  document.getElementById('rH').textContent = '10^'+(-pH).toFixed(1)+' M';
-  document.getElementById('rT').textContent = pH<6.9 ? 'Acidic' : pH>7.1 ? 'Basic' : 'Neutral';
-}
-
-document.getElementById('sub').onchange=e=>{
-  const opt = e.target.options[e.target.selectedIndex];
-  pH = parseFloat(opt.dataset.ph);
-  document.getElementById('ph').value = pH*10;
-  document.getElementById('vP').textContent = pH.toFixed(1);
-  draw();
-};
-document.getElementById('ph').oninput=e=>{
-  pH = +e.target.value/10;
-  document.getElementById('vP').textContent = pH.toFixed(1);
-  draw();
-};
-draw();
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>pH Scale</title>
+<link rel="stylesheet" href="../engine/concept.css">
+<script type="importmap">{"imports":{"three":"../../simulations/lib/three/three.module.min.js","three/addons/":"../../simulations/lib/three/addons/"}}</script>
+</head><body>
+<script type="module">
+import { runSim, V3, MAT, mesh, std, THREE } from '../engine/concept.js';
+import * as C from '../../simulations/lab-engine/chem.js';
+// A beaker of the chosen substance with universal indicator, a pH meter, a reference rack of
+// indicator colours 0–14, and a magnified view of H₃O⁺ and OH⁻ ions.
+const BENCH = -3, NI = 120;
+const SUBS = [['Battery acid', 0], ['Stomach acid', 1.5], ['Lemon juice', 2.4], ['Vinegar', 3], ['Soda', 3.5], ['Tomato juice', 4], ['Coffee', 5.5], ['Milk', 6.5], ['Pure water', 7], ['Blood', 7.4], ['Sea water', 8], ['Baking soda', 9], ['Toothpaste', 10], ['Ammonia', 11], ['Bleach', 12.5], ['Drain cleaner', 14]];
+let beaker, meterTex, meterCanvas, probe, ions, idat = [], marker, lens;
+const pHv = (ctx) => (ctx.v.sub === 'manual' ? ctx.v.pH : SUBS[ctx.v.sub][1]);
+runSim({
+  title: 'The pH Scale', subtitle: 'pH = −log[H⁺]: each step of one pH unit is a tenfold change in acidity.',
+  stage: 'bench', camera: { pos: [4, 30, 56], target: [-1, 10, 0] },
+  autoplay: true, dt: 1 / 60,
+  controls: [
+    { id: 'sub', label: 'Substance', type: 'select', value: 3, options: SUBS.map(([n, p], i) => ({ value: i, label: `${n} (pH ${p})` })).concat([{ value: 'manual', label: 'Set pH manually ↓' }]) },
+    { id: 'pH', label: 'Manual pH', min: 0, max: 14, step: 0.1, value: 7 },
+  ],
+  onControl(ctx, id) { if (id === 'pH') ctx.setControl('sub', 'manual'); },
+  readouts: [{ id: 'pH', label: 'pH' }, { id: 'pOH', label: 'pOH = 14 − pH' }, { id: 'H', label: '[H⁺]' }, { id: 'OH', label: '[OH⁻]' }, { id: 'rat', label: 'H⁺ : OH⁻' }, { id: 'kind', label: 'Nature' }],
+  info: 'Water always contains a few hydronium (H₃O⁺) and hydroxide (OH⁻) ions, and their concentrations multiply to 10⁻¹⁴ at 25 °C. Acids add H⁺ ions, so pH falls below 7; bases remove them (adding OH⁻), so pH rises above 7. Because the scale is logarithmic, lemon juice (pH 2.4) is about 4000 times more acidic than milk (pH 6.5). Universal indicator shows the pH by colour; a pH meter reads it electronically.',
+  formulas: ['pH = −log₁₀[H⁺]', '[H⁺][OH⁻] = 10⁻¹⁴', 'pH + pOH = 14'],
+  formulasPlain: ['pH = −log[H⁺]', '[H⁺][OH⁻] = 1e-14'],
+  setup(ctx) {
+    beaker = C.beaker(250); beaker.group.position.set(-6, BENCH, 4); ctx.scene.add(beaker.group); beaker.setLiquid(180, 0xffffff, 0.6);
+    // reference rack of universal-indicator colours
+    const rack = mesh(new THREE.BoxGeometry(46, 1.2, 4), MAT.wood); rack.position.set(0, BENCH + 7, -10); ctx.scene.add(rack);
+    [-22.5, 22.5].forEach((x) => { const leg = mesh(new THREE.BoxGeometry(1, 7, 4), MAT.wood); leg.position.set(x, BENCH + 3.5, -10); ctx.scene.add(leg); });
+    const base = mesh(new THREE.BoxGeometry(46, 1, 4), MAT.wood); base.position.set(0, BENCH + 0.5, -10); ctx.scene.add(base);
+    for (let p = 0; p <= 14; p++) {
+      const t = C.testTube(11, 0.8); t.group.position.set(-21 + p * 3, BENCH + 1, -10); t.setLiquid(12, C.phColor(p), 0.85); ctx.scene.add(t.group);
+      const lab = ctx.textSprite(String(p), { size: 1.4, color: '#fff' }); lab.position.set(-21 + p * 3, BENCH + 13.4, -10); ctx.scene.add(lab);
+    }
+    marker = mesh(new THREE.ConeGeometry(0.8, 1.6, 12), std(0xfde047, { emissive: 0xfde047, emissiveIntensity: 0.6 })); marker.rotation.x = Math.PI; ctx.scene.add(marker);
+    // pH meter with probe
+    const meter = mesh(new THREE.BoxGeometry(8, 3, 6), std(0x1f2937)); meter.position.set(8, BENCH + 1.5, 6);
+    meterCanvas = document.createElement('canvas'); meterCanvas.width = 256; meterCanvas.height = 128; meterTex = new THREE.CanvasTexture(meterCanvas);
+    const disp = new THREE.Mesh(new THREE.PlaneGeometry(6, 3), new THREE.MeshBasicMaterial({ map: meterTex, toneMapped: false })); disp.rotation.x = -Math.PI / 2 + 0.5; disp.position.set(8, BENCH + 3.2, 6.2);
+    probe = new THREE.Group(); const rod = mesh(new THREE.CylinderGeometry(0.35, 0.35, 12, 14), std(0xe5e7eb)); rod.position.y = 6; const bulb = mesh(new THREE.SphereGeometry(0.5, 14, 10), MAT.glass); probe.add(rod, bulb);
+    probe.position.set(-5, BENCH + 1.2, 4.6); probe.rotation.z = -0.12; ctx.scene.add(meter, disp, probe);
+    const cable = new THREE.CatmullRomCurve3([V3(-3.6, BENCH + 12.8, 4.6), V3(0, BENCH + 16, 5), V3(6, BENCH + 8, 6), V3(8, BENCH + 3, 3)]); ctx.scene.add(mesh(new THREE.TubeGeometry(cable, 30, 0.2, 6), MAT.black, false));
+    // magnified ion view
+    lens = new THREE.Group(); lens.position.set(-13, BENCH + 21, 6);
+    const glass = new THREE.Mesh(new THREE.SphereGeometry(5.5, 40, 28), new THREE.MeshPhysicalMaterial({ color: 0xe0f2fe, transparent: true, opacity: 0.12, roughness: 0.05, depthWrite: false }));
+    const ring = mesh(new THREE.TorusGeometry(5.6, 0.2, 8, 48), MAT.steel); lens.add(glass, ring);
+    ions = new THREE.InstancedMesh(new THREE.SphereGeometry(0.32, 12, 8), new THREE.MeshStandardMaterial({ roughness: 0.3 }), NI); ions.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(NI * 3), 3); lens.add(ions);
+    for (let i = 0; i < NI; i++) { const v = V3(Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5).normalize().multiplyScalar(4.8 * Math.cbrt(Math.random())); idat.push({ p: v, ph: Math.random() * 6 }); }
+    ctx.scene.add(lens);
+    const guide = new THREE.Line(new THREE.BufferGeometry().setFromPoints([V3(-13, BENCH + 15.5, 6), V3(-8, BENCH + 10.5, 4)]), new THREE.LineDashedMaterial({ color: 0x94a3b8, dashSize: 0.5, gapSize: 0.4 })); guide.computeLineDistances(); ctx.scene.add(guide);
+    ctx.label('zoomed in: H₃O⁺ (red) and OH⁻ (blue)', () => V3(-13, BENCH + 27.5, 6));
+    ctx.label('pH meter', () => V3(8, BENCH + 5, 6)); ctx.label('universal indicator colours', () => V3(0, BENCH + 16, -10));
+  },
+  frame(ctx) {
+    const pH = pHv(ctx), col = new THREE.Color(C.phColor(pH));
+    beaker.setLiquid(180, col, 0.7);
+    marker.position.set(-21 + pH * 3, BENCH + 15.4, -10);
+    // ions: share of H₃O⁺ vs OH⁻ on a log scale (7 → equal numbers)
+    const fracH = 1 / (1 + 10 ** ((pH - 7) * 0.35)), m = new THREE.Matrix4(), cH = new THREE.Color(0xef4444), cO = new THREE.Color(0x3b82f6);
+    const nShow = Math.round(20 + Math.abs(pH - 7) * 14);
+    for (let i = 0; i < NI; i++) {
+      const d = idat[i], on = i < nShow; const w = ctx.t * 0.6 + d.ph;
+      m.makeScale(on ? 1 : 0.0001, on ? 1 : 0.0001, on ? 1 : 0.0001); m.setPosition(d.p.x + Math.sin(w) * 0.2, d.p.y + Math.cos(w * 1.3) * 0.2, d.p.z);
+      ions.setMatrixAt(i, m); ions.setColorAt(i, i / nShow < fracH ? cH : cO);
+    }
+    ions.instanceMatrix.needsUpdate = true; ions.instanceColor.needsUpdate = true; lens.rotation.y = ctx.t * 0.15;
+    const g = meterCanvas.getContext('2d'); g.fillStyle = '#0b1a0b'; g.fillRect(0, 0, 256, 128); g.fillStyle = '#86efac'; g.font = 'bold 70px monospace'; g.textAlign = 'center'; g.fillText(pH.toFixed(2), 128, 88); g.font = '20px monospace'; g.fillText('pH', 128, 118); meterTex.needsUpdate = true;
+  },
+  ui(ctx) {
+    const pH = pHv(ctx), H = 10 ** -pH, OH = 10 ** (pH - 14), f = sci;
+    ctx.readout('pH', pH.toFixed(2)); ctx.readout('pOH', (14 - pH).toFixed(2)); ctx.readout('H', f(H)); ctx.readout('OH', f(OH));
+    const r = H / OH; ctx.readout('rat', r >= 1 ? `${r >= 1e4 ? r.toExponential(0) : r.toFixed(0)} : 1` : `1 : ${1 / r >= 1e4 ? (1 / r).toExponential(0) : (1 / r).toFixed(0)}`);
+    ctx.readout('kind', pH < 6.95 ? (pH < 3 ? 'Strongly acidic' : 'Acidic') : pH > 7.05 ? (pH > 11 ? 'Strongly basic' : 'Basic (alkaline)') : 'Neutral');
+  },
+});
+function sci(x) { const e = Math.floor(Math.log10(x) + 1e-9), m = x / 10 ** e, sup = String(e).split('').map((c) => '⁻⁰¹²³⁴⁵⁶⁷⁸⁹'['-0123456789'.indexOf(c)]).join(''); return `${m.toFixed(1)} × 10${sup} M`; }
 </script>
 </body></html>

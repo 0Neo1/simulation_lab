@@ -1,101 +1,84 @@
 <!DOCTYPE html>
-<html lang="en"><head><meta charset="UTF-8"><title>Le Chatelier's Principle</title><link rel="stylesheet" href="../styles.css"></head>
-<body>
-<header><a href="../index.html"><h1>Le Chatelier's Principle</h1></a><p>Disturb an equilibrium and watch it shift back.</p></header>
-<main>
-<a class="back-link" href="../index.html">&larr; All simulations</a>
-<div class="sim-container">
-  <div>
-    <div class="canvas-wrap"><canvas id="cv" width="800" height="500"></canvas></div>
-    <div class="info-box">
-      <h3>The Chemistry</h3>
-      <p>For the reversible reaction <em>A + B ⇌ C + D</em>, equilibrium is reached when forward and reverse rates are equal. If you disturb the system (add reactant, remove product, change T), it shifts to counteract the change.</p>
-      <div class="formula">K_eq = [C][D] / [A][B]</div>
-    </div>
-  </div>
-  <div class="controls">
-    <h3>Controls</h3>
-    <div class="control-row"><label>Forward rate constant k_f <span class="val" id="vKf">0.05</span></label><input type="range" id="kf" min="1" max="20" value="5"></div>
-    <div class="control-row"><label>Reverse rate constant k_r <span class="val" id="vKr">0.02</span></label><input type="range" id="kr" min="1" max="20" value="2"></div>
-    <div class="btn-row"><button id="addA">+ Add A</button><button id="addB">+ Add B</button><button id="addC">+ Add C</button><button id="reset">Reset</button></div>
-    <div class="readouts">
-      <div>[A]: <span id="rA">0</span></div>
-      <div>[B]: <span id="rB">0</span></div>
-      <div>[C]: <span id="rC">0</span></div>
-      <div>K observed: <span id="rK">0</span></div>
-    </div>
-  </div>
-</div>
-</main>
-<script>
-const cv=document.getElementById('cv'), ctx=cv.getContext('2d');
-let kf=0.05, kr=0.02;
-let A=50, B=50, C=0, D=0;
-let history = [];
-
-function step(){
-  // mass action
-  const fwd = kf*A*B;
-  const rev = kr*C*D;
-  const dt = 0.1;
-  A -= (fwd-rev)*dt; B -= (fwd-rev)*dt; C += (fwd-rev)*dt; D += (fwd-rev)*dt;
-  if(A<0)A=0; if(B<0)B=0; if(C<0)C=0; if(D<0)D=0;
-  history.push({A,B,C,D});
-  if(history.length > 800) history.shift();
-  draw();
-  document.getElementById('rA').textContent = A.toFixed(1);
-  document.getElementById('rB').textContent = B.toFixed(1);
-  document.getElementById('rC').textContent = C.toFixed(1);
-  const Kobs = (C*D)/(A*B+0.001);
-  document.getElementById('rK').textContent = Kobs.toFixed(3);
-  requestAnimationFrame(step);
-}
-
-function draw(){
-  ctx.clearRect(0,0,cv.width,cv.height);
-  ctx.fillStyle='#0a0a0a'; ctx.fillRect(0,0,cv.width,cv.height);
-  // bars
-  const bx = 50, by = 30, bh = 200, bw = 60;
-  const max = Math.max(A,B,C,D,100);
-  ['A','B','C','D'].forEach((label,i)=>{
-    const v = [A,B,C,D][i];
-    const colors = ['#888888','#ffffff','#aaaaaa','#888888'];
-    ctx.fillStyle = '#222222'; ctx.fillRect(bx+i*100, by, bw, bh);
-    ctx.fillStyle = colors[i]; ctx.fillRect(bx+i*100, by+bh-v/max*bh, bw, v/max*bh);
-    ctx.strokeStyle='#dddddd'; ctx.strokeRect(bx+i*100, by, bw, bh);
-    ctx.fillStyle='#dddddd'; ctx.font='14px sans-serif'; ctx.textAlign='center';
-    ctx.fillText('['+label+'] = '+v.toFixed(0), bx+i*100+bw/2, by+bh+18);
-  });
-  ctx.textAlign='left';
-  // graph history
-  const gX=50, gY=270, gW=700, gH=200;
-  ctx.fillStyle='#f5f5f5'; ctx.fillRect(gX,gY,gW,gH);
-  ctx.strokeStyle='#999999'; ctx.strokeRect(gX,gY,gW,gH);
-  ['A','B','C','D'].forEach((label,i)=>{
-    const colors = ['#888888','#ffffff','#aaaaaa','#888888'];
-    ctx.strokeStyle=colors[i]; ctx.lineWidth=2;
-    ctx.beginPath();
-    history.forEach((h,j)=>{
-      const px = gX + (j/history.length)*gW;
-      const py = gY+gH - h[label]/max*gH;
-      if(j===0) ctx.moveTo(px,py); else ctx.lineTo(px,py);
-    });
-    ctx.stroke();
-    // legend
-    ctx.fillStyle = colors[i]; ctx.fillRect(gX+gW-100, gY+10+i*16, 12, 12);
-    ctx.fillStyle = '#dddddd'; ctx.font='12px sans-serif';
-    ctx.fillText(label, gX+gW-82, gY+20+i*16);
-  });
-  ctx.fillStyle='#dddddd'; ctx.fillText('A + B ⇌ C + D', 350, 260);
-  ctx.fillText('Concentrations vs. time', 50, 260);
-}
-
-document.getElementById('kf').oninput=e=>{kf=+e.target.value/100; document.getElementById('vKf').textContent=kf.toFixed(3);};
-document.getElementById('kr').oninput=e=>{kr=+e.target.value/100; document.getElementById('vKr').textContent=kr.toFixed(3);};
-document.getElementById('addA').onclick=()=>{A+=30;};
-document.getElementById('addB').onclick=()=>{B+=30;};
-document.getElementById('addC').onclick=()=>{C+=30;};
-document.getElementById('reset').onclick=()=>{A=50; B=50; C=0; D=0; history=[];};
-step();
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Le Chatelier's Principle</title>
+<link rel="stylesheet" href="../engine/concept.css">
+<script type="importmap">{"imports":{"three":"../../simulations/lib/three/three.module.min.js","three/addons/":"../../simulations/lib/three/addons/"}}</script>
+</head><body>
+<script type="module">
+import { runSim, V3, THREE } from '../engine/concept.js';
+// A + B ⇌ AB (forward exothermic, ΔH = −40 kJ/mol) in a sealed box with a movable wall.
+// Reactions happen stochastically at the mass-action rates; molecules drift about randomly.
+const MAX = 500, DH = -40, R = 0.008314, T0 = 298;
+let mol = [], meshes = {}, size = 12, fwdN = 0, revN = 0, win = 0, flashes = [];
+const K = (ctx) => ctx.v.K * Math.exp((-DH / R) * (1 / ctx.v.T - 1 / T0)); // van 't Hoff
+function add(type, n, box) { for (let i = 0; i < n; i++) mol.push({ t: type, p: V3((Math.random() - 0.5) * box, (Math.random() - 0.5) * box, (Math.random() - 0.5) * box), v: V3(), axis: V3(Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5).normalize() }); }
+function count() { const c = { A: 0, B: 0, C: 0 }; for (const m of mol) c[m.t]++; return c; }
+const Vol = () => (size / 12) ** 3; // relative volume
+runSim({
+  title: "Equilibrium and Le Chatelier's Principle", subtitle: 'Disturb a system at equilibrium and it shifts to partly undo the change.',
+  stage: 'studio', camera: { pos: [15, 12, 21], target: [0, 6.5, 0] }, stageOpts: { floorSize: 18 },
+  autoplay: true, dt: 1 / 60,
+  controls: [
+    { id: 'K', label: 'K at 298 K', min: 0.5, max: 20, step: 0.5, value: 4, reset: true },
+    { id: 'T', label: 'Temperature', min: 250, max: 400, step: 1, value: 298, unit: 'K' },
+    { id: 'size', label: 'Box size (pressure ↑ when smaller)', min: 7, max: 12, step: 0.1, value: 12, fmt: (v) => `${(v / 12 * 100).toFixed(0)} % wide` },
+    { id: 'speed', label: 'Reaction speed', min: 0.2, max: 3, step: 0.1, value: 1 },
+  ],
+  buttons: [
+    { id: 'aA', label: '+ Add A', run: () => add('A', 30, size) }, { id: 'aB', label: '+ Add B', run: () => add('B', 30, size) },
+    { id: 'aC', label: '+ Add AB', kind: 'ghost', run: () => add('C', 30, size) }, { id: 'rC', label: '− Remove AB', kind: 'ghost', run: () => { let n = 30; mol = mol.filter((m) => !(m.t === 'C' && n-- > 0)); } },
+  ],
+  readouts: [{ id: 'A', label: 'A' }, { id: 'B', label: 'B' }, { id: 'C', label: 'AB' }, { id: 'Q', label: 'Q = [AB]/[A][B]' }, { id: 'K', label: 'K at this T' }, { id: 'dir', label: 'Net reaction' }],
+  graph: { title: 'Number of molecules', series: [{ name: 'A', color: '#ef4444' }, { name: 'B', color: '#3b82f6' }, { name: 'AB', color: '#a855f7' }], max: 900, ymin: 0, window: 30 },
+  info: 'At equilibrium the forward reaction (A + B → AB) and the reverse reaction (AB → A + B) keep going at the same rate, so the amounts stop changing. Add A and the forward reaction speeds up until a new balance is reached, using up some of what you added. Squeeze the box and the concentrations rise; the side with fewer molecules (AB) is favoured, lowering the pressure. The forward reaction releases heat, so heating shifts the equilibrium back towards A and B (K falls), while cooling favours AB.',
+  formulas: ['A + B ⇌ AB   ΔH = −40 kJ/mol', 'K = [AB] / ([A][B]) at equilibrium', 'Q < K → forward;  Q > K → reverse'],
+  onControl(ctx, id, v) { if (id === 'size') { const f = v / size; mol.forEach((m) => m.p.multiplyScalar(f)); size = v; } },
+  setup(ctx) {
+    const box = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshPhysicalMaterial({ color: 0xe0f2fe, transparent: true, opacity: 0.06, side: THREE.DoubleSide, depthWrite: false }));
+    ctx.box = new THREE.Group(); ctx.box.add(box, new THREE.LineSegments(new THREE.EdgesGeometry(box.geometry), new THREE.LineBasicMaterial({ color: 0x7dd3fc }))); ctx.scene.add(ctx.box);
+    const piston = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 0.04), new THREE.MeshStandardMaterial({ color: 0x94a3b8, metalness: 0.7, roughness: 0.3, transparent: true, opacity: 0.5 })); ctx.box.add(piston); piston.position.z = 0.5;
+    const mk = (col) => { const m = new THREE.InstancedMesh(new THREE.SphereGeometry(0.3, 14, 10), new THREE.MeshStandardMaterial({ color: col, roughness: 0.3 }), MAX); m.frustumCulled = false; ctx.scene.add(m); return m; };
+    meshes.A = mk(0xef4444); meshes.B = mk(0x3b82f6); meshes.C1 = mk(0xef4444); meshes.C2 = mk(0x3b82f6);
+    for (let i = 0; i < 16; i++) { const s = ctx.glowSprite(0xfde68a, 0.01); ctx.scene.add(s); flashes.push({ s, t: 0 }); }
+  },
+  reset(ctx) { mol = []; size = ctx.v.size; add('A', 90, size); add('B', 90, size); fwdN = revN = 0; },
+  step(ctx, dt) {
+    const c = count(), V = Vol(), kf = 0.05 * ctx.v.speed, kr = kf / K(ctx) * 40; // scaled so K relates to molecule counts in the full box
+    // expected events this step (mass action), realised stochastically
+    const fwd = kf * c.A * c.B / (V * 40) * dt, rev = kr * c.C / 40 * dt;
+    const nF = Math.floor(fwd) + (Math.random() < fwd % 1 ? 1 : 0), nR = Math.floor(rev) + (Math.random() < rev % 1 ? 1 : 0);
+    for (let i = 0; i < nF; i++) {
+      const A = mol.filter((m) => m.t === 'A'), B = mol.filter((m) => m.t === 'B'); if (!A.length || !B.length) break;
+      const a = A[(Math.random() * A.length) | 0], b = B[(Math.random() * B.length) | 0]; b.dead = true; a.t = 'C'; flash(a.p, 0xfde68a); mol = mol.filter((m) => !m.dead); fwdN++;
+    }
+    for (let i = 0; i < nR; i++) {
+      const Cs = mol.filter((m) => m.t === 'C'); if (!Cs.length) break;
+      const cc = Cs[(Math.random() * Cs.length) | 0]; cc.t = 'A'; mol.push({ t: 'B', p: cc.p.clone().addScaledVector(cc.axis, 0.7), v: V3(), axis: V3(1, 0, 0) }); flash(cc.p, 0x93c5fd); revN++;
+    }
+    // random drift inside the box
+    const H = size / 2 - 0.35;
+    for (const m of mol) { m.v.x += (Math.random() - 0.5) * 12 * dt; m.v.y += (Math.random() - 0.5) * 12 * dt; m.v.z += (Math.random() - 0.5) * 12 * dt; m.v.multiplyScalar(0.985); m.p.addScaledVector(m.v, dt * 3 * Math.sqrt(ctx.v.T / 298)); for (const ax of ['x', 'y', 'z']) { if (m.p[ax] > H) { m.p[ax] = H; m.v[ax] *= -1; } if (m.p[ax] < -H) { m.p[ax] = -H; m.v[ax] *= -1; } } }
+    win += dt; if (win > 1) { ctx.net = fwdN - revN; fwdN = revN = 0; win = 0; }
+    ctx.n = (ctx.n || 0) + 1; if (ctx.n % 15 === 0) { const q = count(); ctx.plot(ctx.t, [q.A, q.B, q.C]); }
+  },
+  frame(ctx, dt) {
+    ctx.box.scale.set(size, size, size); ctx.box.position.y = size / 2 + 0.2;
+    const m = new THREE.Matrix4(), off = V3(0, size / 2 + 0.2, 0), idx = { A: 0, B: 0, C: 0 };
+    for (const o of mol) {
+      if (o.t === 'C') { const d = o.axis.clone().multiplyScalar(0.24); m.setPosition(o.p.clone().add(off).sub(d)); meshes.C1.setMatrixAt(idx.C, m); m.setPosition(o.p.clone().add(off).add(d)); meshes.C2.setMatrixAt(idx.C, m); idx.C++; }
+      else if (idx[o.t] < MAX) { m.setPosition(o.p.clone().add(off)); meshes[o.t].setMatrixAt(idx[o.t]++, m); }
+    }
+    meshes.A.count = idx.A; meshes.B.count = idx.B; meshes.C1.count = meshes.C2.count = Math.min(MAX, idx.C);
+    for (const k of ['A', 'B', 'C1', 'C2']) meshes[k].instanceMatrix.needsUpdate = true;
+    flashes.forEach((f) => { f.t -= dt; f.s.scale.setScalar(f.t > 0 ? 1.4 * f.t / 0.35 + 0.2 : 0.001); if (f.t > 0) f.s.position.copy(f.p).add(off); });
+  },
+  ui(ctx) {
+    const c = count(), V = Vol(), Kt = K(ctx);
+    const Qs = (c.C * V) / Math.max(1, c.A * c.B) * 40; // same scaling as the rates: Q = K at balance
+    ctx.readout('A', String(c.A)); ctx.readout('B', String(c.B)); ctx.readout('C', String(c.C));
+    ctx.readout('Q', Qs.toFixed(2)); ctx.readout('K', Kt.toFixed(2));
+    ctx.readout('dir', Math.abs(Qs - Kt) / Kt < 0.3 ? 'At equilibrium ⇌' : Qs < Kt ? 'Shifting forward →' : 'Shifting back ←');
+  },
+});
+function flash(p, col) { const f = flashes.find((q) => q.t <= 0); if (f) { f.t = 0.35; f.p = p.clone(); f.s.material.color.setHex(col); } }
 </script>
 </body></html>

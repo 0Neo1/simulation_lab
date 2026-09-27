@@ -1,131 +1,83 @@
 <!DOCTYPE html>
-<html lang="en"><head><meta charset="UTF-8"><title>Covalent Bonding</title><link rel="stylesheet" href="../styles.css"></head>
-<body>
-<header><a href="../index.html"><h1>Covalent Bonding — Lennard-Jones Potential</h1></a><p>Two atoms find their happy distance.</p></header>
-<main>
-<a class="back-link" href="../index.html">&larr; All simulations</a>
-<div class="sim-container">
-  <div>
-    <div class="canvas-wrap"><canvas id="cv" width="800" height="500"></canvas></div>
-    <div class="info-box">
-      <h3>The Chemistry</h3>
-      <p>In a covalent bond, atoms share electrons. Energy is minimum at the bond length: too close → strong repulsion; too far → no attraction.</p>
-      <div class="formula">U(r) = 4ε[(σ/r)¹² − (σ/r)⁶]</div>
-      <p>The Lennard-Jones potential captures this trade-off.</p>
-    </div>
-  </div>
-  <div class="controls">
-    <h3>Controls</h3>
-    <div class="control-row"><label>Distance r <span class="val" id="vR">100</span></label><input type="range" id="r" min="40" max="250" value="100"></div>
-    <div class="readouts" style="grid-template-columns:1fr;">
-      <div>U(r): <span id="rU">0</span></div>
-      <div>Force: <span id="rF">0</span></div>
-      <div>State: <span id="rS">—</span></div>
-    </div>
-    <div class="btn-row"><button id="run">Auto-find bond length</button></div>
-  </div>
-</div>
-</main>
-<script>
-const cv=document.getElementById('cv'), ctx=cv.getContext('2d');
-let r = 100;
-const sigma = 80, eps = 100;
-const cy = 200;
-
-function U(r){
-  const x = sigma/r;
-  return 4*eps*(Math.pow(x,12) - Math.pow(x,6));
-}
-function F(r){
-  // -dU/dr
-  const x = sigma/r;
-  return 24*eps/r*(2*Math.pow(x,12) - Math.pow(x,6));
-}
-
-function draw(){
-  ctx.clearRect(0,0,cv.width,cv.height);
-  ctx.fillStyle='#0a0a0a'; ctx.fillRect(0,0,cv.width,cv.height);
-  // top: two atoms
-  ctx.strokeStyle='#999999';
-  // axis line
-  ctx.beginPath(); ctx.moveTo(0,cy); ctx.lineTo(cv.width,cy); ctx.stroke();
-  // atom 1
-  ctx.fillStyle='#ffffff'; ctx.beginPath(); ctx.arc(400-r/2, cy, 25, 0, 2*Math.PI); ctx.fill();
-  ctx.strokeStyle='#dddddd'; ctx.stroke();
-  ctx.fillStyle='#fff'; ctx.font='bold 14px sans-serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
-  ctx.fillText('H', 400-r/2, cy);
-  // atom 2
-  ctx.fillStyle='#888888'; ctx.beginPath(); ctx.arc(400+r/2, cy, 25, 0, 2*Math.PI); ctx.fill();
-  ctx.strokeStyle='#dddddd'; ctx.stroke();
-  ctx.fillStyle='#fff'; ctx.fillText('H', 400+r/2, cy);
-  ctx.textAlign='left'; ctx.textBaseline='alphabetic';
-  // bond electrons if close enough
-  if(r < 130){
-    const nE = Math.min(2, Math.floor((130-r)/15));
-    for(let i=0;i<nE;i++){
-      ctx.fillStyle='#dddddd';
-      ctx.beginPath(); ctx.arc(400 + (i-0.5)*8, cy, 4, 0, 2*Math.PI); ctx.fill();
-    }
-  }
-  // distance label
-  ctx.strokeStyle='#888'; ctx.setLineDash([3,3]);
-  ctx.beginPath(); ctx.moveTo(400-r/2, cy+40); ctx.lineTo(400+r/2, cy+40); ctx.stroke();
-  ctx.setLineDash([]);
-  ctx.fillStyle='#dddddd'; ctx.font='14px sans-serif';
-  ctx.fillText('r = '+r.toFixed(0), 400-30, cy+60);
-  // graph U vs r
-  const gX=80, gY=290, gW=640, gH=180;
-  ctx.fillStyle='#f5f5f5'; ctx.fillRect(gX,gY,gW,gH);
-  ctx.strokeStyle='#999999'; ctx.strokeRect(gX,gY,gW,gH);
-  ctx.fillStyle='#dddddd'; ctx.font='14px sans-serif';
-  ctx.fillText('Potential Energy U(r)', gX+220, gY-5);
-  // zero line
-  ctx.strokeStyle='#cccccc';
-  const zeroY = gY+gH*0.4;
-  ctx.beginPath(); ctx.moveTo(gX, zeroY); ctx.lineTo(gX+gW, zeroY); ctx.stroke();
-  // curve
-  ctx.strokeStyle='#ffffff'; ctx.lineWidth=2;
-  ctx.beginPath();
-  for(let rr=40;rr<=300;rr+=2){
-    const u = U(rr);
-    const px = gX + (rr-40)/260 * gW;
-    const py = zeroY - u*0.4;
-    if(py < gY) continue;
-    if(py > gY+gH) continue;
-    if(rr===40) ctx.moveTo(px,py); else ctx.lineTo(px,py);
-  }
-  ctx.stroke();
-  // current point
-  const u = U(r);
-  const px = gX + (r-40)/260*gW;
-  const py = Math.max(gY, Math.min(gY+gH, zeroY - u*0.4));
-  ctx.fillStyle='#888888'; ctx.beginPath(); ctx.arc(px,py,7,0,2*Math.PI); ctx.fill();
-  // labels
-  ctx.fillStyle='#dddddd'; ctx.font='12px sans-serif';
-  ctx.fillText('r (closer →)', gX+gW-80, gY+gH+15);
-  // info
-  document.getElementById('rU').textContent = u.toFixed(2);
-  document.getElementById('rF').textContent = F(r).toFixed(2);
-  let state;
-  if(r<70) state='Strong repulsion';
-  else if(r<90) state='Bond region (covalent)';
-  else if(r<130) state='Attractive force';
-  else state='Too far, weak attraction';
-  document.getElementById('rS').textContent = state;
-}
-
-document.getElementById('r').oninput=e=>{r=+e.target.value; document.getElementById('vR').textContent=r; draw();};
-document.getElementById('run').onclick=()=>{
-  const id = setInterval(()=>{
-    const f = F(r);
-    r += -f*0.5;
-    if(r<40) r=40; if(r>250) r=250;
-    document.getElementById('r').value = r;
-    document.getElementById('vR').textContent = r.toFixed(0);
-    draw();
-    if(Math.abs(f)<0.05){ clearInterval(id); }
-  }, 30);
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Covalent Bonding</title>
+<link rel="stylesheet" href="../engine/concept.css">
+<script type="importmap">{"imports":{"three":"../../simulations/lib/three/three.module.min.js","three/addons/":"../../simulations/lib/three/addons/"}}</script>
+</head><body>
+<script type="module">
+import { runSim, V3, std, THREE } from '../engine/concept.js';
+// Two atoms approach; their electron clouds overlap and the shared pair lowers the energy.
+// Morse potential V(r) = Dₑ(1 − e^(−a(r − rₑ)))² − Dₑ. Scene: 1 unit = 50 pm.
+const MOL = {
+  h2: { name: 'H₂', a: ['H', 'H'], c: [0xf1f5f9, 0xf1f5f9], re: 74, De: 436, order: 1, beta: 1.9, rad: [53, 53] },
+  hcl: { name: 'HCl', a: ['H', 'Cl'], c: [0xf1f5f9, 0x22c55e], re: 127, De: 431, order: 1, beta: 1.9, rad: [53, 100] },
+  cl2: { name: 'Cl₂', a: ['Cl', 'Cl'], c: [0x22c55e, 0x22c55e], re: 199, De: 243, order: 1, beta: 2.0, rad: [100, 100] },
+  o2: { name: 'O₂', a: ['O', 'O'], c: [0xef4444, 0xef4444], re: 121, De: 498, order: 2, beta: 2.6, rad: [60, 60] },
+  n2: { name: 'N₂', a: ['N', 'N'], c: [0x3b82f6, 0x3b82f6], re: 110, De: 945, order: 3, beta: 2.7, rad: [65, 65] },
 };
-draw();
+let atoms = [], clouds = [], shared, r = 250, vr = 0, mode = 'hold', bondLines = [];
+const V = (m, x) => m.De * (1 - Math.exp(-m.beta * (x - m.re) / 100)) ** 2 - m.De; // kJ/mol, x in pm
+const dV = (m, x) => 2 * m.De * (1 - Math.exp(-m.beta * (x - m.re) / 100)) * Math.exp(-m.beta * (x - m.re) / 100) * m.beta / 100;
+function cloud(n, radius, col) {
+  const pos = new Float32Array(n * 3);
+  for (let i = 0; i < n; i++) { const u = V3(Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5).normalize(); const d = radius * Math.sqrt(-2 * Math.log(Math.random() + 1e-6)) * 0.55; pos.set([u.x * d, u.y * d, u.z * d], i * 3); }
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  return new THREE.Points(g, new THREE.PointsMaterial({ color: col, size: 0.07, transparent: true, opacity: 0.55, depthWrite: false, blending: THREE.AdditiveBlending }));
+}
+runSim({
+  title: 'Covalent Bonding', subtitle: 'Atoms share electron pairs; the bond length is where the energy is lowest.',
+  stage: 'studio', camera: { pos: [0, 3, 13], target: [0, 1.5, 0] }, stageOpts: { floorSize: 14, floorY: -2 },
+  autoplay: true, dt: 1 / 240,
+  controls: [
+    { id: 'mol', label: 'Molecule', type: 'select', value: 'h2', reset: true, options: Object.entries(MOL).map(([k, m]) => ({ value: k, label: `${m.name} (${['', 'single', 'double', 'triple'][m.order]} bond)` })) },
+    { id: 'r', label: 'Distance between nuclei r', min: 40, max: 400, step: 1, value: 250, unit: 'pm' },
+  ],
+  onControl(ctx, id, v) { if (id === 'r') { r = v; vr = 0; mode = 'hold'; } },
+  buttons: [{ id: 'rel', label: 'Let go (atoms find the bond length)', run: (c) => { mode = 'free'; vr = 0; c.play(); } }, { id: 'pull', label: 'Pull apart', kind: 'ghost', run: (c) => { mode = 'hold'; c.setControl('r', 400); r = 400; } }],
+  readouts: [{ id: 'r', label: 'Distance r' }, { id: 'E', label: 'Potential energy' }, { id: 're', label: 'Bond length rₑ' }, { id: 'De', label: 'Bond energy' }, { id: 'ord', label: 'Shared pairs' }, { id: 'st', label: 'State' }],
+  graph: { title: 'Potential energy against distance', series: [{ name: 'V(r) kJ/mol', color: '#22d3ee' }], xlabel: 'r (pm)', max: 400, ymax: (c) => MOL[c.v.mol].De * 0.8, ymin: (c) => -MOL[c.v.mol].De * 1.1 },
+  graphOverlay(ctx, g, { X, Y }) { const m = MOL[ctx.v.mol]; g.fillStyle = '#f472b6'; g.beginPath(); g.arc(X(r), Y(Math.min(m.De * 0.8, V(m, r))), 5, 0, 7); g.fill(); g.strokeStyle = 'rgba(253,224,71,0.6)'; g.setLineDash([3, 3]); g.beginPath(); g.moveTo(X(m.re), Y(-m.De * 1.1)); g.lineTo(X(m.re), Y(m.De * 0.8)); g.stroke(); g.setLineDash([]); },
+  info: 'Far apart, the atoms do not affect each other (energy zero). As they approach, each nucleus attracts the other atom\'s electrons, the electron clouds overlap and a shared pair of electrons builds up between the nuclei, lowering the energy. Pushed too close, the two positive nuclei repel strongly and the energy shoots up. The bottom of the curve is the bond length; its depth is the bond energy you would need to supply to break the bond. Double and triple bonds share more electrons, so they are shorter and stronger.',
+  formulas: ['V(r) = Dₑ(1 − e^(−a(r − rₑ)))² − Dₑ', 'Bond order ↑ → length ↓, energy ↑'],
+  setup(ctx) {
+    shared = cloud(1600, 0.8, 0xfde047); ctx.scene.add(shared);
+    for (let i = 0; i < 3; i++) { const l = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 1, 8), new THREE.MeshBasicMaterial({ color: 0xfde047, transparent: true, opacity: 0 })); l.rotation.z = Math.PI / 2; ctx.scene.add(l); bondLines.push(l); }
+    ctx.label('shared electron pair', () => (shared.material.opacity > 0.15 ? V3(0, 2.9, 0) : null));
+  },
+  reset(ctx) {
+    atoms.forEach((a) => ctx.scene.remove(a)); clouds.forEach((c) => ctx.scene.remove(c)); atoms = []; clouds = [];
+    const m = MOL[ctx.v.mol];
+    m.a.forEach((sym, i) => {
+      const g = new THREE.Group();
+      const nuc = new THREE.Mesh(new THREE.SphereGeometry(0.22 + (sym === 'Cl' ? 0.1 : 0), 24, 16), std(m.c[i], { emissive: m.c[i], emissiveIntensity: 0.3 })); g.add(nuc);
+      const t = ctx.textSprite(sym, { size: 0.55 }); t.position.y = 0.75; g.add(t);
+      ctx.scene.add(g); atoms.push(g);
+      const c = cloud(1400, m.rad[i] / 50, m.c[i] === 0xf1f5f9 ? 0x93c5fd : m.c[i]); ctx.scene.add(c); clouds.push(c);
+    });
+    ctx.clearGraph(); for (let x = 40; x <= 400; x += 2) ctx.plot(x, [Math.min(m.De * 0.8, V(m, x))]);
+    r = ctx.v.r; vr = 0; mode = 'hold';
+  },
+  step(ctx, dt) {
+    if (mode !== 'free') return;
+    const m = MOL[ctx.v.mol];
+    vr += (-dV(m, r) * 60 - vr * 2.2) * dt; r = Math.max(40, Math.min(400, r + vr * dt));
+    if (Math.abs(vr) < 0.4 && Math.abs(r - m.re) < 1) { r = m.re; mode = 'hold'; ctx.setControl('r', Math.round(r)); }
+  },
+  frame(ctx) {
+    const m = MOL[ctx.v.mol], x = r / 100; // half-distance in scene units (1 unit = 50 pm)
+    atoms[0].position.set(-x, 1.5, 0); atoms[1].position.set(x, 1.5, 0);
+    clouds[0].position.copy(atoms[0].position); clouds[1].position.copy(atoms[1].position);
+    const ov = Math.max(0, Math.min(1, -V(m, r) / m.De)); // how bonded (0 = apart, 1 = at rₑ)
+    shared.position.set(0, 1.5, 0); shared.scale.set(Math.max(0.3, x * 0.9), 0.55, 0.55); shared.material.opacity = 0.7 * ov;
+    clouds.forEach((c) => { c.material.opacity = 0.55 - 0.25 * ov; });
+    bondLines.forEach((l, i) => { const on = i < m.order; l.material.opacity = on ? 0.9 * ov : 0; l.scale.y = 2 * x; l.position.set(0, 1.5 + (i - (m.order - 1) / 2) * 0.18, 0); });
+    atoms.forEach((a) => { a.children[0].position.set(0, 0, 0); });
+  },
+  ui(ctx) {
+    const m = MOL[ctx.v.mol], E = V(m, r);
+    ctx.readout('r', `${r.toFixed(0)} pm`); ctx.readout('E', `${E.toFixed(0)} kJ/mol`); ctx.readout('re', `${m.re} pm`); ctx.readout('De', `${m.De} kJ/mol`);
+    ctx.readout('ord', `${m.order} (${m.order * 2} electrons)`);
+    ctx.readout('st', Math.abs(r - m.re) < 4 ? 'Bonded — lowest energy' : E > 0 ? 'Too close — nuclei repel' : r > m.re * 2.2 ? 'Separate atoms' : r < m.re ? 'Compressed' : 'Attracting');
+  },
+});
 </script>
 </body></html>

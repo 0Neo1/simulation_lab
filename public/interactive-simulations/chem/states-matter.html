@@ -1,131 +1,91 @@
 <!DOCTYPE html>
-<html lang="en"><head><meta charset="UTF-8"><title>States of Matter</title><link rel="stylesheet" href="../styles.css"></head>
-<body>
-<header><a href="../index.html"><h1>States of Matter</h1></a><p>Heat or cool — solid, liquid, gas.</p></header>
-<main>
-<a class="back-link" href="../index.html">&larr; All simulations</a>
-<div class="sim-container">
-  <div>
-    <div class="canvas-wrap"><canvas id="cv" width="800" height="500"></canvas></div>
-    <div class="info-box">
-      <h3>The Chemistry</h3>
-      <p>Particles in a solid vibrate around fixed positions. In a liquid they move freely while staying in contact. In a gas they fly independently.</p>
-      <div class="formula">KE_avg = (3/2) k_B T</div>
-      <p>Higher temperature → more kinetic energy → particles overcome attractive forces.</p>
-    </div>
-  </div>
-  <div class="controls">
-    <h3>Controls</h3>
-    <div class="control-row"><label>Temperature <span class="val" id="vT">300 K</span></label><input type="range" id="t" min="50" max="800" value="300"></div>
-    <div class="readouts" style="grid-template-columns:1fr;">
-      <div>State: <span id="rS">—</span></div>
-      <div>Avg KE: <span id="rK">—</span></div>
-    </div>
-  </div>
-</div>
-</main>
-<script>
-const cv=document.getElementById('cv'), ctx=cv.getContext('2d');
-let T = 300;
-const N = 80;
-let particles = [];
-const r = 12;
-const W = cv.width, H = cv.height;
-
-for(let i=0;i<N;i++){
-  particles.push({
-    x: 100 + (i%10)*60, y: 100 + Math.floor(i/10)*45,
-    vx: 0, vy: 0
-  });
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>States of Matter</title>
+<link rel="stylesheet" href="../engine/concept.css">
+<script type="importmap">{"imports":{"three":"../../simulations/lib/three/three.module.min.js","three/addons/":"../../simulations/lib/three/addons/"}}</script>
+</head><body>
+<script type="module">
+import { runSim, V3, MAT, mesh, std, THREE } from '../engine/concept.js';
+// Molecular dynamics with the Lennard-Jones potential in reduced units (σ = ε = m = 1) inside a
+// box with weak gravity. A thermostat pulls the kinetic temperature towards the set value.
+const N = 125, L = 9, RC = 2.5, RC2 = RC * RC, G = 0.25, DT = 0.004;
+let pos, vel, acc, atoms, Tkin = 0.1, heater, heatMat, coolMat, pe = 0;
+function init() {
+  pos = new Float32Array(N * 3); vel = new Float32Array(N * 3); acc = new Float32Array(N * 3);
+  const a = 1.12; let i = 0;
+  for (let y = 0; y < 5; y++) for (let x = 0; x < 5; x++) for (let z = 0; z < 5; z++) { pos.set([L / 2 + (x - 2) * a + (y % 2) * 0.28, 0.6 + y * a * 0.92, L / 2 + (z - 2) * a + (y % 2) * 0.28], i * 3); i++; }
+  for (let k = 0; k < N * 3; k++) vel[k] = (Math.random() - 0.5) * 0.3;
+  forces();
 }
-
-function step(){
-  // determine kinetic state
-  let speedScale;
-  if(T < 200) speedScale = 0.3; // solid - vibrate around lattice point
-  else if(T < 450) speedScale = 1.5; // liquid
-  else speedScale = 4; // gas
-
-  particles.forEach((p,i)=>{
-    if(T < 200){
-      // solid: oscillate around lattice
-      const ax = 100 + (i%10)*60;
-      const ay = 150 + Math.floor(i/10)*45;
-      const dx = p.x - ax, dy = p.y - ay;
-      p.vx += -0.1*dx + (Math.random()-0.5)*speedScale;
-      p.vy += -0.1*dy + (Math.random()-0.5)*speedScale;
-      p.vx *= 0.85; p.vy *= 0.85;
-    } else if(T < 450){
-      // liquid: limited cohesion + gravity
-      p.vx += (Math.random()-0.5)*speedScale*0.5;
-      p.vy += 0.05; // weak gravity
-      // keep in lower half
-      const targetY = H - 150;
-      if(p.y < targetY-100){ p.vy += 0.3; }
-      p.vx *= 0.97; p.vy *= 0.97;
-    } else {
-      // gas: free random motion
-      p.vx += (Math.random()-0.5)*speedScale*0.3;
-      p.vy += (Math.random()-0.5)*speedScale*0.3;
-      p.vx = Math.max(-6, Math.min(6, p.vx));
-      p.vy = Math.max(-6, Math.min(6, p.vy));
-    }
-    p.x += p.vx; p.y += p.vy;
-    // walls (bounce)
-    if(p.x < r){p.x=r; p.vx*=-1;}
-    if(p.x > W-r){p.x=W-r; p.vx*=-1;}
-    if(p.y < r){p.y=r; p.vy*=-1;}
-    if(p.y > H-r){p.y=H-r; p.vy*=-1;}
-  });
-  // simple particle-particle collision (in liquid)
-  if(T<450){
-    for(let i=0;i<N;i++){
-      for(let j=i+1;j<N;j++){
-        const a=particles[i], b=particles[j];
-        const dx=b.x-a.x, dy=b.y-a.y, d=Math.hypot(dx,dy);
-        if(d < 2*r){
-          const overlap = (2*r-d)/2;
-          const ux=dx/d, uy=dy/d;
-          a.x -= ux*overlap; a.y -= uy*overlap;
-          b.x += ux*overlap; b.y += uy*overlap;
-          // exchange normal velocities
-          const va = a.vx*ux+a.vy*uy;
-          const vb = b.vx*ux+b.vy*uy;
-          a.vx += (vb-va)*ux; a.vy += (vb-va)*uy;
-          b.vx += (va-vb)*ux; b.vy += (va-vb)*uy;
-        }
-      }
+function forces() {
+  acc.fill(0); pe = 0;
+  for (let i = 0; i < N; i++) { acc[i * 3 + 1] -= G; }
+  for (let i = 0; i < N; i++) {
+    const xi = pos[i * 3], yi = pos[i * 3 + 1], zi = pos[i * 3 + 2];
+    for (let j = i + 1; j < N; j++) {
+      const dx = xi - pos[j * 3], dy = yi - pos[j * 3 + 1], dz = zi - pos[j * 3 + 2], r2 = dx * dx + dy * dy + dz * dz;
+      if (r2 > RC2) continue;
+      const ir2 = 1 / Math.max(r2, 0.64), ir6 = ir2 * ir2 * ir2, f = 24 * ir6 * (2 * ir6 - 1) * ir2;
+      pe += 4 * ir6 * (ir6 - 1);
+      acc[i * 3] += f * dx; acc[i * 3 + 1] += f * dy; acc[i * 3 + 2] += f * dz;
+      acc[j * 3] -= f * dx; acc[j * 3 + 1] -= f * dy; acc[j * 3 + 2] -= f * dz;
     }
   }
-  draw();
-  requestAnimationFrame(step);
 }
-
-function draw(){
-  ctx.fillStyle='#000000'; ctx.fillRect(0,0,cv.width,cv.height);
-  // container
-  ctx.strokeStyle='#aaaaaa'; ctx.lineWidth=3;
-  ctx.strokeRect(2,2,cv.width-4,cv.height-4);
-  // particles
-  let color;
-  if(T<200) color='#bbbbbb'; else if(T<450) color='#999999'; else color='#aaaaaa';
-  particles.forEach(p=>{
-    const grd = ctx.createRadialGradient(p.x-3,p.y-3,1,p.x,p.y,r);
-    grd.addColorStop(0,'#fff'); grd.addColorStop(1,color);
-    ctx.fillStyle = grd;
-    ctx.beginPath(); ctx.arc(p.x,p.y,r,0,2*Math.PI); ctx.fill();
-  });
-  // labels
-  let state = T<200?'Solid':T<450?'Liquid':'Gas';
-  ctx.fillStyle='#fff'; ctx.font='bold 24px sans-serif';
-  ctx.fillText(state, 30, 40);
-  ctx.font='14px sans-serif';
-  ctx.fillText(T+' K', 30, 65);
-  document.getElementById('rS').textContent = state;
-  document.getElementById('rK').textContent = (1.5*1.38e-23*T).toExponential(2)+' J';
-}
-
-document.getElementById('t').oninput = e=>{T=+e.target.value; document.getElementById('vT').textContent=T+' K';};
-step();
+const phase = (T) => (T < 0.42 ? 'Solid' : T < 1.05 ? 'Liquid' : 'Gas');
+const waterC = (T) => ((T - 0.42) / (1.05 - 0.42)) * 100; // map melting → 0 °C, boiling → 100 °C
+runSim({
+  title: 'States of Matter', subtitle: 'The same particles form a solid, a liquid or a gas depending on how fast they move.',
+  stage: 'studio', camera: { pos: [13, 9, 17], target: [0, 3.2, 0] }, stageOpts: { floorSize: 16 },
+  autoplay: true, dt: 1 / 240, timeScale: 1,
+  controls: [
+    { id: 'T', label: 'Temperature (reduced units)', min: 0.05, max: 2.5, step: 0.01, value: 0.2 },
+    { id: 'rate', label: 'Heating speed (thermostat)', min: 0.2, max: 3, step: 0.1, value: 1 },
+  ],
+  buttons: [
+    { id: 's', label: 'Freeze', kind: 'ghost', run: (c) => c.setControl('T', 0.15) },
+    { id: 'l', label: 'Melt', kind: 'ghost', run: (c) => c.setControl('T', 0.75) },
+    { id: 'g', label: 'Boil', kind: 'warn', run: (c) => c.setControl('T', 1.8) },
+  ],
+  readouts: [{ id: 'st', label: 'State' }, { id: 'T', label: 'Kinetic temperature' }, { id: 'w', label: 'Like water at' }, { id: 'ke', label: 'Average KE / particle' }, { id: 'pe', label: 'Average PE / particle' }, { id: 'h', label: 'Average height' }],
+  graph: { title: 'Temperature and potential energy', series: [{ name: 'T (kinetic)', color: '#f59e0b' }, { name: 'PE / particle', color: '#a78bfa' }], max: 600, window: 20 },
+  info: 'Particles attract each other when they are close but repel if they get too close (the Lennard-Jones force). Cold particles only jiggle about fixed places in a regular pattern: a solid. Warmer, they have enough energy to slide past each other but still cling together: a liquid, which takes the shape of the bottom of the box. Hotter still, they break free and fill the whole box: a gas. During melting and boiling, added energy goes into breaking attractions (potential energy rises) rather than into making particles faster.',
+  formulas: ['V(r) = 4ε[(σ/r)¹² − (σ/r)⁶]', 'KE_avg = (3/2) k T'],
+  setup(ctx) {
+    const box = new THREE.Mesh(new THREE.BoxGeometry(L, L, L), new THREE.MeshPhysicalMaterial({ color: 0xe0f2fe, transparent: true, opacity: 0.08, roughness: 0.05, side: THREE.DoubleSide, depthWrite: false }));
+    const edges = new THREE.LineSegments(new THREE.EdgesGeometry(box.geometry), new THREE.LineBasicMaterial({ color: 0x7dd3fc }));
+    const grp = new THREE.Group(); grp.add(box, edges); grp.position.set(0, L / 2 + 0.6, 0); ctx.scene.add(grp);
+    heatMat = new THREE.MeshStandardMaterial({ color: 0x3f3f46, emissive: 0xff4500, emissiveIntensity: 0 }); coolMat = new THREE.MeshStandardMaterial({ color: 0x3f3f46, emissive: 0x38bdf8, emissiveIntensity: 0 });
+    heater = mesh(new THREE.BoxGeometry(L + 1, 0.6, L + 1), heatMat); heater.position.y = 0.3; ctx.scene.add(heater);
+    atoms = new THREE.InstancedMesh(new THREE.SphereGeometry(0.46, 18, 12), new THREE.MeshStandardMaterial({ roughness: 0.25, metalness: 0.1 }), N); atoms.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(N * 3), 3); ctx.scene.add(atoms);
+    ctx.label('heater / cooler', () => V3(L / 2 + 0.5, 0.8, L / 2 + 0.5));
+  },
+  reset(ctx) { init(); Tkin = 0.1; },
+  step(ctx) {
+    // velocity Verlet with reflecting walls
+    for (let k = 0; k < N * 3; k++) { vel[k] += 0.5 * DT * acc[k]; pos[k] += DT * vel[k]; }
+    for (let i = 0; i < N; i++) for (let d = 0; d < 3; d++) { const k = i * 3 + d, lo = 0.5, hi = L - 0.5; if (pos[k] < lo) { pos[k] = lo; vel[k] = Math.abs(vel[k]); } if (pos[k] > hi) { pos[k] = hi; vel[k] = -Math.abs(vel[k]); } }
+    forces();
+    let ke = 0; for (let k = 0; k < N * 3; k++) { vel[k] += 0.5 * DT * acc[k]; ke += vel[k] * vel[k]; }
+    Tkin = ke / (3 * N);
+    // Berendsen thermostat towards the set temperature
+    const tau = 2 / ctx.v.rate, lam = Math.sqrt(1 + (DT / tau) * (ctx.v.T / Math.max(1e-4, Tkin) - 1));
+    for (let k = 0; k < N * 3; k++) vel[k] *= lam;
+    ctx.n = (ctx.n || 0) + 1; if (ctx.n % 20 === 0) ctx.plot(ctx.t, [Tkin, pe / N]);
+  },
+  frame(ctx) {
+    const m = new THREE.Matrix4(), c = new THREE.Color();
+    for (let i = 0; i < N; i++) {
+      m.setPosition(pos[i * 3] - L / 2, pos[i * 3 + 1] + 0.6, pos[i * 3 + 2] - L / 2); atoms.setMatrixAt(i, m);
+      const sp = Math.hypot(vel[i * 3], vel[i * 3 + 1], vel[i * 3 + 2]); c.setHSL(0.62 - Math.min(0.62, sp * 0.28), 0.8, 0.55); atoms.setColorAt(i, c);
+    }
+    atoms.instanceMatrix.needsUpdate = true; atoms.instanceColor.needsUpdate = true;
+    const dT = ctx.v.T - Tkin; heatMat.emissive.setHex(dT > 0 ? 0xff4500 : 0x38bdf8); heatMat.emissiveIntensity = Math.min(2, Math.abs(dT) * 3);
+  },
+  ui(ctx) {
+    let hy = 0; for (let i = 0; i < N; i++) hy += pos[i * 3 + 1]; hy /= N;
+    ctx.readout('st', phase(Tkin)); ctx.readout('T', `${Tkin.toFixed(2)} ε/k`); ctx.readout('w', `${waterC(Tkin).toFixed(0)} °C`);
+    ctx.readout('ke', `${(1.5 * Tkin).toFixed(2)} ε`); ctx.readout('pe', `${(pe / N).toFixed(2)} ε`); ctx.readout('h', `${hy.toFixed(2)} σ`);
+  },
+});
 </script>
 </body></html>

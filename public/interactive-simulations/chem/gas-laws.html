@@ -1,122 +1,109 @@
 <!DOCTYPE html>
-<html lang="en"><head><meta charset="UTF-8"><title>Ideal Gas Law</title><link rel="stylesheet" href="../styles.css"></head>
-<body>
-<header><a href="../index.html"><h1>Ideal Gas Law — PV = nRT</h1></a><p>See pressure, volume, temperature, and moles in action.</p></header>
-<main>
-<a class="back-link" href="../index.html">&larr; All simulations</a>
-<div class="sim-container">
-  <div>
-    <div class="canvas-wrap"><canvas id="cv" width="800" height="500"></canvas></div>
-    <div class="info-box">
-      <h3>The Chemistry</h3>
-      <p>An ideal gas obeys PV = nRT. Pressure comes from particles striking the walls. Boyle (P↑ V↓), Charles (V↑ T↑), and Avogadro (V↑ n↑) are special cases.</p>
-      <div class="formula">P V = n R T</div>
-    </div>
-  </div>
-  <div class="controls">
-    <h3>Controls</h3>
-    <div class="control-row"><label>Volume (piston) <span class="val" id="vV">400</span></label><input type="range" id="v" min="150" max="600" value="400"></div>
-    <div class="control-row"><label>Temperature <span class="val" id="vT">300 K</span></label><input type="range" id="t" min="100" max="800" value="300"></div>
-    <div class="control-row"><label>Particles n <span class="val" id="vN">50</span></label><input type="range" id="n" min="10" max="150" value="50"></div>
-    <div class="readouts" style="grid-template-columns:1fr;">
-      <div>P (relative): <span id="rP">0</span></div>
-      <div>Wall hits/s: <span id="rH">0</span></div>
-    </div>
-  </div>
-</div>
-</main>
-<script>
-const cv=document.getElementById('cv'), ctx=cv.getContext('2d');
-let V = 400, T = 300, N = 50;
-let particles = [];
-const r = 4;
-const containerY = 80, containerH = 320;
-const containerX = 80;
-let hits = 0, lastHitTime = 0;
-
-function init(){
-  particles = [];
-  for(let i=0;i<N;i++){
-    const speed = Math.sqrt(T)/2;
-    const ang = Math.random()*2*Math.PI;
-    particles.push({
-      x: containerX + 20 + Math.random()*(V-40),
-      y: containerY + 20 + Math.random()*(containerH-40),
-      vx: speed*Math.cos(ang), vy: speed*Math.sin(ang)
-    });
-  }
-}
-
-function step(){
-  // adjust counts
-  if(particles.length < N){
-    for(let i=particles.length;i<N;i++){
-      const speed = Math.sqrt(T)/2;
-      const ang = Math.random()*2*Math.PI;
-      particles.push({x:containerX+50, y:containerY+containerH/2, vx:speed*Math.cos(ang), vy:speed*Math.sin(ang)});
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Ideal Gas Law</title>
+<link rel="stylesheet" href="../engine/concept.css">
+<script type="importmap">{"imports":{"three":"../../simulations/lib/three/three.module.min.js","three/addons/":"../../simulations/lib/three/addons/"}}</script>
+</head><body>
+<script type="module">
+import { runSim, V3, MAT, mesh, std, glow, THREE } from '../engine/concept.js';
+// Gas molecules bouncing in a cylinder under a piston. Pressure is measured from the impulse
+// the molecules deliver to the piston, and compared with PV = nRT.
+// 1 scene unit of piston height = 1 L (cross-section 1 dm²); n = N / 50 mol.
+const R0 = 3.2, NMAX = 250, S = 0.9, R = 8.314, AREA = Math.PI * R0 * R0;
+let parts, P = [], piston, rod, heater, heatMat, gauge, needle, thermo, thermoLiq, imp = 0, win = 0, Pmeas = 0, h = 10;
+const Pideal = (ctx) => (ctx.v.N / 50) * R * ctx.v.T / ctx.v.V; // kPa with V in L
+runSim({
+  title: 'Ideal Gas Law', subtitle: 'Pressure comes from molecules hitting the walls: squeeze them, heat them or add more and it rises.',
+  stage: 'studio', camera: { pos: [10, 12, 26], target: [0, 7, 0] }, stageOpts: { floorSize: 24 },
+  autoplay: true, dt: 1 / 240,
+  controls: [
+    { id: 'V', label: 'Volume (piston)', min: 3, max: 14, step: 0.1, value: 10, unit: 'L' },
+    { id: 'T', label: 'Temperature', min: 100, max: 800, step: 5, value: 300, unit: 'K' },
+    { id: 'N', label: 'Molecules (n = N/50 mol)', min: 20, max: NMAX, step: 5, value: 120, reset: true },
+    { id: 'law', label: 'Graph', type: 'select', value: 'boyle', options: [{ value: 'boyle', label: "P against V (Boyle's law, fixed T)" }, { value: 'charles', label: 'V against T at fixed P (Charles)' }, { value: 'gay', label: 'P against T (Gay-Lussac, fixed V)' }] },
+  ],
+  readouts: [{ id: 'Pi', label: 'P = nRT/V' }, { id: 'Pm', label: 'P measured (hits)' }, { id: 'n', label: 'Amount n' }, { id: 'v', label: 'rms speed (N₂)' }, { id: 'k', label: 'PV / nT' }, { id: 'KE', label: 'Mean KE per molecule' }],
+  graph: { title: 'Gas law curve', series: [{ name: 'curve', color: '#22d3ee' }], max: 300, ymin: 0 },
+  graphOverlay(ctx, g, { X, Y }) { const [x, y] = point(ctx); g.fillStyle = '#f472b6'; g.beginPath(); g.arc(X(x), Y(y), 5, 0, 7); g.fill(); },
+  info: 'Each molecule that hits the piston gives it a tiny push. Pressure is the total push per unit area. Halve the volume and the molecules hit twice as often (Boyle\'s law). Raise the temperature and they move faster, hitting harder and more often. Add more molecules and there are more hits. All three are summed up in PV = nRT. The measured pressure fluctuates because it counts real hits, but it averages to the ideal value.',
+  formulas: ['PV = nRT', 'P₁V₁ = P₂V₂ (fixed n, T)', 'V / T = constant (fixed n, P)', 'KE_avg = (3/2) k T'],
+  formulasPlain: ['PV = nRT'],
+  setup(ctx) {
+    const cyl = new THREE.Mesh(new THREE.CylinderGeometry(R0 + 0.1, R0 + 0.1, 15, 48, 1, true), new THREE.MeshPhysicalMaterial({ color: 0xe0f2fe, transparent: true, opacity: 0.14, roughness: 0.05, side: THREE.DoubleSide, depthWrite: false }));
+    cyl.position.y = 1 + 7.5; ctx.scene.add(cyl);
+    ctx.scene.add(new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.CylinderGeometry(R0 + 0.1, R0 + 0.1, 15, 48, 1, true), 40), new THREE.LineBasicMaterial({ color: 0x7dd3fc })).translateY(8.5));
+    const base = mesh(new THREE.CylinderGeometry(R0 + 0.8, R0 + 1, 1, 48), MAT.darkSteel); base.position.y = 0.5; ctx.scene.add(base);
+    heatMat = new THREE.MeshStandardMaterial({ color: 0x3f3f46, emissive: 0xff4500, emissiveIntensity: 0, roughness: 0.5 });
+    heater = mesh(new THREE.TorusGeometry(2.2, 0.18, 8, 40), heatMat); heater.rotation.x = Math.PI / 2; heater.position.y = 1.15; ctx.scene.add(heater);
+    piston = mesh(new THREE.CylinderGeometry(R0, R0, 0.6, 48), std(0x94a3b8, { metalness: 0.8, roughness: 0.3 })); ctx.scene.add(piston);
+    rod = mesh(new THREE.CylinderGeometry(0.25, 0.25, 1, 12), MAT.steel); ctx.scene.add(rod);
+    const handle = mesh(new THREE.BoxGeometry(3, 0.4, 0.6), MAT.darkSteel); rod.add(handle); rod.handle = handle;
+    parts = new THREE.InstancedMesh(new THREE.SphereGeometry(0.16, 10, 8), new THREE.MeshStandardMaterial({ roughness: 0.3 }), NMAX); parts.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(NMAX * 3), 3); parts.frustumCulled = false; ctx.scene.add(parts);
+    // pressure gauge
+    gauge = new THREE.Group(); const body = mesh(new THREE.CylinderGeometry(2, 2, 0.8, 40), MAT.darkSteel); body.rotation.x = Math.PI / 2;
+    const face = new THREE.Mesh(new THREE.CircleGeometry(1.8, 40), new THREE.MeshBasicMaterial({ map: ctx.canvasTex(256, 256, (g) => { g.fillStyle = '#f8f5ea'; g.beginPath(); g.arc(128, 128, 126, 0, 7); g.fill(); g.strokeStyle = '#111'; g.fillStyle = '#111'; g.textAlign = 'center'; g.font = 'bold 18px Arial'; for (let i = 0; i <= 40; i++) { const a = Math.PI * (1.25 - 1.5 * i / 40), L = i % 5 ? 10 : 20; g.lineWidth = i % 5 ? 1.5 : 3; g.beginPath(); g.moveTo(128 + Math.cos(a) * 118, 128 - Math.sin(a) * 118); g.lineTo(128 + Math.cos(a) * (118 - L), 128 - Math.sin(a) * (118 - L)); g.stroke(); if (i % 10 === 0) g.fillText(String(i / 40 * 4000), 128 + Math.cos(a) * 84, 134 - Math.sin(a) * 84); } g.font = '16px Arial'; g.fillText('kPa', 128, 190); }) }));
+    face.position.z = 0.41; needle = new THREE.Mesh(new THREE.BoxGeometry(0.08, 1.5, 0.04), new THREE.MeshBasicMaterial({ color: 0xdc2626 })); needle.geometry.translate(0, 0.7, 0); needle.position.z = 0.45;
+    gauge.add(body, face, needle); gauge.position.set(6.5, 5, 0); ctx.scene.add(gauge);
+    const pipe = mesh(new THREE.CylinderGeometry(0.2, 0.2, 3, 10), MAT.copper); pipe.rotation.z = Math.PI / 2; pipe.position.set(4.6, 2.2, 0); ctx.scene.add(pipe);
+    const pipe2 = mesh(new THREE.CylinderGeometry(0.2, 0.2, 1.8, 10), MAT.copper); pipe2.position.set(6.1, 3.1, 0); ctx.scene.add(pipe2);
+    // thermometer
+    thermo = mesh(new THREE.CylinderGeometry(0.28, 0.28, 10, 14), MAT.glass); thermo.position.set(-5.5, 6, 0); const tb = mesh(new THREE.SphereGeometry(0.5, 14, 10), std(0xdc2626)); tb.position.set(-5.5, 0.9, 0);
+    thermoLiq = mesh(new THREE.CylinderGeometry(0.14, 0.14, 1, 8), glow(0xdc2626)); thermoLiq.geometry.translate(0, 0.5, 0); thermoLiq.position.set(-5.5, 1.2, 0); ctx.scene.add(thermo, tb, thermoLiq);
+    ctx.label('pressure gauge', () => V3(6.5, 7.6, 0)); ctx.label('thermometer', () => V3(-5.5, 11.6, 0)); ctx.label('piston', () => piston.position.clone().add(V3(0, 0.8, R0)));
+  },
+  reset(ctx) {
+    P = [];
+    for (let i = 0; i < ctx.v.N; i++) { const a = Math.random() * 2 * Math.PI, r = Math.sqrt(Math.random()) * (R0 - 0.3); P.push({ p: V3(Math.cos(a) * r, 1.3 + Math.random() * (ctx.v.V - 0.6), Math.sin(a) * r), v: rndV(ctx.v.T) }); }
+    parts.count = P.length; imp = 0; win = 0; Pmeas = Pideal(ctx); h = ctx.v.V;
+  },
+  onControl(ctx, id, val) {
+    if (id === 'T') { /* rescale speeds to the new temperature */ const f = Math.sqrt(val / (ctx.lastT || val)); P.forEach((q) => q.v.multiplyScalar(f)); }
+    ctx.lastT = ctx.v.T; ctx.lastGraph = null;
+  },
+  step(ctx, dt) {
+    ctx.lastT = ctx.v.T;
+    h += (ctx.v.V - h) * Math.min(1, dt * 6); // piston glides to the set volume
+    const top = 1.3 + h - 0.3;
+    for (const q of P) {
+      q.p.addScaledVector(q.v, dt);
+      if (q.p.y < 1.3) { q.p.y = 1.3; q.v.y = Math.abs(q.v.y); }
+      if (q.p.y > top) { q.p.y = top; if (q.v.y > 0) { imp += 2 * q.v.y; q.v.y = -q.v.y; } }
+      const rr = Math.hypot(q.p.x, q.p.z), lim = R0 - 0.2;
+      if (rr > lim) { const nx = q.p.x / rr, nz = q.p.z / rr, vn = q.v.x * nx + q.v.z * nz; if (vn > 0) { q.v.x -= 2 * vn * nx; q.v.z -= 2 * vn * nz; } q.p.x = nx * lim; q.p.z = nz * lim; }
     }
-  } else if(particles.length > N){ particles.length = N; }
-
-  // adjust velocities to match temperature
-  particles.forEach(p=>{
-    const targetSpeed = Math.sqrt(T)/2;
-    const cs = Math.hypot(p.vx,p.vy);
-    if(cs>0){
-      p.vx = p.vx/cs*targetSpeed;
-      p.vy = p.vy/cs*targetSpeed;
+    win += dt;
+    if (win > 0.5) {
+      // kinetic theory: impulse per area per time = (N/V_sim)·m⟨v_y²⟩; the constant converts it to kPa
+      // for n = N/50 mol and V in litres (V_sim = area × usable height)
+      const Kc = (R / 50) * AREA * ((h - 0.3) / h) / (S * S);
+      Pmeas = Pmeas * 0.75 + 0.25 * Kc * imp / (AREA * win); imp = 0; win = 0;
     }
-    p.x += p.vx; p.y += p.vy;
-    if(p.x < containerX+r){p.x=containerX+r; p.vx*=-1; hits++;}
-    if(p.x > containerX+V-r){p.x=containerX+V-r; p.vx*=-1; hits++;}
-    if(p.y < containerY+r){p.y=containerY+r; p.vy*=-1; hits++;}
-    if(p.y > containerY+containerH-r){p.y=containerY+containerH-r; p.vy*=-1; hits++;}
-  });
-  draw();
-  requestAnimationFrame(step);
+  },
+  frame(ctx) {
+    const top = 1.3 + h;
+    piston.position.y = top; rod.position.y = top + 3.3; rod.scale.y = 6; rod.handle.position.y = 0.5;
+    const m = new THREE.Matrix4(), c = new THREE.Color();
+    P.forEach((q, i) => { m.setPosition(q.p); parts.setMatrixAt(i, m); const sp = q.v.length() / (S * Math.sqrt(3 * ctx.v.T)); c.setHSL(0.62 - Math.min(0.62, sp * 0.31), 0.85, 0.55); parts.setColorAt(i, c); });
+    parts.instanceMatrix.needsUpdate = true; parts.instanceColor.needsUpdate = true;
+    heatMat.emissiveIntensity = Math.max(0, (ctx.v.T - 300) / 500) * 2.5;
+    needle.rotation.z = Math.PI * 1.25 - Math.PI * 1.5 * Math.min(1.02, Pmeas / 4000) - Math.PI / 2;
+    thermoLiq.scale.y = 0.3 + (ctx.v.T / 800) * 9;
+    if (ctx.lastGraph !== ctx.v.law) { ctx.lastGraph = ctx.v.law; drawCurve(ctx); }
+  },
+  ui(ctx) {
+    const n = ctx.v.N / 50, Pi = Pideal(ctx);
+    ctx.readout('Pi', `${Pi.toFixed(0)} kPa`); ctx.readout('Pm', `${Pmeas.toFixed(0)} kPa`); ctx.readout('n', `${n.toFixed(2)} mol`);
+    ctx.readout('v', `${Math.sqrt(3 * R * ctx.v.T / 0.028).toFixed(0)} m/s`); ctx.readout('k', `${(Pi * ctx.v.V / (n * ctx.v.T)).toFixed(3)} J/(mol·K) = R`);
+    ctx.readout('KE', `${(1.5 * 1.380649e-23 * ctx.v.T * 1e21).toFixed(2)} ×10⁻²¹ J`);
+  },
+});
+function rndV(T) { const g = () => { let u = 0; for (let i = 0; i < 6; i++) u += Math.random(); return (u - 3) / Math.sqrt(0.5); }; return V3(g(), g(), g()).multiplyScalar(S * Math.sqrt(T)); }
+function point(ctx) { const law = ctx.v.law; return law === 'boyle' ? [ctx.v.V, Pideal(ctx)] : law === 'charles' ? [ctx.v.T, ctx.v.V] : [ctx.v.T, Pideal(ctx)]; }
+function drawCurve(ctx) {
+  ctx.clearGraph(); const n = ctx.v.N / 50, law = ctx.v.law;
+  const gs = ctx.spec.graph;
+  if (law === 'boyle') { gs.xlabel = 'V (L)'; for (let V = 3; V <= 14; V += 0.1) ctx.plot(V, [n * R * ctx.v.T / V]); }
+  else if (law === 'charles') { gs.xlabel = 'T (K)'; const Pfix = Pideal(ctx); for (let T = 100; T <= 800; T += 5) ctx.plot(T, [n * R * T / Pfix]); }
+  else { gs.xlabel = 'T (K)'; for (let T = 100; T <= 800; T += 5) ctx.plot(T, [n * R * T / ctx.v.V]); }
 }
-
-function draw(){
-  ctx.clearRect(0,0,cv.width,cv.height);
-  ctx.fillStyle='#0a0a0a'; ctx.fillRect(0,0,cv.width,cv.height);
-  // container
-  ctx.fillStyle='#888'; ctx.fillRect(containerX-15, containerY-10, 15, containerH+20);
-  ctx.fillRect(containerX-15, containerY-10, V+30, 10);
-  ctx.fillRect(containerX-15, containerY+containerH, V+30, 10);
-  // piston
-  ctx.fillStyle='#444'; ctx.fillRect(containerX+V, containerY-20, 25, containerH+40);
-  ctx.fillStyle='#888888'; ctx.fillRect(containerX+V+25, containerY+containerH/2-5, 80, 10);
-  // gas region
-  ctx.fillStyle = `rgba(200,200,200,${0.3+0.3*N/150})`;
-  ctx.fillRect(containerX, containerY, V, containerH);
-  // particles
-  particles.forEach(p=>{
-    const speed = Math.hypot(p.vx,p.vy);
-    const hue = Math.min(60, 240 - speed*30);
-    ctx.fillStyle = `hsl(${hue},80%,55%)`;
-    ctx.beginPath(); ctx.arc(p.x,p.y,r,0,2*Math.PI); ctx.fill();
-  });
-  // pressure gauge
-  const P = (N*T)/V;
-  const Pnorm = P/100;
-  ctx.fillStyle='#dddddd'; ctx.font='14px sans-serif';
-  ctx.fillText('P (relative): '+P.toFixed(1), 600, 50);
-  ctx.fillText('V: '+V, 600, 70);
-  ctx.fillText('T: '+T+' K', 600, 90);
-  ctx.fillText('n: '+N, 600, 110);
-  // gauge
-  ctx.strokeStyle='#dddddd'; ctx.strokeRect(600, 130, 150, 25);
-  ctx.fillStyle='#888888'; ctx.fillRect(601, 131, Math.min(148, Pnorm*30), 23);
-  document.getElementById('rP').textContent = P.toFixed(1);
-  if(performance.now() - lastHitTime > 1000){
-    document.getElementById('rH').textContent = hits;
-    hits = 0;
-    lastHitTime = performance.now();
-  }
-}
-
-document.getElementById('v').oninput=e=>{V=+e.target.value; document.getElementById('vV').textContent=V;};
-document.getElementById('t').oninput=e=>{T=+e.target.value; document.getElementById('vT').textContent=T+' K';};
-document.getElementById('n').oninput=e=>{N=+e.target.value; document.getElementById('vN').textContent=N;};
-init(); step();
 </script>
 </body></html>

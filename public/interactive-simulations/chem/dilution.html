@@ -1,89 +1,81 @@
 <!DOCTYPE html>
-<html lang="en"><head><meta charset="UTF-8"><title>Dilution &amp; Molarity</title><link rel="stylesheet" href="../styles.css"></head>
-<body>
-<header><a href="../index.html"><h1>Dilution &amp; Molarity</h1></a><p>Add water and watch concentration drop.</p></header>
-<main>
-<a class="back-link" href="../index.html">&larr; All simulations</a>
-<div class="sim-container">
-  <div>
-    <div class="canvas-wrap"><canvas id="cv" width="800" height="500"></canvas></div>
-    <div class="info-box">
-      <h3>The Chemistry</h3>
-      <p>Molarity is moles of solute per liter of solution. Dilution doesn't change the amount of solute, only the volume.</p>
-      <div class="formula">M = mol / L &nbsp;&nbsp; M₁V₁ = M₂V₂</div>
-      <p>Color intensity (Beer's law): A = εlc — darker means more concentrated.</p>
-    </div>
-  </div>
-  <div class="controls">
-    <h3>Controls</h3>
-    <div class="control-row"><label>Initial molarity M₁ <span class="val" id="vM">1.0 M</span></label><input type="range" id="m" min="1" max="50" value="10"></div>
-    <div class="control-row"><label>Initial volume V₁ <span class="val" id="vV1">100 mL</span></label><input type="range" id="v1" min="20" max="300" value="100"></div>
-    <div class="btn-row"><button id="add">+ Add 50 mL water</button><button id="reset">Reset</button></div>
-    <div class="readouts">
-      <div>Volume: <span id="rV">100 mL</span></div>
-      <div>Molarity: <span id="rM">1.000 M</span></div>
-      <div>Moles solute: <span id="rN">0.100</span></div>
-      <div>Mass (NaCl): <span id="rMa">5.85 g</span></div>
-    </div>
-  </div>
-</div>
-</main>
-<script>
-const cv=document.getElementById('cv'), ctx=cv.getContext('2d');
-let M0 = 1.0, V0 = 100;
-let V = 100;
-
-function moles(){ return M0*V0/1000; }
-function M(){ return moles()*1000/V; }
-
-function draw(){
-  ctx.clearRect(0,0,cv.width,cv.height);
-  ctx.fillStyle='#0a0a0a'; ctx.fillRect(0,0,cv.width,cv.height);
-  // beaker
-  const bx=200, by=60, bw=250, bh=400;
-  ctx.strokeStyle='#888888'; ctx.lineWidth=3;
-  ctx.beginPath(); ctx.moveTo(bx,by); ctx.lineTo(bx,by+bh); ctx.lineTo(bx+bw, by+bh); ctx.lineTo(bx+bw, by); ctx.stroke();
-  // tick marks
-  for(let v=0; v<=400; v+=50){
-    const y = by+bh - v/400*bh;
-    ctx.strokeStyle='#999999'; ctx.beginPath(); ctx.moveTo(bx-5, y); ctx.lineTo(bx, y); ctx.stroke();
-    ctx.fillStyle='#999999'; ctx.font='11px sans-serif';
-    ctx.fillText(v+' mL', bx-50, y+4);
-  }
-  // liquid
-  const fillH = V/400*bh;
-  const intensity = Math.min(1, M()/1.5);
-  // CuSO4 solution blue
-  ctx.fillStyle = `rgba(${255-intensity*200}, ${100+intensity*50}, ${255-intensity*50}, 0.8)`;
-  ctx.fillRect(bx+2, by+bh-fillH, bw-4, fillH);
-  // surface
-  ctx.strokeStyle='#fff';
-  ctx.beginPath(); ctx.moveTo(bx+2, by+bh-fillH); ctx.lineTo(bx+bw-2, by+bh-fillH); ctx.stroke();
-  // formula
-  ctx.fillStyle='#dddddd'; ctx.font='bold 16px sans-serif';
-  ctx.fillText('M₁V₁ = M₂V₂', 530, 100);
-  ctx.font='14px sans-serif';
-  ctx.fillText(`Initial: ${M0.toFixed(2)} M × ${V0} mL = ${moles().toFixed(3)} mol`, 530, 140);
-  ctx.fillText(`Now: ${M().toFixed(3)} M × ${V} mL = ${moles().toFixed(3)} mol`, 530, 165);
-  ctx.fillText('(moles solute is conserved)', 530, 190);
-  // particles for visual
-  const nDots = Math.floor(M()*30);
-  for(let i=0;i<nDots;i++){
-    const px = bx+10 + Math.random()*(bw-20);
-    const py = by+bh-fillH+10 + Math.random()*(fillH-20);
-    ctx.fillStyle='#bbbbbb'; ctx.beginPath(); ctx.arc(px,py,3,0,2*Math.PI); ctx.fill();
-  }
-
-  document.getElementById('rV').textContent = V+' mL';
-  document.getElementById('rM').textContent = M().toFixed(3)+' M';
-  document.getElementById('rN').textContent = moles().toFixed(4);
-  document.getElementById('rMa').textContent = (moles()*58.44).toFixed(2)+' g';
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Dilution and Molarity</title>
+<link rel="stylesheet" href="../engine/concept.css">
+<script type="importmap">{"imports":{"three":"../../simulations/lib/three/three.module.min.js","three/addons/":"../../simulations/lib/three/addons/"}}</script>
+</head><body>
+<script type="module">
+import { runSim, V3, THREE } from '../engine/concept.js';
+import * as C from '../../simulations/lab-engine/chem.js';
+// A 1 L beaker of coloured solution; water is poured in from a wash bottle. The solute
+// particles (one sphere ≈ fixed number of moles) never change in number, they just spread out.
+const BENCH = -3, NMAX = 400;
+const SOLUTES = { cuso4: ['Copper sulfate CuSO₄', 0x1d6fd8, 12], kmno4: ['Potassium permanganate KMnO₄', 0x7a1fa2, 2400], k2cr2o7: ['Potassium dichromate K₂Cr₂O₇', 0xf28c28, 480], nicl2: ['Nickel chloride NiCl₂', 0x2fa84f, 5] };
+let beaker, wash, str, parts, pdat = [], vol = 0, target = 0, pourT = 0;
+runSim({
+  title: 'Dilution and Molarity', subtitle: 'Adding water spreads the same moles of solute through more volume: M₁V₁ = M₂V₂.',
+  stage: 'bench', camera: { pos: [10, 26, 46], target: [0, 8, 0] },
+  autoplay: true, dt: 1 / 60,
+  controls: [
+    { id: 'sol', label: 'Solute', type: 'select', value: 'cuso4', reset: true, options: Object.entries(SOLUTES).map(([k, [n]]) => ({ value: k, label: n })) },
+    { id: 'M1', label: 'Starting molarity M₁', min: 0.1, max: 2, step: 0.05, value: 1, unit: 'M', reset: true },
+    { id: 'V1', label: 'Starting volume V₁', min: 50, max: 300, step: 10, value: 200, unit: 'mL', reset: true },
+  ],
+  buttons: [
+    { id: 'w10', label: '+10 mL water', kind: 'ghost', run: () => { target = Math.min(1200, target + 10); } },
+    { id: 'w50', label: '+50 mL water', run: () => { target = Math.min(1200, target + 50); } },
+    { id: 'x2', label: 'Double the volume', kind: 'ghost', run: () => { target = Math.min(1200, target * 2); } },
+  ],
+  readouts: [{ id: 'V2', label: 'Volume V₂' }, { id: 'M2', label: 'Molarity M₂' }, { id: 'n', label: 'Moles of solute' }, { id: 'df', label: 'Dilution factor' }, { id: 'A', label: 'Absorbance (1 cm)' }, { id: 'chk', label: 'M₁V₁ = M₂V₂ ?' }],
+  graph: { title: 'Molarity as water is added', series: [{ name: 'M (mol/L)', color: '#60a5fa' }], xlabel: 'V (mL)', ymin: 0, max: 800 },
+  info: 'Molarity is moles of solute per litre of solution. When you add water the number of moles does not change: count the particles, they stay the same, but they have more room. So the concentration falls in proportion to the volume, and the colour fades. A colorimeter measures this fading as absorbance, which is proportional to concentration (Beer–Lambert law).',
+  formulas: ['M = n / V', 'M₁V₁ = M₂V₂', 'A = ε l c'],
+  formulasPlain: ['M = n / V', 'M1V1 = M2V2'],
+  setup(ctx) {
+    beaker = C.vessel({ capacity: 1000, name: '1 L beaker', profile: [[5.3, 0], [5.5, 0.3], [5.5, 14.5], [5.8, 14.8]] });
+    beaker.group.position.set(0, BENCH, 0); ctx.scene.add(beaker.group);
+    const marks = ctx.canvasTex(128, 512, (g, w, h) => { g.fillStyle = '#fff'; g.font = 'bold 22px Arial'; for (let v = 100; v <= 1200; v += 100) { const y = h - ((beaker.levelOf(v) - beaker.y0) / (beaker.yTop - beaker.y0)) * h; g.fillRect(0, y - 1.5, v % 500 ? 26 : 44, 3); if (v % 200 === 0) g.fillText(String(v), 50, y + 8); } });
+    const plate = new THREE.Mesh(new THREE.CylinderGeometry(5.52, 5.52, beaker.yTop - beaker.y0, 24, 1, true, -0.35, 0.7), new THREE.MeshBasicMaterial({ map: marks, transparent: true, depthWrite: false, side: THREE.DoubleSide }));
+    plate.position.y = (beaker.yTop + beaker.y0) / 2; plate.renderOrder = 5; beaker.group.add(plate);
+    // the wash bottle's nozzle points along its local +z: turn it to face the beaker, then tip it
+    wash = C.washBottle(); const holder = new THREE.Group(); holder.position.set(11, BENCH + 4, 0); holder.rotation.y = -Math.PI / 2; holder.add(wash.group); ctx.scene.add(holder);
+    str = C.stream(ctx.scene);
+    parts = new THREE.InstancedMesh(new THREE.SphereGeometry(0.16, 8, 6), new THREE.MeshBasicMaterial({ color: 0xfff7d6 }), NMAX); parts.frustumCulled = false; parts.renderOrder = 6;
+    parts.material.depthTest = false; beaker.group.add(parts);
+    ctx.label('solute particles (same number)', () => V3(-7, BENCH + 4, 4));
+    ctx.label('wash bottle (water)', () => V3(12, BENCH + 20, 0));
+  },
+  reset(ctx) {
+    vol = target = ctx.v.V1; pourT = 0;
+    const n = Math.round(Math.min(NMAX, ctx.v.M1 * ctx.v.V1 / 1000 * 1000 + 20)); // one particle per mmol (+20 for visibility)
+    pdat = Array.from({ length: n }, () => ({ a: Math.random() * Math.PI * 2, r: Math.sqrt(Math.random()), h: Math.random(), ph: Math.random() * 6 }));
+    parts.count = n;
+    ctx.clearGraph(); ctx.plot(vol, [ctx.v.M1]); ctx.lastPlot = vol;
+    refresh(ctx);
+  },
+  step(ctx, dt) {
+    if (vol < target - 1e-6) { vol = Math.min(target, vol + 40 * dt); pourT = 0.3; } else pourT = Math.max(0, pourT - dt);
+    if (vol - ctx.lastPlot > 2 || (vol === target && vol !== ctx.lastPlot)) { ctx.plot(vol, [ctx.v.M1 * ctx.v.V1 / vol]); ctx.lastPlot = vol; }
+  },
+  frame(ctx, dt) {
+    C.update(dt, ctx.t);
+    refresh(ctx);
+    const tilt = pourT > 0 ? 0.55 : 0.15; wash.group.rotation.x += (tilt - wash.group.rotation.x) * 0.15;
+    if (pourT > 0) { const nz = wash.group.localToWorld(V3(0, 17.2, 4.4)); str.show(nz, beaker.group.localToWorld(V3(0, beaker.level, 0)), 0xdbeafe, 0.18); } else str.hide();
+    const lev = beaker.level, m = new THREE.Matrix4();
+    pdat.forEach((p, i) => { const R = beaker.innerR(beaker.y0) - 0.4, y = beaker.y0 + 0.25 + p.h * Math.max(0.2, lev - beaker.y0 - 0.5); const w = Math.sin(ctx.t * 0.8 + p.ph) * 0.15; m.setPosition(Math.cos(p.a + w) * p.r * R, y, Math.sin(p.a + w) * p.r * R); parts.setMatrixAt(i, m); });
+    parts.instanceMatrix.needsUpdate = true;
+  },
+  ui(ctx) {
+    const M2 = ctx.v.M1 * ctx.v.V1 / vol, eps = SOLUTES[ctx.v.sol][2];
+    ctx.readout('V2', `${vol.toFixed(0)} mL`); ctx.readout('M2', `${M2.toFixed(3)} M`); ctx.readout('n', `${(ctx.v.M1 * ctx.v.V1).toFixed(0)} mmol`);
+    ctx.readout('df', `× ${(vol / ctx.v.V1).toFixed(2)}`); ctx.readout('A', (eps * M2 * (ctx.v.sol === 'kmno4' ? 0.001 : ctx.v.sol === 'k2cr2o7' ? 0.004 : 0.1)).toFixed(3));
+    ctx.readout('chk', `${(ctx.v.M1 * ctx.v.V1).toFixed(0)} = ${(M2 * vol).toFixed(0)} ✓`);
+  },
+});
+function refresh(ctx) {
+  const M2 = ctx.v.M1 * ctx.v.V1 / vol, k = Math.min(1, M2 / 1.2);
+  const col = new THREE.Color(0xeef6ff).lerp(new THREE.Color(SOLUTES[ctx.v.sol][1]), 0.25 + 0.75 * Math.sqrt(k));
+  beaker.setLiquid(vol, col, 0.28 + 0.6 * Math.sqrt(k));
 }
-
-document.getElementById('m').oninput=e=>{M0=+e.target.value/10; document.getElementById('vM').textContent=M0.toFixed(1)+' M'; V=V0; draw();};
-document.getElementById('v1').oninput=e=>{V0=+e.target.value; document.getElementById('vV1').textContent=V0+' mL'; V=V0; draw();};
-document.getElementById('add').onclick=()=>{V=Math.min(400, V+50); draw();};
-document.getElementById('reset').onclick=()=>{V=V0; draw();};
-draw();
 </script>
 </body></html>

@@ -1,140 +1,106 @@
 <!DOCTYPE html>
-<html lang="en"><head><meta charset="UTF-8"><title>Galvanic Cell</title><link rel="stylesheet" href="../styles.css"></head>
-<body>
-<header><a href="../index.html"><h1>Galvanic (Voltaic) Cell</h1></a><p>Zinc-copper cell — chemistry as a battery.</p></header>
-<main>
-<a class="back-link" href="../index.html">&larr; All simulations</a>
-<div class="sim-container">
-  <div>
-    <div class="canvas-wrap"><canvas id="cv" width="800" height="500"></canvas></div>
-    <div class="info-box">
-      <h3>The Chemistry</h3>
-      <p>The more reactive metal (Zn) gives up electrons (oxidation) at the anode; they flow through the external wire to the copper cathode where Cu²⁺ ions get reduced.</p>
-      <div class="formula">Anode: Zn → Zn²⁺ + 2e⁻<br>Cathode: Cu²⁺ + 2e⁻ → Cu<br>E°_cell = E°_cathode − E°_anode = 1.10 V</div>
-      <p>The salt bridge keeps both half-cells electrically neutral.</p>
-    </div>
-  </div>
-  <div class="controls">
-    <h3>Controls</h3>
-    <div class="btn-row"><button id="run">Start</button><button class="secondary" id="pause">Pause</button></div>
-    <div class="readouts" style="grid-template-columns:1fr;">
-      <div>Voltage: <span id="rV">1.10 V</span></div>
-      <div>Anode: Zn (oxidation)</div>
-      <div>Cathode: Cu (reduction)</div>
-    </div>
-  </div>
-</div>
-</main>
-<script>
-const cv=document.getElementById('cv'), ctx=cv.getContext('2d');
-let running = true;
-let electrons = []; // along wire
-let cations = []; // in salt bridge
-
-const wirePoints = [
-  {x:200, y:200}, {x:200, y:80}, {x:600, y:80}, {x:600, y:200}
-];
-
-function pos(s){
-  // total wire length
-  const segs = [
-    [wirePoints[0], wirePoints[1]],
-    [wirePoints[1], wirePoints[2]],
-    [wirePoints[2], wirePoints[3]]
-  ];
-  const lens = segs.map(([a,b])=>Math.hypot(b.x-a.x, b.y-a.y));
-  const total = lens.reduce((a,b)=>a+b);
-  s = ((s%total)+total)%total;
-  let acc=0;
-  for(let i=0;i<segs.length;i++){
-    if(s < acc+lens[i]){
-      const t = (s-acc)/lens[i];
-      const [a,b] = segs[i];
-      return {x:a.x+(b.x-a.x)*t, y:a.y+(b.y-a.y)*t};
-    }
-    acc += lens[i];
-  }
-  return wirePoints[3];
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Galvanic Cell</title>
+<link rel="stylesheet" href="../engine/concept.css">
+<script type="importmap">{"imports":{"three":"../../simulations/lib/three/three.module.min.js","three/addons/":"../../simulations/lib/three/addons/"}}</script>
+</head><body>
+<script type="module">
+import { runSim, V3, MAT, mesh, std, glow, THREE } from '../engine/concept.js';
+import * as C from '../../simulations/lab-engine/chem.js';
+// Two half-cells joined by a salt bridge and an external wire through a voltmeter and lamp.
+// E from the Nernst equation; the reaction runs (sped up) while the switch is closed.
+const BENCH = -3, F = 96485, VOL = 0.1, NE = 40;
+const MET = {
+  Mg: { E: -2.37, q: 2, metal: 0xc0c4c8, sol: 0xeef6ff, op: 0.3, name: 'magnesium' },
+  Zn: { E: -0.76, q: 2, metal: 0x9aa3ad, sol: 0xeef6ff, op: 0.3, name: 'zinc' },
+  Fe: { E: -0.44, q: 2, metal: 0x6b7280, sol: 0xbfe6b0, op: 0.45, name: 'iron' },
+  Pb: { E: -0.13, q: 2, metal: 0x5b6470, sol: 0xeef6ff, op: 0.3, name: 'lead' },
+  Cu: { E: 0.34, q: 2, metal: 0xc27a4a, sol: 0x1d6fd8, op: 0.6, name: 'copper' },
+  Ag: { E: 0.8, q: 1, metal: 0xd9dde2, sol: 0xeef6ff, op: 0.3, name: 'silver' },
+};
+let L, R, elL, elR, wire, eDots, eU = [], bridgeIons = [], meterTex, meterCanvas, bulbMat, bulbLight, sw, cA = 1, cC = 1, massA = 1, massC = 1, curve;
+const pair = (ctx) => { const a = MET[ctx.v.left], b = MET[ctx.v.right]; return a.E <= b.E ? { an: ctx.v.left, ca: ctx.v.right, flip: false } : { an: ctx.v.right, ca: ctx.v.left, flip: true }; };
+function emf(ctx) {
+  const p = pair(ctx), A = MET[p.an], Cc = MET[p.ca];
+  const n = A.q === Cc.q ? A.q : A.q * Cc.q, E0 = Cc.E - A.E;
+  const Q = Math.pow(Math.max(1e-6, cA), n / A.q) / Math.pow(Math.max(1e-6, cC), n / Cc.q);
+  return { E0, E: E0 - (0.0592 / n) * Math.log10(Q), n, p };
 }
-
-for(let i=0;i<10;i++) electrons.push({s: i*60});
-
-function step(){
-  if(running){
-    electrons.forEach(e=>e.s += 2);
-    // salt bridge ions
-    if(Math.random() < 0.1) cations.push({x:300, y:180, vx:1.5, color:'#bbbbbb'});
-    cations.forEach(c=>{c.x += c.vx;});
-    cations = cations.filter(c=>c.x < 520);
-  }
-  draw();
-  requestAnimationFrame(step);
-}
-
-function draw(){
-  ctx.clearRect(0,0,cv.width,cv.height);
-  ctx.fillStyle='#0a0a0a'; ctx.fillRect(0,0,cv.width,cv.height);
-  // Zn beaker (left)
-  ctx.strokeStyle='#999999'; ctx.lineWidth=3;
-  ctx.beginPath(); ctx.moveTo(120,200); ctx.lineTo(120,420); ctx.lineTo(280,420); ctx.lineTo(280,200); ctx.stroke();
-  // ZnSO4 solution
-  ctx.fillStyle='rgba(220,220,220,0.4)'; ctx.fillRect(123,250,154,168);
-  ctx.fillStyle='#dddddd'; ctx.font='13px sans-serif'; ctx.fillText('ZnSO₄', 175, 415);
-  // Zn electrode
-  ctx.fillStyle='#888'; ctx.fillRect(195, 200, 10, 200);
-  ctx.fillStyle='#dddddd'; ctx.fillText('Zn', 195, 195);
-  // Cu beaker
-  ctx.beginPath(); ctx.moveTo(520,200); ctx.lineTo(520,420); ctx.lineTo(680,420); ctx.lineTo(680,200); ctx.stroke();
-  ctx.fillStyle='rgba(200,200,200,0.5)'; ctx.fillRect(523,250,154,168);
-  ctx.fillStyle='#dddddd'; ctx.fillText('CuSO₄', 575, 415);
-  // Cu electrode
-  ctx.fillStyle='#888888'; ctx.fillRect(595, 200, 10, 200);
-  ctx.fillStyle='#dddddd'; ctx.fillText('Cu', 595, 195);
-  // wire
-  ctx.strokeStyle='#888888'; ctx.lineWidth=4;
-  ctx.beginPath();
-  ctx.moveTo(200, 200); ctx.lineTo(200, 80); ctx.lineTo(600, 80); ctx.lineTo(600, 200);
-  ctx.stroke();
-  // voltmeter
-  ctx.fillStyle='#fff'; ctx.fillRect(360, 50, 80, 60);
-  ctx.strokeStyle='#dddddd'; ctx.strokeRect(360, 50, 80, 60);
-  ctx.fillStyle='#dddddd'; ctx.font='bold 18px sans-serif'; ctx.textAlign='center';
-  ctx.fillText('V', 400, 75);
-  ctx.fillText('1.10', 400, 100);
-  ctx.textAlign='left';
-  // salt bridge
-  ctx.strokeStyle='#888888'; ctx.lineWidth=15;
-  ctx.beginPath(); ctx.moveTo(280, 250); ctx.quadraticCurveTo(400, 170, 520, 250); ctx.stroke();
-  ctx.lineWidth=12; ctx.strokeStyle='#dddddd';
-  ctx.beginPath(); ctx.moveTo(280, 250); ctx.quadraticCurveTo(400, 170, 520, 250); ctx.stroke();
-  ctx.fillStyle='#dddddd'; ctx.font='12px sans-serif'; ctx.fillText('Salt bridge', 360, 200);
-  // electrons in wire
-  electrons.forEach(e=>{
-    const p = pos(e.s);
-    ctx.fillStyle='#dddddd';
-    ctx.beginPath(); ctx.arc(p.x, p.y, 6, 0, 2*Math.PI); ctx.fill();
-    ctx.strokeStyle='#dddddd'; ctx.stroke();
-    ctx.fillStyle='#dddddd'; ctx.font='bold 9px sans-serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
-    ctx.fillText('-', p.x, p.y);
-  });
-  ctx.textAlign='left'; ctx.textBaseline='alphabetic';
-  // arrow showing electron direction
-  ctx.fillStyle='#dddddd'; ctx.font='12px sans-serif';
-  ctx.fillText('→ e⁻ flow →', 300, 70);
-  // cations in salt bridge
-  cations.forEach(c=>{
-    ctx.fillStyle = c.color;
-    ctx.beginPath(); ctx.arc(c.x, 220 + Math.sin((c.x-300)/30)*15, 4, 0, 2*Math.PI); ctx.fill();
-  });
-  // labels
-  ctx.fillStyle='#888888'; ctx.font='bold 14px sans-serif';
-  ctx.fillText('Anode (−)', 165, 175);
-  ctx.fillStyle='#aaaaaa';
-  ctx.fillText('Cathode (+)', 565, 175);
-}
-
-document.getElementById('run').onclick=()=>running=true;
-document.getElementById('pause').onclick=()=>running=false;
-step();
+runSim({
+  title: 'Galvanic (Voltaic) Cell', subtitle: 'A spontaneous redox reaction pushes electrons through the wire: chemical energy becomes electrical energy.',
+  stage: 'bench', camera: { pos: [0, 34, 62], target: [0, 10, 0] },
+  autoplay: true, dt: 1 / 60,
+  controls: [
+    { id: 'left', label: 'Left half-cell metal', type: 'select', value: 'Zn', reset: true, options: Object.keys(MET).map((k) => ({ value: k, label: `${k} | ${k}${MET[k].q > 1 ? '²' : ''}⁺  (E° = ${MET[k].E} V)` })) },
+    { id: 'right', label: 'Right half-cell metal', type: 'select', value: 'Cu', reset: true, options: Object.keys(MET).map((k) => ({ value: k, label: `${k} | ${k}${MET[k].q > 1 ? '²' : ''}⁺  (E° = ${MET[k].E} V)` })) },
+    { id: 'cl', label: 'Left solution concentration', min: 0.01, max: 2, step: 0.01, value: 1, unit: 'M', reset: true },
+    { id: 'cr', label: 'Right solution concentration', min: 0.01, max: 2, step: 0.01, value: 1, unit: 'M', reset: true },
+    { id: 'sw', label: 'Close the switch (connect the lamp)', type: 'check', value: true },
+    { id: 'fast', label: 'Time speed-up', min: 1, max: 5000, step: 1, value: 1500, fmt: (v) => `× ${v}` },
+  ],
+  readouts: [{ id: 'E0', label: 'E°cell' }, { id: 'E', label: 'Cell voltage (Nernst)' }, { id: 'I', label: 'Current' }, { id: 'an', label: 'Anode (−, oxidation)' }, { id: 'ca', label: 'Cathode (+, reduction)' }, { id: 'rx', label: 'Overall reaction' }],
+  graph: { title: 'Cell voltage as it runs', series: [{ name: 'E (V)', color: '#22c55e' }], max: 600, ymin: 0 },
+  info: 'The more reactive metal (lower E°) is oxidised at the anode: its atoms give up electrons and dissolve as ions, so the electrode slowly wears away. The electrons travel through the wire to the cathode, where the ions of the less reactive metal pick them up and plate out as metal. The salt bridge lets ions drift between the beakers to keep both solutions neutral; without it the current stops. As the cathode ions are used up the voltage slowly falls (Nernst equation), and when E reaches zero the cell is flat.',
+  formulas: ['E°cell = E°cathode − E°anode', 'E = E° − (0.0592 / n) log Q', 'ΔG = −nFE'],
+  formulasPlain: ['E° = E°cathode − E°anode', 'E = E° − (0.0592/n) log Q'],
+  setup(ctx) {
+    L = C.beaker(250); L.group.position.set(-13, BENCH, 0); R = C.beaker(250); R.group.position.set(13, BENCH, 0); ctx.scene.add(L.group, R.group);
+    elL = mesh(new THREE.BoxGeometry(2.4, 14, 0.5), std(0x999999, { metalness: 0.9, roughness: 0.35 })); elR = elL.clone(); elR.material = elL.material.clone();
+    elL.position.set(-13, BENCH + 8, 0); elR.position.set(13, BENCH + 8, 0); ctx.scene.add(elL, elR);
+    // salt bridge (inverted U tube filled with KNO₃ gel)
+    curve = new THREE.CatmullRomCurve3([V3(-11.5, BENCH + 3, -1.5), V3(-11.5, BENCH + 13, -1.5), V3(-8, BENCH + 16, -1.5), V3(8, BENCH + 16, -1.5), V3(11.5, BENCH + 13, -1.5), V3(11.5, BENCH + 3, -1.5)]);
+    ctx.scene.add(mesh(new THREE.TubeGeometry(curve, 80, 0.9, 16, false), new THREE.MeshPhysicalMaterial({ color: 0xfff7e0, transparent: true, opacity: 0.55, roughness: 0.2, depthWrite: false }), false));
+    for (let i = 0; i < 14; i++) { const k = i % 2 === 0; const s = new THREE.Mesh(new THREE.SphereGeometry(0.28, 10, 8), glow(k ? 0x60a5fa : 0xf97316)); s.userData = { u: Math.random(), dir: k ? -1 : 1 }; ctx.scene.add(s); bridgeIons.push(s); }
+    // external circuit: electrode tops → switch → lamp → voltmeter → electrode
+    wire = new THREE.CatmullRomCurve3([V3(-13, BENCH + 15, 0), V3(-13, BENCH + 26, 0), V3(-6, BENCH + 28, 0), V3(0, BENCH + 28, 0), V3(6, BENCH + 28, 0), V3(13, BENCH + 26, 0), V3(13, BENCH + 15, 0)]);
+    ctx.scene.add(mesh(new THREE.TubeGeometry(wire, 120, 0.22, 8, false), std(0xb45309), false));
+    const meter = mesh(new THREE.BoxGeometry(8, 5, 3), std(0x111827)); meter.position.set(0, BENCH + 28, 0.2); ctx.scene.add(meter);
+    meterCanvas = document.createElement('canvas'); meterCanvas.width = 256; meterCanvas.height = 128; meterTex = new THREE.CanvasTexture(meterCanvas);
+    const disp = new THREE.Mesh(new THREE.PlaneGeometry(6.6, 3.3), new THREE.MeshBasicMaterial({ map: meterTex, toneMapped: false })); disp.position.set(0, BENCH + 28.2, 1.72); ctx.scene.add(disp);
+    bulbMat = new THREE.MeshPhysicalMaterial({ color: 0xffffff, transparent: true, opacity: 0.35, emissive: 0xffc46b, emissiveIntensity: 0 });
+    const bulb = new THREE.Mesh(new THREE.SphereGeometry(1.4, 24, 16), bulbMat); bulb.position.set(-6.5, BENCH + 29.4, 0); ctx.scene.add(bulb);
+    bulbLight = new THREE.PointLight(0xffc46b, 0, 60, 2); bulbLight.position.copy(bulb.position); ctx.scene.add(bulbLight);
+    sw = mesh(new THREE.BoxGeometry(2.6, 0.3, 0.6), MAT.darkSteel); sw.geometry.translate(1.3, 0, 0); sw.position.set(5.2, BENCH + 28.6, 0.6); ctx.scene.add(sw);
+    eDots = new THREE.InstancedMesh(new THREE.SphereGeometry(0.28, 10, 8), glow(0x7dd3fc), NE); ctx.scene.add(eDots); for (let i = 0; i < NE; i++) eU.push(i / NE);
+    ctx.tagL = ctx.label('', () => V3(-13, BENCH + 18, 2)); ctx.tagR = ctx.label('', () => V3(13, BENCH + 18, 2));
+    ctx.label('salt bridge (KNO₃)', () => V3(0, BENCH + 18.3, -1.5)); ctx.label('e⁻ flow', () => wire.getPointAt(0.3).add(V3(0, 1.5, 0)));
+  },
+  reset(ctx) { cA = cC = 1; const p = pair(ctx); cA = p.flip ? ctx.v.cr : ctx.v.cl; cC = p.flip ? ctx.v.cl : ctx.v.cr; massA = massC = 1; ctx.clearGraph(); ctx.lastPlot = -1; },
+  step(ctx, dt) {
+    const e = emf(ctx), Rtot = 12; // lamp + internal resistance (Ω)
+    const I = ctx.v.sw && ctx.v.left !== ctx.v.right ? Math.max(0, e.E) / Rtot : 0;
+    const mol = (I * dt * ctx.v.fast) / F; // moles of electrons
+    const A = MET[e.p.an], Cc = MET[e.p.ca];
+    cA += mol / A.q / VOL; cC = Math.max(0, cC - mol / Cc.q / VOL);
+    massA = Math.max(0.2, massA - mol * 25); massC += mol * 25;
+    ctx.I = I;
+    for (let i = 0; i < NE; i++) eU[i] = (eU[i] + (e.p.flip ? -1 : 1) * I * dt * 1.2 + 1) % 1; // electrons leave the anode
+    for (const s of bridgeIons) s.userData.u = (s.userData.u + s.userData.dir * (e.p.flip ? -1 : 1) * I * dt * 0.4 + 1) % 1;
+    if (ctx.t - ctx.lastPlot > 0.25) { ctx.plot(ctx.t, [Math.max(0, e.E)]); ctx.lastPlot = ctx.t; }
+  },
+  frame(ctx) {
+    const e = emf(ctx), p = e.p, left = MET[ctx.v.left], right = MET[ctx.v.right];
+    const cL = p.flip ? cC : cA, cR = p.flip ? cA : cC;
+    const solCol = (m, c) => new THREE.Color(0xeef6ff).lerp(new THREE.Color(m.sol), Math.min(1, 0.25 + 0.75 * Math.sqrt(c / 1.5)));
+    L.setLiquid(180, solCol(left, cL), left.op * Math.min(1, 0.5 + cL / 2) + 0.15); R.setLiquid(180, solCol(right, cR), right.op * Math.min(1, 0.5 + cR / 2) + 0.15);
+    elL.material.color.setHex(left.metal); elR.material.color.setHex(right.metal);
+    const mL = p.flip ? massC : massA, mR = p.flip ? massA : massC;
+    elL.scale.set(Math.min(1.6, mL), 1, Math.min(1.6, mL)); elR.scale.set(Math.min(1.6, mR), 1, Math.min(1.6, mR));
+    const I = ctx.I || 0, m = new THREE.Matrix4();
+    for (let i = 0; i < NE; i++) { m.setPosition(wire.getPointAt(eU[i])); eDots.setMatrixAt(i, m); } eDots.instanceMatrix.needsUpdate = true; eDots.visible = I > 0;
+    for (const s of bridgeIons) s.position.copy(curve.getPointAt(s.userData.u));
+    bulbMat.emissiveIntensity = Math.min(2.5, I * I * 12 * 8); bulbLight.intensity = Math.min(1, I * I * 12) * 1200;
+    sw.rotation.z = ctx.v.sw ? 0 : 0.6;
+    const g = meterCanvas.getContext('2d'); g.fillStyle = '#0b1a0b'; g.fillRect(0, 0, 256, 128); g.fillStyle = '#86efac'; g.font = 'bold 64px monospace'; g.textAlign = 'center';
+    const Vread = ctx.v.left === ctx.v.right ? 0 : Math.max(0, e.E) * (p.flip ? -1 : 1); g.fillText(`${Vread.toFixed(2)}`, 128, 80); g.font = '22px monospace'; g.fillText('V', 128, 114); meterTex.needsUpdate = true;
+    ctx.tagL.set(`${ctx.v.left}  ${ctx.v.left === ctx.v.right ? '' : p.an === ctx.v.left ? 'anode (−)' : 'cathode (+)'}`); ctx.tagR.set(`${ctx.v.right}  ${ctx.v.left === ctx.v.right ? '' : p.an === ctx.v.right ? 'anode (−)' : 'cathode (+)'}`);
+  },
+  ui(ctx) {
+    const e = emf(ctx), A = MET[e.p.an], Cc = MET[e.p.ca], same = ctx.v.left === ctx.v.right, ion = (k) => `${k}${MET[k].q > 1 ? '²' : ''}⁺`;
+    ctx.readout('E0', same ? '0 V' : `${e.E0.toFixed(2)} V`); ctx.readout('E', same ? '0 V' : `${Math.max(0, e.E).toFixed(3)} V`); ctx.readout('I', `${((ctx.I || 0) * 1000).toFixed(1)} mA`);
+    ctx.readout('an', same ? '—' : `${e.p.an} → ${ion(e.p.an)} + ${A.q}e⁻`); ctx.readout('ca', same ? '—' : `${ion(e.p.ca)} + ${Cc.q}e⁻ → ${e.p.ca}`);
+    const a = e.n / A.q, c = e.n / Cc.q, k = (x) => (x > 1 ? x : '');
+    ctx.readout('rx', same ? 'No reaction (same metals)' : `${k(a)}${e.p.an} + ${k(c)}${ion(e.p.ca)} → ${k(a)}${ion(e.p.an)} + ${k(c)}${e.p.ca}`);
+  },
+});
 </script>
 </body></html>

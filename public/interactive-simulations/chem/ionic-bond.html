@@ -1,121 +1,112 @@
 <!DOCTYPE html>
-<html lang="en"><head><meta charset="UTF-8"><title>Ionic Bonding</title><link rel="stylesheet" href="../styles.css"></head>
-<body>
-<header><a href="../index.html"><h1>Ionic Bonding — NaCl Formation</h1></a><p>Watch sodium give up an electron to chlorine.</p></header>
-<main>
-<a class="back-link" href="../index.html">&larr; All simulations</a>
-<div class="sim-container">
-  <div>
-    <div class="canvas-wrap"><canvas id="cv" width="800" height="500"></canvas></div>
-    <div class="info-box">
-      <h3>The Chemistry</h3>
-      <p>Sodium (Na) has 1 valence electron; chlorine (Cl) needs 1 to complete its octet. Na transfers its electron to Cl, forming Na⁺ and Cl⁻ which attract electrostatically.</p>
-      <div class="formula">Na → Na⁺ + e⁻ &nbsp;&nbsp; Cl + e⁻ → Cl⁻ &nbsp;&nbsp; Na⁺ + Cl⁻ → NaCl</div>
-    </div>
-  </div>
-  <div class="controls">
-    <h3>Controls</h3>
-    <div class="btn-row"><button id="approach">Bring atoms close</button><button id="transfer">Transfer electron</button><button id="reset">Reset</button></div>
-    <div class="readouts" style="grid-template-columns:1fr;">
-      <div>Status: <span id="rS">Neutral atoms</span></div>
-    </div>
-  </div>
-</div>
-</main>
-<script>
-const cv=document.getElementById('cv'), ctx=cv.getContext('2d');
-const cy = 250;
-let naX = 200, clX = 600;
-let phase = 'separate'; // separate, approached, transferred
-let transferringE = null;
-
-function draw(){
-  ctx.clearRect(0,0,cv.width,cv.height);
-  ctx.fillStyle='#000000'; ctx.fillRect(0,0,cv.width,cv.height);
-  // sodium
-  drawAtom(naX, cy, 'Na', '#cccccc', phase==='transferred' ? 0 : 1, phase==='transferred' ? '+1' : '');
-  // chlorine
-  drawAtom(clX, cy, 'Cl', '#999999', phase==='transferred' ? 8 : 7, phase==='transferred' ? '−1' : '');
-  // bond/attraction line
-  if(phase==='transferred'){
-    ctx.strokeStyle='rgba(255,255,255,0.5)'; ctx.lineWidth=2; ctx.setLineDash([5,5]);
-    ctx.beginPath(); ctx.moveTo(naX+50, cy); ctx.lineTo(clX-50, cy); ctx.stroke();
-    ctx.setLineDash([]);
-    ctx.fillStyle='#fff'; ctx.font='14px sans-serif'; ctx.textAlign='center';
-    ctx.fillText('Electrostatic attraction', (naX+clX)/2, cy-90);
-    ctx.fillText('NaCl ionic compound', (naX+clX)/2, cy+90);
-    ctx.textAlign='left';
-  }
-  // transferring electron
-  if(transferringE !== null){
-    transferringE.x += (transferringE.tx - transferringE.x)*0.05;
-    if(Math.abs(transferringE.x - transferringE.tx) < 1){ transferringE = null; phase='transferred'; document.getElementById('rS').textContent = 'Na⁺ and Cl⁻ formed'; }
-    else { ctx.fillStyle='#dddddd'; ctx.beginPath(); ctx.arc(transferringE.x, transferringE.y, 5, 0, 2*Math.PI); ctx.fill(); }
-  }
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Ionic Bonding</title>
+<link rel="stylesheet" href="../engine/concept.css">
+<script type="importmap">{"imports":{"three":"../../simulations/lib/three/three.module.min.js","three/addons/":"../../simulations/lib/three/addons/"}}</script>
+</head><body>
+<script type="module">
+import { runSim, V3, std, glow, THREE } from '../engine/concept.js';
+// A metal atom gives its outer electron(s) to a non-metal atom. The ions attract and, with many
+// of them, stack into a rock-salt crystal lattice.
+const PAIRS = {
+  nacl: { m: ['Na', [2, 8, 1], 0xa855f7, 102], n: ['Cl', [2, 8, 7], 0x22c55e, 181], q: 1, name: 'Sodium chloride NaCl', E: 787 },
+  lif: { m: ['Li', [2, 1], 0xf472b6, 76], n: ['F', [2, 7], 0xa3e635, 133], q: 1, name: 'Lithium fluoride LiF', E: 1037 },
+  kcl: { m: ['K', [2, 8, 8, 1], 0xc084fc, 138], n: ['Cl', [2, 8, 7], 0x22c55e, 181], q: 1, name: 'Potassium chloride KCl', E: 701 },
+  mgo: { m: ['Mg', [2, 8, 2], 0x94a3b8, 72], n: ['O', [2, 6], 0xef4444, 140], q: 2, name: 'Magnesium oxide MgO', E: 3791 },
+};
+let A, B, stage = 'apart', t = 0, movers = [], lattice, sep = 14;
+function atom(ctx, sym, shells, col) {
+  const g = new THREE.Group(); g.shellR = []; g.electrons = [];
+  const orb = new THREE.Group(); orb.rotation.x = 1.05; g.add(orb); g.orb = orb; // shells tilted towards the viewer
+  const nuc = new THREE.Mesh(new THREE.SphereGeometry(0.45, 24, 16), std(col, { emissive: col, emissiveIntensity: 0.4 })); g.add(nuc); g.nuc = nuc;
+  shells.forEach((n, s) => {
+    const R = 1.1 + s * 0.85; g.shellR.push(R);
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(R, 0.02, 6, 96), glow(0x64748b, { transparent: true, opacity: 0.6 })); ring.rotation.x = Math.PI / 2; orb.add(ring);
+    for (let i = 0; i < n; i++) { const e = new THREE.Mesh(new THREE.SphereGeometry(0.13, 12, 8), glow(0x38bdf8)); e.userData = { s, i, n, R }; orb.add(e); g.electrons.push(e); }
+  });
+  const tag = ctx.textSprite(sym, { size: 0.8 }); tag.position.y = 1.2 + shells.length * 0.85 + 0.3; g.add(tag); g.tag = tag;
+  g.ringObjs = orb.children.filter((c) => c.geometry && c.geometry.type === 'TorusGeometry');
+  return g;
 }
-
-function drawAtom(cx, cy, sym, color, valence, charge){
-  // nucleus
-  ctx.fillStyle = color; ctx.beginPath(); ctx.arc(cx,cy,25,0,2*Math.PI); ctx.fill();
-  ctx.strokeStyle='#fff'; ctx.stroke();
-  ctx.fillStyle='#dddddd'; ctx.font='bold 18px sans-serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
-  ctx.fillText(sym, cx, cy);
-  ctx.textAlign='left'; ctx.textBaseline='alphabetic';
-  // shell 1 (always 2)
-  ctx.strokeStyle='rgba(255,255,255,0.3)';
-  ctx.beginPath(); ctx.arc(cx,cy,40,0,2*Math.PI); ctx.stroke();
-  for(let i=0;i<2;i++){
-    const a = i*Math.PI;
-    ctx.fillStyle='#dddddd'; ctx.beginPath(); ctx.arc(cx+40*Math.cos(a), cy+40*Math.sin(a), 4, 0, 2*Math.PI); ctx.fill();
-  }
-  // shell 2 (8 if Cl/Na with full)
-  ctx.beginPath(); ctx.arc(cx,cy,60,0,2*Math.PI); ctx.stroke();
-  const shell2 = sym==='Na' ? 8 : 7;
-  for(let i=0;i<shell2;i++){
-    const a = i*Math.PI*2/8;
-    ctx.fillStyle='#dddddd'; ctx.beginPath(); ctx.arc(cx+60*Math.cos(a), cy+60*Math.sin(a), 4, 0, 2*Math.PI); ctx.fill();
-  }
-  // shell 3 (valence)
-  if(sym==='Na' || (sym==='Cl' && valence===8)){
-    ctx.beginPath(); ctx.arc(cx,cy,80,0,2*Math.PI); ctx.stroke();
-  }
-  if(sym==='Na' && valence>0){
-    ctx.fillStyle='#cccccc'; ctx.beginPath(); ctx.arc(cx+80, cy, 6, 0, 2*Math.PI); ctx.fill();
-  }
-  if(sym==='Cl' && valence===8){
-    ctx.fillStyle='#cccccc'; ctx.beginPath(); ctx.arc(cx+80, cy, 6, 0, 2*Math.PI); ctx.fill();
-  }
-  // charge
-  if(charge){
-    ctx.fillStyle = charge.includes('+') ? '#cccccc' : '#bbbbbb';
-    ctx.font='bold 18px sans-serif';
-    ctx.fillText(charge, cx-15, cy-35);
-  }
-  ctx.fillStyle='#fff'; ctx.font='12px sans-serif';
-  ctx.fillText(sym + (charge?charge:'') , cx-15, cy+105);
+runSim({
+  title: 'Ionic Bonding', subtitle: 'Metals give electrons to non-metals; the oppositely charged ions attract and build a crystal.',
+  stage: 'studio', camera: { pos: [0, 7, 18], target: [0, 1.5, 0] }, stageOpts: { floorSize: 18, floorY: -4 },
+  autoplay: true, dt: 1 / 120,
+  controls: [{ id: 'pair', label: 'Compound', type: 'select', value: 'nacl', reset: true, options: Object.entries(PAIRS).map(([k, p]) => ({ value: k, label: p.name })) }],
+  buttons: [
+    { id: 'b1', label: '1 · Bring atoms close', run: () => { if (stage === 'apart') { stage = 'close'; t = 0; } } },
+    { id: 'b2', label: '2 · Transfer electron(s)', kind: 'warn', run: (c) => { if (stage === 'close' || stage === 'near') startTransfer(c); } },
+    { id: 'b3', label: '3 · Build the crystal', run: () => { if (stage === 'ions') { stage = 'lattice'; t = 0; } } },
+  ],
+  readouts: [{ id: 'st', label: 'Stage' }, { id: 'm', label: 'Metal' }, { id: 'n', label: 'Non-metal' }, { id: 'cfg', label: 'Electron shells' }, { id: 'r', label: 'Ionic radii' }, { id: 'E', label: 'Lattice energy' }],
+  info: 'A metal atom has one or two electrons in its outer shell and loses them easily; a non-metal atom needs one or two more to fill its outer shell. When they meet, the electrons move across: the metal becomes a positive ion (smaller, because it has lost its outer shell) and the non-metal becomes a negative ion (slightly larger). Opposite charges attract strongly in all directions, so ions pack into a giant lattice, each surrounded by six of the other kind in rock salt. That is why ionic compounds have high melting points.',
+  formulas: ['Na (2,8,1) → Na⁺ (2,8) + e⁻', 'Cl (2,8,7) + e⁻ → Cl⁻ (2,8,8)', 'F ∝ q₁q₂ / r²'],
+  reset(ctx) {
+    [A, B, lattice].forEach((o) => o && ctx.scene.remove(o)); movers = []; stage = 'apart'; t = 0; sep = 14;
+    const p = PAIRS[ctx.v.pair];
+    A = atom(ctx, p.m[0], p.m[1], p.m[2]); B = atom(ctx, p.n[0], p.n[1], p.n[2]); ctx.scene.add(A, B);
+    lattice = new THREE.Group(); lattice.visible = false; ctx.scene.add(lattice);
+    const rc = p.m[3] / 100, ra = p.n[3] / 100, a = (rc + ra) * 1.0;
+    for (let x = -1; x <= 1; x++) for (let y = -1; y <= 1; y++) for (let z = -1; z <= 1; z++) {
+      const cat = (x + y + z) % 2 !== 0; const s = new THREE.Mesh(new THREE.SphereGeometry(cat ? rc : ra, 28, 18), std(cat ? p.m[2] : p.n[2], { roughness: 0.3 })); s.position.set(x * a, y * a, z * a); lattice.add(s);
+    }
+    ctx.A = A; ctx.B = B;
+  },
+  step(ctx, dt) {
+    t += dt;
+    if (stage === 'close') { sep += (7.5 - sep) * Math.min(1, dt * 2.5); if (Math.abs(sep - 7.5) < 0.05) stage = 'near'; }
+    if (stage === 'transfer') {
+      let done = true;
+      for (const mv of movers) { mv.k = Math.min(1, mv.k + dt * 0.7); if (mv.k < 1) done = false; }
+      if (done) {
+        const p = PAIRS[ctx.v.pair];
+        stage = 'ions'; t = 0;
+        // the metal loses its now-empty outer shell ring; the ions get their charges
+        A.ringObjs[A.ringObjs.length - 1].visible = false;
+        A.tag.material.map.dispose(); A.remove(A.tag); A.tag = ctx.textSprite(`${p.m[0]}${p.q > 1 ? '²' : ''}⁺`, { size: 0.8, color: '#fda4af' }); A.tag.position.y = 1.2 + (p.m[1].length - 1) * 0.85 + 0.3; A.add(A.tag);
+        B.remove(B.tag); B.tag = ctx.textSprite(`${p.n[0]}${p.q > 1 ? '²' : ''}⁻`, { size: 0.8, color: '#93c5fd' }); B.tag.position.y = 1.2 + p.n[1].length * 0.85 + 0.3; B.add(B.tag);
+      }
+    }
+    if (stage === 'ions') { const p = PAIRS[ctx.v.pair], target = (p.m[3] + p.n[3]) / 100 * 2.4 + 2.2; sep += (target - sep) * Math.min(1, dt * 1.5); }
+  },
+  frame(ctx) {
+    if (!A) return;
+    const lat = stage === 'lattice';
+    A.visible = B.visible = !lat; lattice.visible = lat;
+    if (lat) { lattice.rotation.y += 0.004; lattice.rotation.x = 0.35; lattice.position.y = 1.5; const s = Math.min(1, t * 1.5); lattice.scale.setScalar(0.2 + 0.8 * s * s); return; }
+    A.position.set(-sep / 2, 1.5, 0); B.position.set(sep / 2, 1.5, 0);
+    const spin = ctx.t * 1.2;
+    for (const g of [A, B]) for (const e of g.electrons) {
+      if (e.userData.moving) continue;
+      const { s, i, n, R } = e.userData, a = spin / (1 + s * 0.6) + (i / n) * Math.PI * 2 + s;
+      e.position.set(Math.cos(a) * R, 0, Math.sin(a) * R);
+    }
+    for (const mv of movers) {
+      if (mv.done) continue;
+      const from = A.orb.localToWorld(mv.from.clone()), to = B.orb.localToWorld(mv.to.clone()), k = mv.k * mv.k * (3 - 2 * mv.k);
+      const p = from.lerp(to, k); p.y += Math.sin(Math.PI * k) * 2.2;
+      mv.e.position.copy(mv.e.parent.worldToLocal(p));
+      if (mv.k >= 1 && mv.e.parent === A.orb) { B.orb.attach(mv.e); mv.done = true; mv.e.userData = { s: B.shellR.length - 1, i: mv.slot, n: mv.slotN, R: B.shellR[B.shellR.length - 1] }; }
+    }
+    // pulse the ions' glow once charged
+    const ionK = stage === 'ions' ? 0.4 + 0.3 * Math.sin(ctx.t * 4) : 0.4; A.nuc.material.emissiveIntensity = ionK; B.nuc.material.emissiveIntensity = ionK;
+    // shrink the cation / expand the anion to their ionic sizes after transfer
+    const sA = stage === 'ions' ? 1 - 0.18 * Math.min(1, t) : 1, sB = stage === 'ions' ? 1 + 0.06 * Math.min(1, t) : 1; A.scale.setScalar(sA); B.scale.setScalar(sB);
+  },
+  ui(ctx) {
+    const p = PAIRS[ctx.v.pair], ion = stage === 'ions' || stage === 'lattice';
+    ctx.readout('st', { apart: 'Separate atoms', close: 'Approaching…', near: 'Ready to transfer', transfer: 'Electron moving…', ions: 'Ions attract', lattice: 'Crystal lattice (rock salt)' }[stage]);
+    ctx.readout('m', ion ? `${p.m[0]}${p.q > 1 ? '²' : ''}⁺ cation` : `${p.m[0]} atom`); ctx.readout('n', ion ? `${p.n[0]}${p.q > 1 ? '²' : ''}⁻ anion` : `${p.n[0]} atom`);
+    const mc = ion ? p.m[1].slice(0, -1) : p.m[1], nc = ion ? [...p.n[1].slice(0, -1), p.n[1][p.n[1].length - 1] + p.q] : p.n[1];
+    ctx.readout('cfg', `${mc.join(',')} | ${nc.join(',')}`); ctx.readout('r', ion ? `${p.m[3]} pm | ${p.n[3]} pm` : '—'); ctx.readout('E', `${p.E} kJ/mol`);
+  },
+});
+function startTransfer(ctx) {
+  const p = PAIRS[ctx.v.pair], outer = A.shellR.length - 1, give = A.electrons.filter((e) => e.userData.s === outer);
+  const nOuter = p.n[1][p.n[1].length - 1], R = B.shellR[B.shellR.length - 1], total = nOuter + give.length;
+  // spread the anion's outer electrons out to make room for the new ones
+  B.electrons.filter((e) => e.userData.s === B.shellR.length - 1).forEach((e, i) => { e.userData.n = total; e.userData.i = i; });
+  movers = give.map((e, j) => { e.userData.moving = true; const slot = nOuter + j, a = (slot / total) * Math.PI * 2; return { e, from: e.position.clone(), to: V3(Math.cos(a) * R, 0, Math.sin(a) * R), k: 0, slot, slotN: total }; });
+  stage = 'transfer'; t = 0;
 }
-
-document.getElementById('approach').onclick=()=>{
-  const id = setInterval(()=>{
-    if(naX < 320) naX += 4;
-    if(clX > 480) clX -= 4;
-    draw();
-    if(naX >= 320 && clX <= 480){ clearInterval(id); phase='approached'; document.getElementById('rS').textContent = 'Atoms close — ready for transfer';}
-  }, 30);
-};
-document.getElementById('transfer').onclick=()=>{
-  if(phase==='approached'){
-    transferringE = {x: naX+80, y: cy, tx: clX-80, ty: cy};
-    document.getElementById('rS').textContent = 'Transferring electron...';
-    const animate = ()=>{ draw(); if(transferringE) requestAnimationFrame(animate); };
-    animate();
-  }
-};
-document.getElementById('reset').onclick=()=>{
-  naX = 200; clX = 600; phase='separate'; transferringE = null;
-  document.getElementById('rS').textContent='Neutral atoms';
-  draw();
-};
-draw();
 </script>
 </body></html>
