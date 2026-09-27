@@ -211,7 +211,7 @@ export function optics(cfg) {
     setupOrder: ['lamp', 'lens', 'screen'],
     views: {
       screen: { label: 'Screen', pos: (lab) => { const p = lab.items.screen.group.position; return [p.x - 30, WORLD_Y(AXIS + 6), p.z + 22]; }, target: (lab) => { const p = lab.items.screen.group.position; return [p.x, WORLD_Y(AXIS), p.z]; } },
-      optbench: { label: 'Optical bench', pos: [0, 75, 150], target: [0, 8, BENCH_Z] },
+      optbench: { label: 'Optical bench', fit: [-80, 80, [0, 10, BENCH_Z]] },
     },
     classicView: 'optbench',
     pips: [

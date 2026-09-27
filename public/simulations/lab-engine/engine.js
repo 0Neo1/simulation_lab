@@ -244,16 +244,17 @@ export function runLab(spec) {
     ITEMS[key] = it;
   }
   // Items may rest in a turned pose (a pipette lying on its side): restRot [x, y, z], lifted by restLift
-  const restEuler = (it, rot = 0) => { const r = it.restRot || [0, 0, 0]; return new THREE.Euler(r[0], rot + r[1], r[2]); };
-  const itemAt = (it, spot, y) => {
-    it.group.position.set(spot[0], y + (it.restLift || 0), spot[1]);
-    it.group.rotation.copy(restEuler(it, spot[2] || 0));
+  // (homeRot, if given, is used on the trolley only: a hanging balance lies down there)
+  const restEuler = (it, rot = 0, home = false) => { const r = (home && it.homeRot) || it.restRot || [0, 0, 0]; return new THREE.Euler(r[0], rot + r[1], r[2]); };
+  const itemAt = (it, spot, y, home = false) => {
+    it.group.position.set(spot[0], y + (home && it.homeRot ? 0 : it.restLift || 0), spot[1]);
+    it.group.rotation.copy(restEuler(it, spot[2] || 0, home));
   };
   function sendHome(key) {
     const it = ITEMS[key];
     if (it.fixed) { placeAtSlot(key); return; }
     it.placed = false;
-    itemAt(it, it.home, it.homeY);
+    itemAt(it, it.home, it.homeY, true);
     if (it.onHome) it.onHome(lab);
   }
   function placeAtSlot(key) {
@@ -1138,7 +1139,8 @@ export function runLab(spec) {
     setup: fitView(-80, 242, [80, -10, -6]),
     bench: fitView(-70, 70, [0, 2, -4]),
     top: { pos: [30, 190, 20], target: [30, 0, 0] },
-    ...(spec.views || {}),
+    // a view may be given as fit: [x0, x1, target] to frame that width of the bench
+    ...Object.fromEntries(Object.entries(spec.views || {}).map(([k, v]) => [k, v.fit ? fitView(...v.fit) : v])),
   };
   let fly = null;
   function flyTo(name) {

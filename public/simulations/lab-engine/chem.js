@@ -709,8 +709,7 @@ export function stopwatch() {
   };
   draw();
   const disp = new THREE.Mesh(new THREE.PlaneGeometry(3.6, 1.35), new THREE.MeshBasicMaterial({ map: tex }));
-  disp.position.set(0, 2.2, 0.55); disp.rotation.x = -1.2 + Math.PI / 2 - Math.PI / 2;
-  disp.rotation.x = -(Math.PI / 2 - (Math.PI / 2 - 1.2));
+  disp.position.set(0, 2.49, 0.2); disp.rotation.x = -1.2; // on the tilted face of the watch
   g.add(body, btn, disp);
   const api = {
     group: g, btn, t: 0, running: false,
